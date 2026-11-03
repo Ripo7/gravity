@@ -1,0 +1,9 @@
+[gd_resource type="ShaderMaterial" load_steps=2 format=3]
+
+[ext_resource type="Shader" path="res://shaders/block.gdshader" id="1_block"]
+
+[resource]
+shader = ExtResource("1_block")
+shader_parameter/violet = Color(0.55, 0.24, 1, 1)
+shader_parameter/glow_strength = 2.2
+shader_parameter/roughness_value = 0.85

@@ -1,0 +1,143 @@
+[gd_scene load_steps=12 format=3]
+
+[ext_resource type="Script" path="res://scripts/core/game_world.gd" id="1_world"]
+[ext_resource type="Environment" path="res://materials/environment.tres" id="2_env"]
+[ext_resource type="Material" path="res://materials/floor.tres" id="3_floor"]
+[ext_resource type="Script" path="res://scripts/destruction/structure_set.gd" id="4_sset"]
+[ext_resource type="Script" path="res://scripts/destruction/debris_system.gd" id="5_debris"]
+[ext_resource type="Material" path="res://materials/block.tres" id="6_block"]
+[ext_resource type="Script" path="res://scripts/destruction/structure.gd" id="7_structure"]
+[ext_resource type="PackedScene" path="res://scenes/player.tscn" id="8_player"]
+[ext_resource type="Script" path="res://scripts/ui/hud.gd" id="9_hud"]
+
+[sub_resource type="BoxShape3D" id="floor_shape"]
+size = Vector3(160, 1, 160)
+
+[sub_resource type="BoxMesh" id="floor_mesh"]
+size = Vector3(160, 1, 160)
+
+[node name="Main" type="Node3D" node_paths=PackedStringArray("structures", "debris", "player", "structure_root")]
+script = ExtResource("1_world")
+structures = NodePath("StructureSet")
+debris = NodePath("DebrisSystem")
+player = NodePath("Player")
+structure_root = NodePath("Structures")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = ExtResource("2_env")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.8192, 0.0000, -0.5736, -0.4520, 0.6157, -0.6455, 0.3531, 0.7880, 0.5043, 0, 30, 0)
+light_color = Color(1, 0.99, 0.97, 1)
+light_energy = 1.1
+shadow_enabled = true
+shadow_opacity = 0.75
+shadow_blur = 1.5
+directional_shadow_max_distance = 90.0
+
+[node name="Floor" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Floor"]
+shape = SubResource("floor_shape")
+
+[node name="Mesh" type="MeshInstance3D" parent="Floor"]
+mesh = SubResource("floor_mesh")
+surface_material_override/0 = ExtResource("3_floor")
+
+[node name="DebrisSystem" type="Node3D" parent="."]
+script = ExtResource("5_debris")
+material = ExtResource("6_block")
+
+[node name="StructureSet" type="Node3D" parent="." node_paths=PackedStringArray("debris")]
+script = ExtResource("4_sset")
+debris = NodePath("../DebrisSystem")
+material = ExtResource("6_block")
+
+[node name="Structures" type="Node3D" parent="."]
+
+[node name="WallFront" type="Node3D" parent="Structures"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 2)
+script = ExtResource("7_structure")
+counts = Vector3i(14, 8, 1)
+block = Vector3(1, 0.5, 0.5)
+strength = 3.0
+
+[node name="TowerLeft" type="Node3D" parent="Structures"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -13, 0, -8)
+script = ExtResource("7_structure")
+kind = 1
+counts = Vector3i(4, 16, 1)
+block = Vector3(1, 0.8, 0.4)
+strength = 3.5
+seed_value = 1
+
+[node name="TowerRight" type="Node3D" parent="Structures"]
+transform = Transform3D(0.9397, 0, -0.342, 0, 1, 0, 0.342, 0, 0.9397, 13, 0, -10)
+script = ExtResource("7_structure")
+kind = 1
+counts = Vector3i(5, 12, 1)
+block = Vector3(1, 0.8, 0.4)
+strength = 3.5
+seed_value = 2
+
+[node name="TowerBack" type="Node3D" parent="Structures"]
+transform = Transform3D(0.866, 0, 0.5, 0, 1, 0, -0.5, 0, 0.866, 2, 0, -32)
+script = ExtResource("7_structure")
+kind = 1
+counts = Vector3i(5, 20, 1)
+block = Vector3(1.2, 0.9, 0.45)
+strength = 4.0
+seed_value = 3
+
+[node name="StackLeft" type="Node3D" parent="Structures"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7, 0, 9)
+script = ExtResource("7_structure")
+kind = 2
+counts = Vector3i(5, 1, 4)
+block = Vector3(0.8, 0.8, 0.8)
+strength = 2.0
+seed_value = 4
+
+[node name="StackRight" type="Node3D" parent="Structures"]
+transform = Transform3D(0.866, 0, 0.5, 0, 1, 0, -0.5, 0, 0.866, 8, 0, 7)
+script = ExtResource("7_structure")
+kind = 2
+counts = Vector3i(4, 1, 4)
+block = Vector3(0.8, 0.8, 0.8)
+strength = 2.0
+seed_value = 5
+
+[node name="Colonnade" type="Node3D" parent="Structures"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -16)
+script = ExtResource("7_structure")
+kind = 3
+counts = Vector3i(5, 7, 1)
+block = Vector3(0.7, 0.6, 0.7)
+strength = 4.0
+seed_value = 6
+
+[node name="WallSide" type="Node3D" parent="Structures"]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, -20, 0, 4)
+script = ExtResource("7_structure")
+counts = Vector3i(10, 6, 1)
+block = Vector3(1, 0.5, 0.5)
+strength = 3.0
+seed_value = 7
+
+[node name="Player" parent="." instance=ExtResource("8_player")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 15)
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="Hud" type="Control" parent="UI" node_paths=PackedStringArray("world")]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("9_hud")
+world = NodePath("../..")

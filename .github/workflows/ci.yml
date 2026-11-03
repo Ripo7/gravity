@@ -1,0 +1,107 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: GDScript lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install "gdtoolkit==4.*"
+      - name: gdlint
+        run: gdlint scripts tests
+      - name: gdformat (check)
+        run: gdformat --check scripts tests
+
+  test:
+    name: Headless tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: ~/.godot-ci
+          key: godot-${{ hashFiles('tools/godot_version.env') }}
+      - name: Install Godot
+        run: echo "GODOT=$(tools/install_godot.sh | tail -n1)" >> "$GITHUB_ENV"
+      - name: Import project
+        run: $GODOT --headless --path . --import
+      - name: Run tests
+        run: $GODOT --headless --path . res://tests/test_runner.tscn
+
+  export:
+    name: Export builds
+    needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.godot-ci
+            ~/.local/share/godot/export_templates
+          key: godot-templates-${{ hashFiles('tools/godot_version.env') }}
+      - name: Install Godot + templates
+        run: echo "GODOT=$(tools/install_godot.sh --templates | tail -n1)" >> "$GITHUB_ENV"
+      - name: Import project
+        run: $GODOT --headless --path . --import
+      - name: Export
+        run: |
+          mkdir -p build/web build/windows build/macos build/linux
+          $GODOT --headless --path . --export-release "Web" build/web/index.html
+          $GODOT --headless --path . --export-release "Windows" build/windows/Gravity.exe
+          $GODOT --headless --path . --export-release "macOS" build/macos/Gravity.zip
+          $GODOT --headless --path . --export-release "Linux" build/linux/Gravity.x86_64
+          ls -laR build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gravity-windows
+          path: build/windows
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gravity-macos
+          path: build/macos
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gravity-linux
+          path: build/linux
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gravity-web
+          path: build/web
+
+  web-benchmark:
+    name: Web benchmark (headless Chromium)
+    needs: [export]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: gravity-web
+          path: build/web
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install --no-save playwright@1 && npx playwright install --with-deps chromium
+      - name: Run benchmark
+        run: node tools/web_bench.mjs build/web | tee bench.txt
+      - name: Summary
+        if: always()
+        run: |
+          echo '### Web benchmark (CI runner, software WebGL)' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          grep -E 'BENCH' bench.txt >> "$GITHUB_STEP_SUMMARY" || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
