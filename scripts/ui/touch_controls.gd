@@ -59,7 +59,10 @@ func jump_radius() -> float:
 
 
 func _input(event: InputEvent) -> void:
-	if not visible or player == null:
+	# Only steer the player during play: menus, cards and pause screens get
+	# the taps (as emulated mouse clicks) instead.
+	if not is_visible_in_tree() or player == null or get_tree().paused or not player.input_enabled:
+		_release_all()
 		return
 	if event is InputEventScreenTouch:
 		_on_touch(event as InputEventScreenTouch)
@@ -67,6 +70,20 @@ func _input(event: InputEvent) -> void:
 	elif event is InputEventScreenDrag:
 		_on_drag(event as InputEventScreenDrag)
 		get_viewport().set_input_as_handled()
+
+
+func _release_all() -> void:
+	if _stick_finger < 0 and _look_finger < 0 and _charge_finger < 0 and _jump_finger < 0:
+		return
+	_stick_finger = -1
+	_look_finger = -1
+	_charge_finger = -1
+	_jump_finger = -1
+	_last.clear()
+	if player:
+		player.touch_move = Vector2.ZERO
+		player.power.touch_held = false
+	queue_redraw()
 
 
 func _on_touch(e: InputEventScreenTouch) -> void:
@@ -82,7 +99,7 @@ func _on_touch(e: InputEventScreenTouch) -> void:
 			_stick_finger = e.index
 			_stick_origin = e.position
 			_stick_pos = e.position
-		elif _look_finger < 0:
+		elif _look_finger < 0 and not (e.position.x > size.x - 100 and e.position.y < 90):
 			_look_finger = e.index
 	else:
 		_last.erase(e.index)

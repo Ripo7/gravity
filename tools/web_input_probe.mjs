@@ -41,5 +41,25 @@ for (const key of ["KeyW", "ArrowUp", "KeyD"]) {
   await page.keyboard.up(key);
   await page.waitForTimeout(1000);
 }
+
+// Phase 2: on a touch screen, tapping Play on the main menu must start a level.
+const touch = await browser.newContext({ viewport: { width: 1280, height: 720 }, hasTouch: true });
+const tp = await touch.newPage();
+let scene = "";
+tp.on("console", (m) => {
+  const t = m.text();
+  if (t.startsWith("SCENE")) {
+    scene = t;
+    console.log(`TOUCH ${t}`);
+  }
+});
+await tp.goto("http://localhost:8061/index.html");
+await tp.waitForFunction(() => !document.getElementById("status"), null, { timeout: 120000 });
+await tp.waitForTimeout(4000);
+await tp.touchscreen.tap(260, 330); // "Play" on the menu panel
+await tp.waitForTimeout(6000);
+const ok = scene.startsWith("SCENE level");
+console.log(ok ? "TOUCH_MENU_OK" : `TOUCH_MENU_FAIL (${scene || "no scene"})`);
 await browser.close();
 server.close();
+if (!ok) process.exit(1);

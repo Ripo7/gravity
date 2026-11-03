@@ -58,6 +58,8 @@ func _load_level() -> void:
 	structure_root.add_child(level)
 	player.global_transform = level.player_start()
 	player.reset_spawn()
+	var kind := "menu" if attract else "level"
+	print("SCENE %s %s" % [kind, level.title])
 
 
 func build_structures() -> void:
