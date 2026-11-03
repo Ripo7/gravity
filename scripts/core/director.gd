@@ -7,6 +7,7 @@ var options := {}
 var world: GameWorld
 var player: Player
 var _shot_dir := ""
+var _label: Label
 
 
 func _ready() -> void:
@@ -22,6 +23,8 @@ func _ready() -> void:
 			_showcase()
 		"bench":
 			_bench()
+		"still":
+			_still()
 
 
 func _wait(seconds: float) -> void:
@@ -116,6 +119,28 @@ func _showcase() -> void:
 	get_tree().quit()
 
 
+## One screenshot from --pos=x,y,z looking at --at=x,y,z.
+func _still() -> void:
+	var p := _vec(options.get("pos", "0,0.05,15"))
+	var t := _vec(options.get("at", "0,3,0"))
+	_place(p, t)
+	if options.has("charge"):
+		player.power.begin_charge()
+		player.power.charge = float(options["charge"])
+	if options.has("blast"):
+		var params := BlastParams.from_charge(float(options["blast"]))
+		await _wait(0.2)
+		world.detonate(t, params)
+	await _wait(float(options.get("wait", "0.5")))
+	await _shot(options.get("name", "still"))
+	get_tree().quit()
+
+
+static func _vec(s: String) -> Vector3:
+	var f := s.split_floats(",")
+	return Vector3(f[0], f[1], f[2])
+
+
 func _bench() -> void:
 	var debris := world.debris
 	var step := int(options.get("step", "150"))
@@ -125,7 +150,7 @@ func _bench() -> void:
 	rng.seed = 7
 	var over := 0
 	await _wait(1.0)
-	print("BENCH_START capacity=%d web=%s" % [debris.capacity, OS.has_feature("web")])
+	_report("BENCH_START capacity=%d web=%s" % [debris.capacity, OS.has_feature("web")])
 	while debris.active_count + step <= limit:
 		for k in step:
 			var n := debris.active_count
@@ -143,31 +168,40 @@ func _bench() -> void:
 		await _wait(0.4)
 		var blast := await _measure(1.5)
 		await _wait(1.5)
-		var row := {
-			"bodies": debris.active_count,
-			"falling_physics_ms": falling.x,
-			"settled_physics_ms": settled.x,
-			"blast_physics_ms": blast.x,
-			"blast_fps": blast.y,
-			"awake_after": debris.awake_count,
-		}
-		print("BENCH ", JSON.stringify(row))
+		_report(
+			(
+				"BENCH bodies=%d  physics ms: falling %.1f  settled %.1f  blast %.1f  |  fps %d"
+				% [debris.active_count, falling.x, settled.x, blast.x, blast.y]
+			)
+		)
 		over = over + 1 if blast.x > 16.6 else 0
 		if over >= 2:
 			break
-	print("BENCH_DONE")
+	_report("BENCH_DONE")
 	if not OS.has_feature("web"):
 		get_tree().quit()
 
 
-## Average physics time (ms) and fps over `seconds` of real time.
+## Average physics time (ms) over `seconds` of simulated time, and render fps.
+## Counted in physics frames so a slow renderer does not skew the physics cost.
 func _measure(seconds: float) -> Vector2:
 	var total := 0.0
-	var frames := 0
-	var start := Time.get_ticks_usec()
-	while Time.get_ticks_usec() - start < int(seconds * 1e6):
+	var frames := int(seconds * Engine.physics_ticks_per_second)
+	for i in frames:
 		await get_tree().physics_frame
 		total += Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0
-		frames += 1
-	var elapsed := (Time.get_ticks_usec() - start) / 1e6
-	return Vector2(total / maxf(frames, 1), Engine.get_frames_per_second() if elapsed > 0 else 0.0)
+	return Vector2(total / maxf(frames, 1), Engine.get_frames_per_second())
+
+
+func _report(text: String) -> void:
+	print(text)
+	if _label == null:
+		var layer := CanvasLayer.new()
+		layer.layer = 10
+		add_child(layer)
+		_label = Label.new()
+		_label.position = Vector2(20, 120)
+		_label.add_theme_font_size_override("font_size", 18)
+		_label.add_theme_color_override("font_color", Color(0.2, 0.1, 0.35))
+		layer.add_child(_label)
+	_label.text += text + "\n"

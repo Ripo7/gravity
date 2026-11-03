@@ -19,6 +19,8 @@ void fragment() {
 	vec2 offset = n * strength * pow(facing, 0.6) * (1.0 - facing) * 4.0;
 	offset.y = -offset.y;
 	vec3 bent = texture(screen_tex, SCREEN_UV + offset).rgb;
+	// The screen copy is sRGB here; ALBEDO expects linear.
+	bent = pow(bent, vec3(2.2));
 	float centre = smoothstep(0.55, 0.95, facing) * core;
 	vec3 col = mix(bent, deep, centre);
 	float edge = pow(1.0 - facing, 3.0);

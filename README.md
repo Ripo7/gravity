@@ -60,9 +60,9 @@ contacts to the ground are released as whole blocks, which can shatter again.
 
 - Pieces are raw `PhysicsServer3D` bodies (no nodes), created once and pooled.
 - Sleeping pieces are skipped every frame; Jolt sleeps them after 0.4 s at rest.
-- Budget: 1500 pieces on desktop, 600 on web. When full, the oldest sleeping
+- Budget: 2000 pieces on desktop, 900 on web. When full, the oldest sleeping
   piece is recycled. On web, pieces also expire after 120 s.
-- Run the benchmark: `godot -- --mode=bench` (desktop) or `index.html?mode=bench`
+- Run the benchmark: `godot -- --mode=bench` (desktop) or open the web build with `?mode=bench`
   (web). CI runs the web one in headless Chromium and prints it in the job summary.
 
 ## Develop

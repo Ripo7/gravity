@@ -18,8 +18,8 @@ const TINT_DECAY := 0.6  # violet glow fades per second
 ## Set before the scene loads to force a pool size (benchmarks).
 static var capacity_override := 0
 
-@export var capacity_desktop := 1500
-@export var capacity_web := 600
+@export var capacity_desktop := 2000
+@export var capacity_web := 900
 ## Seconds a piece may live; 0 keeps pieces until the budget recycles them.
 @export var lifetime_desktop := 0.0
 @export var lifetime_web := 120.0

@@ -27,13 +27,13 @@ structure_root = NodePath("Structures")
 environment = ExtResource("2_env")
 
 [node name="Sun" type="DirectionalLight3D" parent="."]
-transform = Transform3D(0.8192, 0.0000, -0.5736, -0.4520, 0.6157, -0.6455, 0.3531, 0.7880, 0.5043, 0, 30, 0)
+transform = Transform3D(0.4229, 0.5015, -0.7547, -0.0000, 0.8329, 0.5535, 0.9062, -0.2341, 0.3522, 0, 30, 0)
 light_color = Color(1, 0.99, 0.97, 1)
-light_energy = 1.1
+light_energy = 0.85
 shadow_enabled = true
-shadow_opacity = 0.75
+shadow_opacity = 0.85
 shadow_blur = 1.5
-directional_shadow_max_distance = 90.0
+directional_shadow_max_distance = 70.0
 
 [node name="Floor" type="StaticBody3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)

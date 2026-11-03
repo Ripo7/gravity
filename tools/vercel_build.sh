@@ -4,7 +4,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 godot="$(tools/install_godot.sh --templates-only=web | tail -n1)"
-mkdir -p build/web
+mkdir -p build/web && touch build/.gdignore
 "$godot" --headless --path . --import >/dev/null 2>&1 || true
 "$godot" --headless --path . --export-release "Web" build/web/index.html
 ls -la build/web

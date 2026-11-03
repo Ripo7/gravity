@@ -59,7 +59,7 @@ jobs:
         run: $GODOT --headless --path . --import
       - name: Export
         run: |
-          mkdir -p build/web build/windows build/macos build/linux
+          mkdir -p build/web build/windows build/macos build/linux && touch build/.gdignore
           $GODOT --headless --path . --export-release "Web" build/web/index.html
           $GODOT --headless --path . --export-release "Windows" build/windows/Gravity.exe
           $GODOT --headless --path . --export-release "macOS" build/macos/Gravity.zip

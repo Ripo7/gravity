@@ -1,10 +1,10 @@
 shader_type spatial;
 // White floor with a faint 2 m grid so speed and distance read clearly.
 
-uniform vec3 base : source_color = vec3(0.95, 0.95, 0.96);
-uniform vec3 line : source_color = vec3(0.82, 0.83, 0.87);
+uniform vec3 base : source_color = vec3(0.86, 0.86, 0.88);
+uniform vec3 line : source_color = vec3(0.78, 0.79, 0.83);
 uniform float cell = 2.0;
-uniform float width = 0.03;
+uniform float width = 0.02;
 
 varying vec3 world_pos;
 

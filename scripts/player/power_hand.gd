@@ -6,8 +6,6 @@ extends Node3D
 signal charge_changed(value: float)
 signal thrown(params: BlastParams)
 
-const PowerBallScript := preload("res://scripts/power/power_ball.gd")
-
 @export var charge_time := 1.6  ## seconds to full charge
 @export var cooldown := 0.22
 @export var ball_material: Material
@@ -66,7 +64,7 @@ func release() -> void:
 	var params := BlastParams.from_charge(_eased(charge))
 	var cam := get_viewport().get_camera_3d()
 	var dir := -cam.global_basis.z if cam else -global_basis.z
-	var ball: Node3D = PowerBallScript.new()
+	var ball := PowerBall.new()
 	ball.setup(params, global_position, dir * params.throw_speed, ball_material)
 	var world := GameWorld.of(self)
 	if world:
@@ -92,12 +90,13 @@ func _input_allowed() -> bool:
 func _update_visual(delta: float) -> void:
 	_wobble += delta * (6.0 + charge * 14.0)
 	if charging:
-		var r := BlastParams.from_charge(_eased(charge)).ball_radius
+		# Held close to the camera, so drawn smaller than the thrown ball.
+		var r := lerpf(0.035, 0.12, ease(charge, 0.7))
 		var pulse := 1.0 + sin(_wobble) * 0.06 * charge
 		_ball.visible = true
 		_ball.scale = Vector3.ONE * r * 2.0 * pulse
 		# Bigger balls sit further from the camera so they stay in frame.
-		_ball.position = Vector3(0, 0, -r * 1.2)
+		_ball.position = Vector3(0, 0, -r * 0.5)
 		_light.light_energy = 0.6 + charge * 2.5
 		_light.omni_range = 1.5 + charge * 3.0
 	else:

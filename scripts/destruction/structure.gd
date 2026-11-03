@@ -48,7 +48,7 @@ func build_segments() -> Array[Dictionary]:
 			_build_pillars(out)
 	for seg in out:
 		seg["strength"] = seg.get("strength", strength)
-		seg["shade"] = rng.randf_range(0.86, 1.0)
+		seg["shade"] = rng.randf_range(0.84, 0.9)
 	return out
 
 

@@ -60,7 +60,7 @@ func _process(delta: float) -> void:
 	var m := _shock.material_override as ShaderMaterial
 	m.set_shader_parameter("alpha_scale", 1.0 - k)
 	m.set_shader_parameter("rim", (1.0 - k) * 1.2)
-	_light.light_energy = maxf(0.0, 8.0 * params.charge + 3.0) * (1.0 - k) * (1.0 - k)
+	_light.light_energy = (1.0 + 2.5 * params.charge) * (1.0 - k) * (1.0 - k)
 	if b > 1.2:
 		queue_free()
 

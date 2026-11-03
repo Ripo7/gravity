@@ -5,5 +5,6 @@
 [resource]
 shader = ExtResource("1_block")
 shader_parameter/violet = Color(0.55, 0.24, 1, 1)
-shader_parameter/glow_strength = 2.2
+shader_parameter/glow_strength = 0.9
+shader_parameter/violet_deep = Color(0.32, 0.08, 0.78, 1)
 shader_parameter/roughness_value = 0.85
