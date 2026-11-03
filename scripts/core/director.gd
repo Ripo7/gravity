@@ -43,6 +43,7 @@ func _shot(name: String) -> void:
 func _place(at: Vector3, target: Vector3) -> void:
 	player.global_position = at
 	player.velocity = Vector3.ZERO
+	player.external_velocity = Vector3.ZERO
 	_aim_now(target)
 
 
@@ -112,7 +113,7 @@ func _showcase() -> void:
 	await _wait(2.5)
 	await _shot("04_colonnade_after")
 	# 4: overview.
-	_place(Vector3(10, 0.05, 16), Vector3(-6, 0, -10))
+	_place(Vector3(10, 0.05, 16), Vector3(-6, 1.6, -10))
 	await _wait(0.5)
 	await _shot("05_overview")
 	print("SHOWCASE_DONE pieces=%d standing=%d" % [world.debris.active_count, world.structures.alive_count])
