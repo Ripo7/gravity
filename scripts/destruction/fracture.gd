@@ -12,6 +12,9 @@ extends RefCounted
 ## Pieces smaller than this along any axis are not split further.
 const MIN_EDGE := 0.14
 
+## Multiplies piece counts (lower on phones). Part of the cache key.
+static var quality := 1.0
+
 static var _cache := {}
 
 
@@ -47,7 +50,7 @@ static func pattern(size: Vector3, pieces: int, seed_value: int = 0) -> Array[AA
 ## Suggested piece count for a block: bigger blocks break into more pieces.
 static func piece_count_for(size: Vector3) -> int:
 	var volume := size.x * size.y * size.z
-	return clampi(int(round(volume * 14.0)), 3, 14)
+	return clampi(int(round(volume * 14.0 * quality)), 3, 14)
 
 
 static func clear_cache() -> void:

@@ -56,6 +56,7 @@ func _make_label(font_size: int, align: HorizontalAlignment) -> Label:
 func _process(delta: float) -> void:
 	var captured := Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
 	_hint.visible = not captured and Input.get_connected_joypads().is_empty()
+	_hint.visible = _hint.visible and not Launch.options.has("mode")
 	if touch:
 		_hint_time += delta
 		_hint.visible = _hint_time < 6.0

@@ -160,3 +160,23 @@ func test_touch_look_ignores_bogus_relative() -> void:
 	check_near(p.rotation.y, yaw, 1e-5, "spike ignored")
 	tc.queue_free()
 	await _unload()
+
+
+func test_soft_budget_shrinks_pieces_away_gradually() -> void:
+	await _load_world()
+	var d := world.debris
+	d.retire_min_age = 0.0
+	var n := int(d.capacity * 0.95)
+	for i in n:
+		d.spawn(
+			Transform3D(Basis(), Vector3(i % 30, 0.5 + floorf(i / 900.0), 30 + floori(i / 30.0) % 30)),
+			Vector3.ONE * 0.3
+		)
+	await frames(2)
+	check(d.fading_count > 0, "retiring started")
+	check_eq(d.active_count, n, "nothing vanished instantly")
+	await frames(int(DebrisSystem.FADE_TIME * 60.0) + 90)
+	var target := int(d.capacity * DebrisSystem.SOFT_BUDGET)
+	check(d.active_count <= target + d.fading_count, "back under soft budget (%d)" % d.active_count)
+	check(d.active_count >= target - DebrisSystem.RETIRE_PER_FRAME, "did not over-retire")
+	await _unload()

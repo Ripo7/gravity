@@ -44,7 +44,8 @@ func _process(delta: float) -> void:
 		var k := clampf(_t / params.pull_time, 0.0, 1.0)
 		var e := ease(k, 0.4)
 		var core_r := params.core_radius * (0.35 + 0.65 * e)
-		_core.scale = Vector3.ONE * core_r
+		# Small dark core so the pieces gathering around it stay visible.
+		_core.scale = Vector3.ONE * core_r * 0.55
 		_halo.scale = Vector3.ONE * core_r * (2.4 + sin(_t * 30.0) * 0.08)
 		_light.light_energy = 1.0 + e * 3.0
 		return

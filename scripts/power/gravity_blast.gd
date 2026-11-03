@@ -11,7 +11,7 @@ signal burst
 
 enum Phase { PULL, BURST, DONE }
 
-const SWIRL := 0.35
+const SWIRL := 0.6
 const PLAYER_PULL := 0.25
 const PLAYER_BURST := 0.45
 const LINGER := 0.8
@@ -53,6 +53,8 @@ func _pull(delta: float) -> void:
 	var r := params.radius
 	var hold := params.core_radius
 	pieces_affected = 0
+	# Ease the pull in so pieces visibly lift and lean before they rush in.
+	var ramp := lerpf(0.3, 1.0, smoothstep(0.0, 0.4, _t / params.pull_time))
 	for i in debris.capacity:
 		if not debris.is_active(i):
 			continue
@@ -64,7 +66,7 @@ func _pull(delta: float) -> void:
 		var dir := to_core / d
 		var v := debris.velocity_of(i)
 		# Strong across the whole radius, gentle fade at the edge.
-		var strength := params.pull_accel * sqrt(1.0 - d / r)
+		var strength := params.pull_accel * sqrt(1.0 - d / r) * ramp
 		var swirl := dir.cross(Vector3.UP).normalized() * SWIRL
 		if d > hold:
 			v += (dir + swirl) * strength * delta
@@ -74,6 +76,9 @@ func _pull(delta: float) -> void:
 		# Cancel gravity inside the field so things float up into the ball.
 		v.y += 18.0 * delta * (1.0 - d / r)
 		debris.set_velocity(i, v)
+		# Tumble as they fall in; helps read the motion on small pieces.
+		var tumble := Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5)
+		debris.add_spin(i, tumble * 14.0 * delta)
 		debris.set_tint(i, 0.6 + 0.4 * (1.0 - d / r))
 	_push_player(PLAYER_PULL * delta * params.pull_accel, true)
 
@@ -105,7 +110,7 @@ func _burst() -> void:
 			continue
 		pieces_affected += 1
 		var dir := offset / d if d > 0.01 else Vector3.UP
-		dir = (dir + Vector3.UP * 0.25).normalized()
+		dir = (dir + Vector3.UP * 0.35).normalized()
 		var f := maxf(params.falloff(d), 0.15)
 		var jitter := randf_range(0.75, 1.25)
 		debris.set_velocity(i, debris.velocity_of(i) * 0.2 + dir * params.burst_speed * f * jitter)

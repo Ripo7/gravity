@@ -27,12 +27,12 @@ static func from_charge(c: float) -> BlastParams:
 	p.core_radius = lerpf(0.5, 1.6, k)
 	p.pull_time = lerpf(0.28, 0.85, k)
 	p.pull_accel = lerpf(40.0, 120.0, k)
-	p.burst_speed = lerpf(9.0, 34.0, k)
+	p.burst_speed = lerpf(8.0, 24.0, k)
 	p.damage = lerpf(1.2, 12.0, k2) + 1.5 * k
 	p.ball_radius = lerpf(0.1, 0.42, k)
 	p.throw_speed = lerpf(36.0, 26.0, k)
 	p.shake = lerpf(0.25, 1.0, k)
-	p.slow_motion = k >= 0.8
+	p.slow_motion = k >= 0.6
 	return p
 
 
