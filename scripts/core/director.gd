@@ -13,6 +13,9 @@ var _label: Label
 func _ready() -> void:
 	world = get_parent() as GameWorld
 	player = world.player
+	if options.get("mode", "") == "probe":
+		_probe()
+		return
 	player.input_enabled = false
 	player.power.auto_input = true
 	_shot_dir = options.get("shots", "")
@@ -118,6 +121,26 @@ func _showcase() -> void:
 	await _shot("05_overview")
 	print("SHOWCASE_DONE pieces=%d standing=%d" % [world.debris.active_count, world.structures.alive_count])
 	get_tree().quit()
+
+
+## Prints the player state twice a second; input stays live (input checks).
+func _probe() -> void:
+	while true:
+		await _wait(0.5)
+		var p := player.global_position
+		print(
+			(
+				"PROBE pos=%.2f,%.2f,%.2f fwd=%s floor=%s mouse=%d"
+				% [
+					p.x,
+					p.y,
+					p.z,
+					Input.is_action_pressed("move_forward"),
+					player.is_on_floor(),
+					Input.mouse_mode,
+				]
+			)
+		)
 
 
 ## One screenshot from --pos=x,y,z looking at --at=x,y,z.
