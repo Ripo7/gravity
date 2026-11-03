@@ -10,7 +10,10 @@ extends Control
 @export var player: Player
 ## Radians per pixel of drag, scaled by screen height so it feels the same
 ## on every phone.
-@export var look_sensitivity := 2.6
+@export var look_sensitivity := 2.2
+## Drags longer than this fraction of screen height in one event are
+## treated as glitches and ignored.
+@export var max_step := 0.2
 
 var _stick_finger := -1
 var _stick_origin := Vector2.ZERO
@@ -18,6 +21,10 @@ var _stick_pos := Vector2.ZERO
 var _look_finger := -1
 var _charge_finger := -1
 var _jump_finger := -1
+## Last position per finger. Deltas are computed from these instead of the
+## event's `relative`: on the web, Godot pairs multi-touch moves with the
+## wrong previous finger, which made the camera jump and spin on iOS.
+var _last := {}
 
 
 static func should_show() -> bool:
@@ -64,6 +71,7 @@ func _input(event: InputEvent) -> void:
 
 func _on_touch(e: InputEventScreenTouch) -> void:
 	if e.pressed:
+		_last[e.index] = e.position
 		if e.position.distance_to(charge_center()) < charge_radius() * 1.3 and _charge_finger < 0:
 			_charge_finger = e.index
 			player.power.touch_held = true
@@ -77,6 +85,7 @@ func _on_touch(e: InputEventScreenTouch) -> void:
 		elif _look_finger < 0:
 			_look_finger = e.index
 	else:
+		_last.erase(e.index)
 		if e.index == _charge_finger:
 			_charge_finger = -1
 			player.power.touch_held = false
@@ -91,6 +100,11 @@ func _on_touch(e: InputEventScreenTouch) -> void:
 
 
 func _on_drag(e: InputEventScreenDrag) -> void:
+	var prev: Vector2 = _last.get(e.index, e.position)
+	_last[e.index] = e.position
+	var step := e.position - prev
+	if step.length() > size.y * max_step:
+		step = Vector2.ZERO
 	if e.index == _stick_finger:
 		_stick_pos = e.position
 		var offset := (_stick_pos - _stick_origin) / stick_radius()
@@ -103,7 +117,7 @@ func _on_drag(e: InputEventScreenDrag) -> void:
 	elif e.index == _look_finger or e.index == _charge_finger:
 		# Dragging the charge button also aims, like a real thumb would.
 		var k := look_sensitivity / maxf(size.y, 1.0)
-		player.look(Vector2(-e.relative.x, -e.relative.y) * k)
+		player.look(Vector2(-step.x, -step.y) * k)
 
 
 func _draw() -> void:

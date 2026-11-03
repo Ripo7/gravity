@@ -29,6 +29,9 @@ static func of(node: Node) -> GameWorld:
 
 func _ready() -> void:
 	Engine.time_scale = 1.0
+	if OS.has_feature("web_ios") or OS.has_feature("web_android"):
+		# Phones have 3x screens: render 3D at lower resolution, keep UI sharp.
+		get_viewport().scaling_3d_scale = 0.6
 	build_structures()
 
 

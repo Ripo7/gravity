@@ -138,3 +138,25 @@ func _drag(i: int, pos: Vector2, rel: Vector2) -> InputEventScreenDrag:
 	e.position = pos
 	e.relative = rel
 	return e
+
+
+func test_touch_look_ignores_bogus_relative() -> void:
+	await _load_world()
+	var p := world.player
+	var tc := TouchControls.new()
+	tc.player = p
+	add_child(tc)
+	tc.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	tc.size = Vector2(1600, 900)
+	tc._on_touch(_touch(7, Vector2(300, 700), true))
+	tc._on_touch(_touch(42, Vector2(1100, 400), true))
+	var yaw := p.rotation.y
+	# Web builds can report another finger's delta in `relative`.
+	tc._on_drag(_drag(42, Vector2(1110, 400), Vector2(-800, 300)))
+	check_near(p.rotation.y - yaw, -10.0 * tc.look_sensitivity / 900.0, 1e-4, "uses own 10 px delta")
+	# A single teleporting jump is ignored.
+	yaw = p.rotation.y
+	tc._on_drag(_drag(42, Vector2(300, 100), Vector2.ZERO))
+	check_near(p.rotation.y, yaw, 1e-5, "spike ignored")
+	tc.queue_free()
+	await _unload()
