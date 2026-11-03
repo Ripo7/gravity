@@ -13,8 +13,6 @@ signal segment_broken(index: int)
 const FLOATS_PER_INSTANCE := 16
 const CONTACT_EPS := 0.03
 const GROUND_EPS := 0.03
-## Fraction of strength above which a segment is knocked loose (not broken).
-const DISLODGE_RATIO := 0.3
 
 @export var debris: DebrisSystem
 @export var material: Material
@@ -26,6 +24,8 @@ var _local: Array[AABB] = []  # in its structure's space, for contacts
 var _size := PackedVector3Array()
 var _strength := PackedFloat32Array()
 var _shade := PackedFloat32Array()
+var _kind := PackedByteArray()
+var _seed := PackedFloat32Array()
 var _alive := PackedByteArray()
 var _group := PackedInt32Array()
 var _grounded := PackedByteArray()
@@ -62,7 +62,10 @@ func add_structure(origin: Transform3D, segments: Array[Dictionary]) -> int:
 		_xform.append(global)
 		_local.append(AABB(local.origin - size * 0.5, size))
 		_size.append(size)
-		_strength.append(seg.get("strength", 3.0))
+		var kind: int = seg.get("material", Materials.Kind.CONCRETE)
+		_kind.append(kind)
+		_seed.append(seg.get("seed", randf()))
+		_strength.append(seg.get("strength", 3.0) * Materials.prop(kind, "strength"))
 		_shade.append(seg.get("shade", 1.0))
 		_alive.append(1)
 		_group.append(group_id)
@@ -102,6 +105,10 @@ func transform_of(i: int) -> Transform3D:
 	return _xform[i]
 
 
+func kind_of(i: int) -> int:
+	return _kind[i]
+
+
 ## Damages every segment within the blast. Returns how many broke or fell.
 func apply_blast(center: Vector3, params: BlastParams, scale := 1.0) -> int:
 	var hits := 0
@@ -123,7 +130,7 @@ func apply_blast(center: Vector3, params: BlastParams, scale := 1.0) -> int:
 		if dmg >= _strength[i]:
 			_shatter(i, center, dmg)
 			hits += 1
-		elif dmg >= _strength[i] * DISLODGE_RATIO:
+		elif dmg >= _strength[i] * Materials.prop(_kind[i], "dislodge"):
 			var away := (xf.origin - center).normalized()
 			_dislodge(i, away * dmg * 0.8)
 			hits += 1
@@ -137,24 +144,26 @@ func break_segment(i: int) -> void:
 func _shatter(i: int, center: Vector3, dmg: float) -> void:
 	var xf := _xform[i]
 	var size := _size[i]
-	var count := Fracture.piece_count_for(size)
+	var kind := _kind[i]
+	var count := Fracture.piece_count_for(size, Materials.prop(kind, "pieces"))
 	_remove(i)
 	if debris == null:
 		return
-	for piece: AABB in Fracture.pattern(size, count, i % 4):
+	var grain := Fracture.grain_for(kind, size)
+	for piece: AABB in Fracture.pattern(size, count, i % 4, grain):
 		var local := Transform3D(Basis(), piece.get_center())
 		var world := xf * local
 		var away := (world.origin - center).normalized()
 		var kick := away * minf(dmg, 6.0) * 0.4
 		var spin := Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * 3.0
-		debris.spawn(world, piece.size * 0.985, kick, spin, 1.0, _shade[i])
+		debris.spawn(world, piece.size * 0.985, kick, spin, 1.0, _shade[i], kind, _seed[i])
 
 
 func _dislodge(i: int, velocity: Vector3) -> void:
 	var xf := _xform[i]
 	_remove(i)
 	if debris:
-		debris.spawn(xf, _size[i] * 0.995, velocity, Vector3.ZERO, 0.5, _shade[i])
+		debris.spawn(xf, _size[i] * 0.995, velocity, Vector3.ZERO, 0.5, _shade[i], _kind[i], _seed[i])
 
 
 func _remove(i: int) -> void:
@@ -259,8 +268,8 @@ func _rebuild_multimesh() -> void:
 			b.z.z * s.z,
 			xf.origin.z,
 			_shade[i],
-			_shade[i],
-			_shade[i],
+			Materials.encode(_kind[i]),
+			_seed[i],
 			0.0,
 		]
 		for k in FLOATS_PER_INSTANCE:

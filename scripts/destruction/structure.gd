@@ -22,6 +22,12 @@ enum Kind { WALL, TOWER, STACK, PILLARS }
 		block = v
 		_refresh_preview()
 @export var strength := 3.0
+@export var material := Materials.Kind.CONCRETE:
+	set(v):
+		material = v
+		_refresh_preview()
+## Used for tower floor slabs and colonnade lintels.
+@export var accent_material := Materials.Kind.CONCRETE
 @export var seed_value := 0
 
 var _preview: MultiMeshInstance3D
@@ -48,12 +54,17 @@ func build_segments() -> Array[Dictionary]:
 			_build_pillars(out)
 	for seg in out:
 		seg["strength"] = seg.get("strength", strength)
-		seg["shade"] = rng.randf_range(0.84, 0.9)
+		seg["material"] = seg.get("material", material)
+		seg["shade"] = rng.randf_range(0.93, 1.04)
+		seg["seed"] = rng.randf()
 	return out
 
 
-func _seg(out: Array[Dictionary], center: Vector3, size: Vector3, mult := 1.0) -> void:
-	out.append({"local": Transform3D(Basis(), center), "size": size, "strength": strength * mult})
+func _seg(out: Array[Dictionary], center: Vector3, size: Vector3, mult := 1.0, accent := false) -> void:
+	var seg := {"local": Transform3D(Basis(), center), "size": size, "strength": strength * mult}
+	if accent:
+		seg["material"] = accent_material
+	out.append(seg)
 
 
 ## Running-bond brick wall centred on x, standing on y=0.
@@ -102,7 +113,7 @@ func _build_tower(out: Array[Dictionary]) -> void:
 			var q := inner_side * 0.5
 			for sx: float in [-0.5, 0.5]:
 				for sz: float in [-0.5, 0.5]:
-					_seg(out, Vector3(sx * q, slab_y - 0.1, sz * q), Vector3(q, 0.2, q), 0.8)
+					_seg(out, Vector3(sx * q, slab_y - 0.1, sz * q), Vector3(q, 0.2, q), 0.8, true)
 
 
 ## Pyramid of crates.
@@ -132,7 +143,7 @@ func _build_pillars(out: Array[Dictionary]) -> void:
 			_seg(out, Vector3(x, (d + 0.5) * block.y, 0), Vector3(block.x, block.y, block.z))
 	for p in counts.x - 1:
 		var x := (p + 0.5 - (counts.x - 1) * 0.5) * gap
-		_seg(out, Vector3(x, top + 0.25, 0), Vector3(gap + block.x, 0.5, block.z * 1.1), 1.5)
+		_seg(out, Vector3(x, top + 0.25, 0), Vector3(gap + block.x, 0.5, block.z * 1.1), 1.5, true)
 
 
 ## Editor-only preview so the layout is visible while editing scenes.

@@ -30,7 +30,6 @@ static var capacity_override := 0
 ## Seconds a piece may live; 0 keeps pieces until the budget recycles them.
 @export var lifetime_desktop := 0.0
 @export var lifetime_web := 240.0
-@export var density := 260.0
 @export var material: Material
 
 var capacity := 0
@@ -51,6 +50,8 @@ var _mass := PackedFloat32Array()
 var _born := PackedFloat64Array()
 var _tint := PackedFloat32Array()
 var _shade := PackedFloat32Array()
+var _kind := PackedByteArray()
+var _seed := PackedFloat32Array()
 var _fade := PackedFloat32Array()  # seconds left while shrinking away, 0 = not
 var _free: Array[int] = []
 var _buffer := PackedFloat32Array()
@@ -93,6 +94,8 @@ func _build_pool() -> void:
 	_born.resize(capacity)
 	_tint.resize(capacity)
 	_shade.resize(capacity)
+	_kind.resize(capacity)
+	_seed.resize(capacity)
 	_fade.resize(capacity)
 	_fade.fill(0.0)
 	_buffer.resize(capacity * FLOATS_PER_INSTANCE)
@@ -107,8 +110,6 @@ func _build_pool() -> void:
 		PhysicsServer3D.body_set_collision_mask(
 			body, LAYER_WORLD | LAYER_STRUCTURES | LAYER_DEBRIS | LAYER_PLAYER
 		)
-		PhysicsServer3D.body_set_param(body, PhysicsServer3D.BODY_PARAM_FRICTION, 0.8)
-		PhysicsServer3D.body_set_param(body, PhysicsServer3D.BODY_PARAM_BOUNCE, 0.05)
 		PhysicsServer3D.body_set_param(body, PhysicsServer3D.BODY_PARAM_LINEAR_DAMP, 0.05)
 		PhysicsServer3D.body_set_param(body, PhysicsServer3D.BODY_PARAM_ANGULAR_DAMP, 0.6)
 		# Fast pieces must not tunnel through the floor or walls and vanish.
@@ -142,15 +143,21 @@ func spawn(
 	velocity := Vector3.ZERO,
 	spin := Vector3.ZERO,
 	tint := 0.0,
-	shade := 1.0
+	shade := 1.0,
+	kind := Materials.Kind.CONCRETE,
+	seed_value := -1.0
 ) -> int:
 	var i := _take_slot()
 	if i < 0:
 		return -1
 	var body := _bodies[i]
 	PhysicsServer3D.shape_set_data(_shapes[i], size * 0.5)
-	var mass := maxf(size.x * size.y * size.z * density, 0.5)
+	var mass := maxf(size.x * size.y * size.z * Materials.prop(kind, "density"), 0.5)
 	PhysicsServer3D.body_set_param(body, PhysicsServer3D.BODY_PARAM_MASS, mass)
+	PhysicsServer3D.body_set_param(
+		body, PhysicsServer3D.BODY_PARAM_FRICTION, Materials.prop(kind, "friction")
+	)
+	PhysicsServer3D.body_set_param(body, PhysicsServer3D.BODY_PARAM_BOUNCE, Materials.prop(kind, "bounce"))
 	PhysicsServer3D.body_set_space(body, _space)
 	var clean := Transform3D(xform.basis.orthonormalized(), xform.origin)
 	PhysicsServer3D.body_set_state(body, PhysicsServer3D.BODY_STATE_TRANSFORM, clean)
@@ -165,6 +172,8 @@ func spawn(
 	_born[i] = _clock
 	_tint[i] = tint
 	_shade[i] = shade
+	_kind[i] = kind
+	_seed[i] = seed_value if seed_value >= 0.0 else randf()
 	_fade[i] = 0.0
 	active_count += 1
 	_write_instance(i, clean)
@@ -223,6 +232,15 @@ func mass_of(i: int) -> float:
 	return _mass[i]
 
 
+func kind_of(i: int) -> int:
+	return _kind[i]
+
+
+## How strongly blasts move this piece (wood flies, metal resists).
+func response_of(i: int) -> float:
+	return Materials.prop(_kind[i], "blast_response")
+
+
 func transform_of(i: int) -> Transform3D:
 	return PhysicsServer3D.body_get_state(_bodies[i], PhysicsServer3D.BODY_STATE_TRANSFORM)
 
@@ -259,17 +277,20 @@ func fracture(i: int, extra_velocity := Vector3.ZERO) -> PackedInt32Array:
 	if not is_active(i):
 		return out
 	var size := _size[i]
-	var count := Fracture.piece_count_for(size)
-	if size[size.min_axis_index()] < Fracture.MIN_EDGE * 2.0 or count < 3:
+	var kind := _kind[i]
+	var count := Fracture.piece_count_for(size, Materials.prop(kind, "pieces"))
+	if size[size.min_axis_index()] < Fracture.MIN_EDGE * 2.0 or count < 2:
 		return out
 	var xform := transform_of(i)
 	var vel := velocity_of(i) + extra_velocity
 	var tint := _tint[i]
 	var shade := _shade[i]
+	var seed_value := _seed[i]
 	despawn(i)
-	for piece: AABB in Fracture.pattern(size, count, i % 3):
+	var grain := Fracture.grain_for(kind, size)
+	for piece: AABB in Fracture.pattern(size, count, i % 3, grain):
 		var local := Transform3D(Basis(), piece.get_center())
-		var j := spawn(xform * local, piece.size * 0.985, vel, Vector3.ZERO, tint, shade)
+		var j := spawn(xform * local, piece.size * 0.985, vel, Vector3.ZERO, tint, shade, kind, seed_value)
 		if j >= 0:
 			out.append(j)
 	return out
@@ -375,9 +396,8 @@ func _write_instance(i: int, xform: Transform3D) -> void:
 	_buffer[o + 9] = b.y.z * s.y
 	_buffer[o + 10] = b.z.z * s.z
 	_buffer[o + 11] = xform.origin.z
-	var shade := _shade[i]
-	_buffer[o + 12] = shade
-	_buffer[o + 13] = shade
-	_buffer[o + 14] = shade
+	_buffer[o + 12] = _shade[i]
+	_buffer[o + 13] = Materials.encode(_kind[i])
+	_buffer[o + 14] = _seed[i]
 	_buffer[o + 15] = _tint[i]
 	_buffer_dirty = true

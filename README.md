@@ -38,6 +38,7 @@ and release to throw, tap the arrow to jump. Debris budget drops to 450 on mobil
 | Intact blocks, support/collapse check | `scripts/destruction/structure_set.gd` |
 | Loose pieces: pooled server bodies + one MultiMesh | `scripts/destruction/debris_system.gd` |
 | Pre-fractured patterns | `scripts/destruction/fracture.gd` |
+| Concrete / wood / metal: look, weight, strength, breakage | `scripts/destruction/materials.gd`, `shaders/block.gdshader` |
 | Charge → blast tuning in one place | `scripts/power/blast_params.gd` |
 | Pull then burst | `scripts/power/gravity_blast.gd` |
 | Lens, sparks, shake, slow motion | `scripts/fx/*`, `shaders/*`, `scripts/core/game_world.gd` |
@@ -55,7 +56,10 @@ Each block breaks into a cached recursive-split pattern of smaller boxes.
 - **Break cost:** a break is a cache lookup plus spawning pooled bodies.
   Runtime Voronoi has to generate meshes, hulls and colliders on the frame of
   the hit, which stalls the browser build at exactly the most exciting moment.
-- **Look:** clean boxy shards fit the minimal white architecture.
+- **Look:** clean boxy shards fit the block architecture. Each material
+  breaks its own way: concrete into many chunks, wood into long splinters
+  along the grain, metal into a few heavy plates (and it is often knocked
+  loose whole).
 
 Collapse comes from a support graph: after any break, blocks with no chain of
 contacts to the ground are released as whole blocks, which can shatter again.

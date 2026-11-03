@@ -73,6 +73,8 @@ counts = Vector3i(4, 16, 1)
 block = Vector3(1, 0.8, 0.4)
 strength = 3.5
 seed_value = 1
+material = 0
+accent_material = 1
 
 [node name="TowerRight" type="Node3D" parent="Structures"]
 transform = Transform3D(0.9397, 0, -0.342, 0, 1, 0, 0.342, 0, 0.9397, 13, 0, -10)
@@ -82,6 +84,8 @@ counts = Vector3i(5, 12, 1)
 block = Vector3(1, 0.8, 0.4)
 strength = 3.5
 seed_value = 2
+material = 1
+accent_material = 2
 
 [node name="TowerBack" type="Node3D" parent="Structures"]
 transform = Transform3D(0.866, 0, 0.5, 0, 1, 0, -0.5, 0, 0.866, 2, 0, -32)
@@ -91,6 +95,8 @@ counts = Vector3i(5, 20, 1)
 block = Vector3(1.2, 0.9, 0.45)
 strength = 4.0
 seed_value = 3
+material = 0
+accent_material = 2
 
 [node name="StackLeft" type="Node3D" parent="Structures"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7, 0, 9)
@@ -100,6 +106,7 @@ counts = Vector3i(5, 1, 4)
 block = Vector3(0.8, 0.8, 0.8)
 strength = 2.0
 seed_value = 4
+material = 1
 
 [node name="StackRight" type="Node3D" parent="Structures"]
 transform = Transform3D(0.866, 0, 0.5, 0, 1, 0, -0.5, 0, 0.866, 8, 0, 7)
@@ -109,6 +116,7 @@ counts = Vector3i(4, 1, 4)
 block = Vector3(0.8, 0.8, 0.8)
 strength = 2.0
 seed_value = 5
+material = 2
 
 [node name="Colonnade" type="Node3D" parent="Structures"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -16)
@@ -118,14 +126,36 @@ counts = Vector3i(5, 7, 1)
 block = Vector3(0.7, 0.6, 0.7)
 strength = 4.0
 seed_value = 6
+material = 2
+accent_material = 1
 
 [node name="WallSide" type="Node3D" parent="Structures"]
 transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, -20, 0, 4)
 script = ExtResource("7_structure")
-counts = Vector3i(10, 6, 1)
-block = Vector3(1, 0.5, 0.5)
+counts = Vector3i(6, 10, 1)
+block = Vector3(2, 0.3, 0.25)
 strength = 3.0
 seed_value = 7
+material = 1
+
+[node name="MetalFence" type="Node3D" parent="Structures"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 14, 0, 3)
+script = ExtResource("7_structure")
+counts = Vector3i(6, 3, 1)
+block = Vector3(1.5, 0.9, 0.15)
+strength = 2.0
+material = 2
+seed_value = 8
+
+[node name="CrateStack" type="Node3D" parent="Structures"]
+transform = Transform3D(0.9397, 0, 0.342, 0, 1, 0, -0.342, 0, 0.9397, -3, 0, -6)
+script = ExtResource("7_structure")
+kind = 2
+counts = Vector3i(3, 1, 3)
+block = Vector3(1.1, 1.1, 1.1)
+strength = 2.0
+material = 1
+seed_value = 9
 
 [node name="Player" parent="." instance=ExtResource("8_player")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 15)

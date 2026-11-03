@@ -69,7 +69,7 @@ func _pull(delta: float) -> void:
 		var strength := params.pull_accel * sqrt(1.0 - d / r) * ramp
 		var swirl := dir.cross(Vector3.UP).normalized() * SWIRL
 		if d > hold:
-			v += (dir + swirl) * strength * delta
+			v += (dir + swirl) * strength * delta * debris.response_of(i)
 		# Drag grows near the core so pieces cluster instead of overshooting.
 		var drag := clampf((1.0 - d / r) * 5.0 * delta, 0.0, 0.5)
 		v *= 1.0 - drag
@@ -113,7 +113,8 @@ func _burst() -> void:
 		dir = (dir + Vector3.UP * 0.35).normalized()
 		var f := maxf(params.falloff(d), 0.15)
 		var jitter := randf_range(0.75, 1.25)
-		debris.set_velocity(i, debris.velocity_of(i) * 0.2 + dir * params.burst_speed * f * jitter)
+		var kick := params.burst_speed * f * jitter * debris.response_of(i)
+		debris.set_velocity(i, debris.velocity_of(i) * 0.2 + dir * kick)
 		debris.add_spin(i, Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * 10.0 * f)
 		debris.set_tint(i, 1.0)
 	_push_player(PLAYER_BURST * params.burst_speed, false)

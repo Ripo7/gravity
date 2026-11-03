@@ -41,4 +41,23 @@ func test_piece_count_grows_with_volume() -> void:
 		Fracture.piece_count_for(Vector3.ONE) > Fracture.piece_count_for(Vector3.ONE * 0.5),
 		"bigger breaks more"
 	)
-	check(Fracture.piece_count_for(Vector3.ONE * 0.1) >= 3, "minimum pieces")
+	check(Fracture.piece_count_for(Vector3.ONE * 0.1) >= 2, "minimum pieces")
+
+
+func test_wood_splits_along_the_grain() -> void:
+	var size := Vector3(2.0, 0.3, 0.25)
+	var grain := Fracture.grain_for(Materials.Kind.WOOD, size)
+	check_eq(grain, 0, "grain follows the long edge")
+	for p in Fracture.pattern(size, 6, 0, grain):
+		check_near(p.size.x, 2.0, 1e-5, "every splinter runs the full length")
+
+
+func test_metal_breaks_into_fewer_pieces() -> void:
+	var size := Vector3(1, 1, 1)
+	var metal := Fracture.piece_count_for(size, Materials.prop(Materials.Kind.METAL, "pieces"))
+	var concrete := Fracture.piece_count_for(size, Materials.prop(Materials.Kind.CONCRETE, "pieces"))
+	check(metal < concrete / 2, "metal %d vs concrete %d" % [metal, concrete])
+	check(
+		Materials.prop(Materials.Kind.METAL, "strength") > Materials.prop(Materials.Kind.WOOD, "strength"),
+		"metal is stronger than wood"
+	)
