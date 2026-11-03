@@ -92,8 +92,9 @@ func test_touch_controls_move_look_and_charge() -> void:
 	p.input_enabled = true
 	var tc := TouchControls.new()
 	tc.player = p
-	tc.size = Vector2(1600, 900)
 	add_child(tc)
+	tc.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	tc.size = Vector2(1600, 900)
 	# Left thumb down, then drag up: walk forward.
 	tc._on_touch(_touch(0, Vector2(300, 700), true))
 	tc._on_drag(_drag(0, Vector2(300, 560), Vector2(0, -140)))
