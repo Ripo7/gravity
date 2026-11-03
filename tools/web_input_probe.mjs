@@ -43,23 +43,36 @@ for (const key of ["KeyW", "ArrowUp", "KeyD"]) {
 }
 
 // Phase 2: on a touch screen, tapping Play on the main menu must start a level.
-const touch = await browser.newContext({ viewport: { width: 1280, height: 720 }, hasTouch: true });
-const tp = await touch.newPage();
-let scene = "";
-tp.on("console", (m) => {
-  const t = m.text();
-  if (t.startsWith("SCENE")) {
-    scene = t;
-    console.log(`TOUCH ${t}`);
-  }
-});
-await tp.goto("http://localhost:8061/index.html");
-await tp.waitForFunction(() => !document.getElementById("status"), null, { timeout: 120000 });
-await tp.waitForTimeout(4000);
-await tp.touchscreen.tap(260, 330); // "Play" on the menu panel
-await tp.waitForTimeout(6000);
-const ok = scene.startsWith("SCENE level");
-console.log(ok ? "TOUCH_MENU_OK" : `TOUCH_MENU_FAIL (${scene || "no scene"})`);
+async function menuTap(useTouch) {
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 }, hasTouch: useTouch });
+  const p = await ctx.newPage();
+  let scene = "";
+  let play = null;
+  p.on("console", (m) => {
+    const t = m.text();
+    if (t.startsWith("SCENE")) scene = t;
+    const mm = t.match(/^MENU_PLAY (\d+) (\d+)/);
+    if (mm) play = [Number(mm[1]), Number(mm[2])];
+  });
+  await p.goto("http://localhost:8061/index.html");
+  await p.waitForFunction(() => !document.getElementById("status"), null, { timeout: 120000 });
+  for (let i = 0; i < 60 && !play; i++) await p.waitForTimeout(500);
+  const box = await p.locator("canvas").boundingBox();
+  const size = await p.evaluate(() => [document.querySelector("canvas").width, window.devicePixelRatio]);
+  const [x, y] = play ?? [260, 330];
+  // Godot reports canvas pixels; convert to CSS pixels.
+  const sx = box.x + x * (box.width / size[0]);
+  const sy = box.y + y * (box.width / size[0]);
+  if (useTouch) await p.touchscreen.tap(sx, sy);
+  else await p.mouse.click(sx, sy);
+  for (let i = 0; i < 30 && !scene.startsWith("SCENE level"); i++) await p.waitForTimeout(500);
+  console.log(`MENU ${useTouch ? "touch" : "mouse"} play=${play} at=${sx.toFixed(0)},${sy.toFixed(0)} -> ${scene}`);
+  await ctx.close();
+  return scene.startsWith("SCENE level");
+}
+const mouseOk = await menuTap(false);
+const ok = await menuTap(true);
+console.log(ok ? "TOUCH_MENU_OK" : `TOUCH_MENU_FAIL (mouse ${mouseOk ? "ok" : "also fails"})`);
 await browser.close();
 server.close();
 if (!ok) process.exit(1);

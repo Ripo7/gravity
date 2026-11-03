@@ -41,6 +41,14 @@ func _show_home() -> void:
 	stars.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	box.add_child(stars)
 	play.grab_focus()
+	_report_play_button.call_deferred(play)
+
+
+## Lets the CI touch probe find the Play button.
+func _report_play_button(play: Button) -> void:
+	await get_tree().process_frame
+	var c := play.get_global_rect().get_center()
+	print("MENU_PLAY %d %d" % [c.x, c.y])
 
 
 func _show_levels() -> void:

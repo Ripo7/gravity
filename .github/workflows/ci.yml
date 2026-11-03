@@ -96,8 +96,9 @@ jobs:
         with:
           node-version: "22"
       - run: npm install --no-save playwright@1 && npx playwright install --with-deps chromium
-      - name: Keyboard input probe
-        run: node tools/web_input_probe.mjs build/web | tee probe.txt
+      - name: Keyboard and touch input probe
+        shell: bash
+        run: set -o pipefail; node tools/web_input_probe.mjs build/web | tee probe.txt
       - name: Run benchmark
         run: node tools/web_bench.mjs build/web | tee bench.txt
       - name: Summary
