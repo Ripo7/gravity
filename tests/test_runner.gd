@@ -16,6 +16,10 @@ func _ready() -> void:
 		):
 			continue
 		var script: GDScript = load("res://tests/" + f)
+		if script == null or not script.can_instantiate():
+			failed += 1
+			print("  FAIL ", f, " (script failed to load)")
+			continue
 		var suite: TestCase = script.new()
 		add_child(suite)
 		for m in suite.get_method_list():

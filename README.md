@@ -16,6 +16,10 @@ and every piece stays in the world.
 | Charge, release to throw | Hold left mouse | Hold RT or RB |
 | Reset arena | R | Back / Select |
 | Stats overlay | F3 | LB |
+
+**Phones and tablets** (landscape): drag the left half to move (the stick appears
+under your thumb), drag the right half to look, hold the violet button to charge
+and release to throw, tap the arrow to jump. Debris budget drops to 450 on mobile.
 | Release mouse | Esc | Start |
 
 ## Play builds

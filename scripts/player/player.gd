@@ -14,6 +14,9 @@ extends CharacterBody3D
 ## Velocity from blasts; decays separately so the player can be flung.
 var external_velocity := Vector3.ZERO
 var input_enabled := true
+## Set by TouchControls: stick vector (x right, y back) and a jump request.
+var touch_move := Vector2.ZERO
+var touch_jump := false
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var _spawn: Transform3D
 
@@ -56,6 +59,7 @@ func _physics_process(delta: float) -> void:
 	if input_enabled:
 		stick = Input.get_vector("look_right", "look_left", "look_down", "look_up")
 		move = Input.get_vector("move_left", "move_right", "move_forward", "move_back")
+		move = (move + touch_move).limit_length(1.0)
 	if stick != Vector2.ZERO:
 		# Squared response curve gives fine aim near the centre.
 		look(stick * stick.length() * stick_sensitivity * delta)
@@ -70,10 +74,12 @@ func _physics_process(delta: float) -> void:
 	velocity.z = horizontal.z
 
 	if is_on_floor():
-		if input_enabled and Input.is_action_just_pressed("jump"):
+		if input_enabled and (Input.is_action_just_pressed("jump") or touch_jump):
 			velocity.y = jump_velocity
 	else:
 		velocity.y -= _gravity * delta
+
+	touch_jump = false
 
 	# Blast velocity is added on top and bleeds off quickly on the ground.
 	velocity += external_velocity

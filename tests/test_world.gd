@@ -84,3 +84,56 @@ func _mean_distance(c: Vector3) -> float:
 			total += d.position_of(i).distance_to(c)
 			n += 1
 	return total / maxf(n, 1)
+
+
+func test_touch_controls_move_look_and_charge() -> void:
+	await _load_world()
+	var p := world.player
+	p.input_enabled = true
+	var tc := TouchControls.new()
+	tc.player = p
+	tc.size = Vector2(1600, 900)
+	add_child(tc)
+	# Left thumb down, then drag up: walk forward.
+	tc._on_touch(_touch(0, Vector2(300, 700), true))
+	tc._on_drag(_drag(0, Vector2(300, 560), Vector2(0, -140)))
+	check(p.touch_move.y < -0.9, "stick forward (%s)" % p.touch_move)
+	var z := p.global_position.z
+	await frames(30)
+	check(p.global_position.z < z - 1.0, "player walked forward")
+	# Right side drag turns the view.
+	var yaw := p.rotation.y
+	tc._on_touch(_touch(1, Vector2(1100, 400), true))
+	tc._on_drag(_drag(1, Vector2(1000, 400), Vector2(-100, 0)))
+	check(p.rotation.y > yaw, "drag left turns left")
+	# Hold the charge button, release to throw.
+	var thrown := [false]
+	p.power.thrown.connect(func(_params: BlastParams) -> void: thrown[0] = true)
+	tc._on_touch(_touch(2, tc.charge_center(), true))
+	await get_tree().create_timer(0.5).timeout
+	check(p.power.charging and p.power.charge > 0.1, "charging while held")
+	tc._on_touch(_touch(2, tc.charge_center(), false))
+	await get_tree().process_frame
+	await get_tree().process_frame
+	check(thrown[0], "released ball")
+	# Releasing the stick stops movement input.
+	tc._on_touch(_touch(0, Vector2(300, 560), false))
+	check_eq(p.touch_move, Vector2.ZERO, "stick released")
+	tc.queue_free()
+	await _unload()
+
+
+func _touch(i: int, pos: Vector2, pressed: bool) -> InputEventScreenTouch:
+	var e := InputEventScreenTouch.new()
+	e.index = i
+	e.position = pos
+	e.pressed = pressed
+	return e
+
+
+func _drag(i: int, pos: Vector2, rel: Vector2) -> InputEventScreenDrag:
+	var e := InputEventScreenDrag.new()
+	e.index = i
+	e.position = pos
+	e.relative = rel
+	return e

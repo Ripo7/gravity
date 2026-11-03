@@ -13,6 +13,7 @@ signal thrown(params: BlastParams)
 var charge := 0.0
 var charging := false
 var auto_input := false  ## true when a script (demo/bench) drives the hand
+var touch_held := false  ## set by TouchControls while the charge button is held
 var _cooldown_left := 0.0
 var _ball: MeshInstance3D
 var _light: OmniLight3D
@@ -41,7 +42,7 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	_cooldown_left = maxf(_cooldown_left - delta, 0.0)
 	if not auto_input:
-		var held := Input.is_action_pressed("charge") and _input_allowed()
+		var held := touch_held or (Input.is_action_pressed("charge") and _input_allowed())
 		if held and not charging and _cooldown_left <= 0.0:
 			begin_charge()
 		elif not held and charging:

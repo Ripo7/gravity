@@ -20,6 +20,7 @@ static var capacity_override := 0
 
 @export var capacity_desktop := 2000
 @export var capacity_web := 900
+@export var capacity_mobile := 450
 ## Seconds a piece may live; 0 keeps pieces until the budget recycles them.
 @export var lifetime_desktop := 0.0
 @export var lifetime_web := 120.0
@@ -57,6 +58,8 @@ func _ready() -> void:
 		capacity = capacity_override
 	elif capacity <= 0:
 		capacity = capacity_web if web else capacity_desktop
+		if OS.has_feature("web_android") or OS.has_feature("web_ios") or OS.has_feature("mobile"):
+			capacity = capacity_mobile
 	lifetime = lifetime_web if web else lifetime_desktop
 	_space = get_world_3d().space
 	_build_pool()

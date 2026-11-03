@@ -151,6 +151,8 @@ func _still() -> void:
 	if options.has("charge"):
 		player.power.begin_charge()
 		player.power.charge = float(options["charge"])
+	if options.has("touchdemo"):
+		_touch_demo()
 	if options.has("blast"):
 		var params := BlastParams.from_charge(float(options["blast"]))
 		await _wait(0.2)
@@ -158,6 +160,31 @@ func _still() -> void:
 	await _wait(float(options.get("wait", "0.5")))
 	await _shot(options.get("name", "still"))
 	get_tree().quit()
+
+
+## Fakes a thumb on the stick and one on the charge button (for screenshots).
+func _touch_demo() -> void:
+	player.power.auto_input = false
+	var c: TouchControls
+	for n in world.find_children("*", "Control", true, false):
+		if n is TouchControls:
+			c = n
+	if c == null:
+		return
+	var stick := InputEventScreenTouch.new()
+	stick.index = 0
+	stick.pressed = true
+	stick.position = Vector2(c.size.y * 0.26, c.size.y * 0.74)
+	c._on_touch(stick)
+	var drag := InputEventScreenDrag.new()
+	drag.index = 0
+	drag.position = stick.position + Vector2(c.size.y * 0.04, -c.size.y * 0.1)
+	c._on_drag(drag)
+	var charge := InputEventScreenTouch.new()
+	charge.index = 1
+	charge.pressed = true
+	charge.position = c.charge_center()
+	c._on_touch(charge)
 
 
 static func _vec(s: String) -> Vector3:

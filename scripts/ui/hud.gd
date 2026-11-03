@@ -5,8 +5,10 @@ extends Control
 @export var world: GameWorld
 
 var show_stats := false
+var touch := false
 var _charge := 0.0
 var _hint: Label
+var _hint_time := 0.0
 var _stats: Label
 
 
@@ -14,15 +16,29 @@ func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_hint = _make_label(24, HORIZONTAL_ALIGNMENT_CENTER)
-	_hint.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	_hint.position.y -= 120
 	_hint.text = (
 		"CLICK TO PLAY\nhold LMB / RT to charge  ·  release to throw\n"
 		+ "WASD / stick move  ·  SPACE / A jump  ·  R reset  ·  F3 stats"
 	)
 	_stats = _make_label(16, HORIZONTAL_ALIGNMENT_LEFT)
-	_stats.position = Vector2(16, 12)
+	_stats.position = Vector2(16, 48)
 	_stats.visible = false
+	touch = TouchControls.should_show() or OS.get_cmdline_user_args().has("--touch")
+	if touch:
+		var controls := TouchControls.new()
+		controls.player = world.player if world else null
+		add_child(controls)
+		_hint.text = (
+			"left thumb: move  ·  drag right side: look\n"
+			+ "hold the violet button to charge, release to throw"
+		)
+		_hint.add_theme_font_size_override("font_size", 20)
+		var stats := Button.new()
+		stats.text = "stats"
+		stats.flat = true
+		stats.position = Vector2(12, 12)
+		stats.pressed.connect(func() -> void: show_stats = not show_stats)
+		add_child(stats)
 	if world and world.player:
 		world.player.power.charge_changed.connect(func(c: float) -> void: _charge = c)
 
@@ -37,11 +53,15 @@ func _make_label(font_size: int, align: HorizontalAlignment) -> Label:
 	return l
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	var captured := Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
 	_hint.visible = not captured and Input.get_connected_joypads().is_empty()
+	if touch:
+		_hint_time += delta
+		_hint.visible = _hint_time < 6.0
 	if Input.is_action_just_pressed("toggle_debug"):
 		show_stats = not show_stats
+	_hint.position = Vector2((size.x - _hint.size.x) * 0.5, size.y * 0.66)
 	_stats.visible = show_stats
 	if show_stats and world:
 		_stats.text = stats_text(world)
