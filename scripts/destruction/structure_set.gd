@@ -47,6 +47,8 @@ const CLUSTER_MAX_AGE := 7.0
 ## A falling piece knocks a standing one over when its momentum exceeds the
 ## standing piece's mass times this (m/s).
 const KNOCK_SPEED := 0.9
+const LEAN_TIME := 0.2  ## seconds of leaning before the weight tells
+const LEAN_SPEED := 2.0  ## leaning counts like an impact at this speed
 
 @export var debris: DebrisSystem
 @export var material: Material
@@ -80,6 +82,7 @@ var _shape_cache := {}
 var _rid_to_seg := {}
 var _grid := {}
 var _dirty_groups := {}
+var _tip := Vector2.ZERO  # last tipping direction (structure space)
 var _clusters: Array[Cluster] = []
 var _multimesh: MultiMesh
 var _buffer := PackedFloat32Array()
@@ -97,6 +100,9 @@ class Cluster:
 	var age := 0.0
 	var prev_velocity := Vector3.ZERO
 	var recent := PackedFloat32Array([0.0, 0.0, 0.0, 0.0])  # last speeds
+	var toppled := false  # pivoting over its base: falls toward the cut side
+	var lean_time := 0.0  # seconds resting against a standing structure
+	var leaned := false
 
 
 func _exit_tree() -> void:
@@ -270,6 +276,10 @@ func push_clusters(center: Vector3, radius: float, dv: float, toward := Vector3.
 		if d > radius or d < 0.01:
 			continue
 		var f := 1.0 - d / radius
+		if c.toppled:
+			# A toppling piece keeps falling toward the side that was cut, like
+			# a real demolition; the blast only nudges it.
+			f *= 0.25
 		var heavy := clampf(sqrt(c.mass / 400.0), 1.0, 4.0)
 		var dir := (to / d * 0.5 + toward).normalized()
 		var v: Vector3 = PhysicsServer3D.body_get_state(c.body, PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY)
@@ -277,7 +287,7 @@ func push_clusters(center: Vector3, radius: float, dv: float, toward := Vector3.
 		PhysicsServer3D.body_set_state(c.body, PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY, v)
 		# Pushed above its base, it tips: that is what topples walls.
 		var flat := Vector3(dir.x, 0, dir.z)
-		if flat.length() > 0.05:
+		if flat.length() > 0.05 and not c.toppled:
 			var w: Vector3 = PhysicsServer3D.body_get_state(
 				c.body, PhysicsServer3D.BODY_STATE_ANGULAR_VELOCITY
 			)
@@ -540,6 +550,9 @@ func _is_tipping(comp: PackedInt32Array) -> bool:
 	var inset := PackedVector2Array()
 	for p in hull:
 		inset.append(p + (centroid - p).limit_length(0.06))
+	# It falls away from what still holds it: from the footprint toward the
+	# centre of mass.
+	_tip = com - centroid
 	return not Geometry2D.is_point_in_polygon(com, inset)
 
 
@@ -575,7 +588,7 @@ func _release(comp: PackedInt32Array, toppled: bool) -> int:
 		PhysicsServer3D.body_set_space(_bodies[i], RID())
 	_score_dirty = true
 	PhysicsServer3D.body_set_param(c.body, PhysicsServer3D.BODY_PARAM_MASS, c.mass)
-	PhysicsServer3D.body_set_max_contacts_reported(c.body, 6)
+	PhysicsServer3D.body_set_max_contacts_reported(c.body, 24)
 	PhysicsServer3D.body_set_param(c.body, PhysicsServer3D.BODY_PARAM_FRICTION, 0.8)
 	PhysicsServer3D.body_set_collision_layer(c.body, DebrisSystem.LAYER_DEBRIS)
 	PhysicsServer3D.body_set_collision_mask(
@@ -589,12 +602,13 @@ func _release(comp: PackedInt32Array, toppled: bool) -> int:
 	)
 	PhysicsServer3D.body_set_space(c.body, get_world_3d().space)
 	PhysicsServer3D.body_set_state(c.body, PhysicsServer3D.BODY_STATE_TRANSFORM, body_xf)
+	c.toppled = toppled
 	if toppled:
 		# Nudge it over its weakest edge so it visibly leans before it goes.
 		var g := _group[comp[0]]
-		var base := _group_origin[g].origin
-		var lean := Vector3(com.x - base.x, 0, com.z - base.z).normalized()
-		var axis := Vector3.UP.cross(lean).normalized()
+		var lean := _group_origin[g].basis * Vector3(_tip.x, 0, _tip.y)
+		lean.y = 0.0
+		var axis := Vector3.UP.cross(lean.normalized()).normalized()
 		PhysicsServer3D.body_set_state(c.body, PhysicsServer3D.BODY_STATE_ANGULAR_VELOCITY, axis * 0.6)
 	_clusters.append(c)
 	_dirty_groups[_group[comp[0]]] = true
@@ -652,11 +666,35 @@ func _update_clusters(delta: float) -> void:
 		if c.age > 0.1 and drop > IMPACT_DV and peak > IMPACT_MIN_SPEED and _touches_solid(c):
 			_impact(c, xf, peak)
 			continue
+		_check_lean(c, xf, delta)
 		if c.age > CLUSTER_MAX_AGE or (asleep and c.age > 0.5) or xf.origin.y < DebrisSystem.KILL_Y:
 			_dissolve(c, Vector3.ZERO, 0.0)
 			continue
 		for k in c.members.size():
 			_write_instance(c.members[k], xf * c.offsets[k])
+
+
+## A heavy piece leaning on a standing one pushes it over (tower into tower).
+func _check_lean(c: Cluster, xf: Transform3D, delta: float) -> void:
+	if c.leaned or c.age < 0.2:
+		return
+	var state := PhysicsServer3D.body_get_direct_state(c.body)
+	if state == null:
+		return
+	for k in state.get_contact_count():
+		var seg: int = _rid_to_seg.get(state.get_contact_collider(k), -1)
+		if seg < 0 or _state[seg] != State.STATIC:
+			continue
+		c.lean_time += delta
+		if c.lean_time < LEAN_TIME:
+			return
+		c.leaned = true
+		var at := state.get_contact_collider_position(k)
+		var push := at - xf.origin
+		push.y = 0.0
+		_knock(seg, push.normalized() * 2.0, c.mass * LEAN_SPEED, at)
+		return
+	c.lean_time = maxf(c.lean_time - delta, 0.0)
 
 
 ## A falling piece hit something: damage what it struck, then break it up.

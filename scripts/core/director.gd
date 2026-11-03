@@ -246,6 +246,7 @@ static func _vec(s: String) -> Vector3:
 
 func _bench() -> void:
 	var debris := world.debris
+	debris.retire_min_age = INF  # measure raw body counts, no soft budget
 	var step := int(options.get("step", "150"))
 	var limit := mini(int(options.get("max", "3000")), debris.capacity)
 	_place(Vector3(0, 0.05, 50), Vector3(0, 1, 30))

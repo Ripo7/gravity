@@ -6,12 +6,12 @@
 [node name="Level" type="Node3D"]
 script = ExtResource("1_level")
 title = "Twin Towers"
-hint = "Topple one tower into the other."
+hint = "Weaken one tower on the side facing the other: it falls the way you cut."
 charges = 2
 star_thresholds = Vector3(0.45, 0.7, 0.9)
 
 [node name="PlayerStart" type="Marker3D" parent="."]
-transform = Transform3D(0.9659, 0, -0.2588, 0, 1, 0, 0.2588, 0, 0.9659, -6, 0.05, 14)
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 0, 0.05, 13)
 
 [node name="West" type="Node3D" parent="."]
 transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, -3, 0, 0)
