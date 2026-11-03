@@ -1,0 +1,17 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/game.tscn" id="1_game"]
+[ext_resource type="Script" path="res://scripts/ui/main_menu.gd" id="2_menu"]
+
+[node name="Menu" instance=ExtResource("1_game")]
+level_path = "res://levels/sandbox.tscn"
+attract = true
+
+[node name="MainMenu" type="Control" parent="UI"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("2_menu")

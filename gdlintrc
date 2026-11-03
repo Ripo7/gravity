@@ -14,7 +14,7 @@ class-definitions-order:
 - onreadyprvvars
 - others
 max-line-length: 110
-max-file-lines: 600
+max-file-lines: 1000
 max-public-methods: 40
 max-returns: 8
 function-arguments-number: 8

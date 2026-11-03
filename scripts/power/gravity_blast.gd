@@ -19,19 +19,22 @@ const LINGER := 0.8
 var params: BlastParams
 var phase := Phase.PULL
 var pieces_affected := 0
+## Horizontal direction the ball was flying: the burst drives things this way.
+var direction := Vector3.ZERO
 var _t := 0.0
 var _world: GameWorld
 
 
-func setup(world: GameWorld, p: BlastParams, at: Vector3) -> void:
+func setup(world: GameWorld, p: BlastParams, at: Vector3, travel := Vector3.ZERO) -> void:
 	_world = world
 	params = p
 	position = at
+	var flat := Vector3(travel.x, 0, travel.z)
+	direction = flat.normalized() if flat.length() > 0.1 else Vector3.ZERO
 
 
 func _ready() -> void:
 	_world.structures.apply_blast(global_position, params, 1.0)
-	_world.structures.settle()
 
 
 func _physics_process(delta: float) -> void:
@@ -88,7 +91,6 @@ func _burst() -> void:
 	var c := global_position
 	var debris := _world.debris
 	_world.structures.apply_blast(c, params, 0.6)
-	_world.structures.settle()
 	var big: Array[int] = []
 	for i in debris.capacity:
 		if not debris.is_active(i):
@@ -98,7 +100,7 @@ func _burst() -> void:
 			big.append(i)
 	# Large whole blocks near the core shatter before being thrown.
 	for i in big:
-		if params.damage * params.falloff(debris.position_of(i).distance_to(c)) > 2.0:
+		if params.damage * params.break_falloff(debris.position_of(i).distance_to(c)) > 2.0:
 			debris.fracture(i)
 	pieces_affected = 0
 	for i in debris.capacity:
@@ -117,6 +119,7 @@ func _burst() -> void:
 		debris.set_velocity(i, debris.velocity_of(i) * 0.2 + dir * kick)
 		debris.add_spin(i, Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * 10.0 * f)
 		debris.set_tint(i, 1.0)
+	_world.structures.push_clusters(c, params.radius * 1.2, params.burst_speed * 0.6, direction)
 	_push_player(PLAYER_BURST * params.burst_speed, false)
 	burst.emit()
 

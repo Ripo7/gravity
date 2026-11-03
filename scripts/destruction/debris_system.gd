@@ -13,7 +13,7 @@ const LAYER_STRUCTURES := 2
 const LAYER_DEBRIS := 4
 const LAYER_PLAYER := 8
 const KILL_Y := -40.0
-const FLOATS_PER_INSTANCE := 16  # 12 transform + 4 colour
+const FLOATS_PER_INSTANCE := 20  # 12 transform + 4 colour + 4 custom
 const TINT_DECAY := 0.6  # violet glow fades per second
 const SOFT_BUDGET := 0.8  ## fraction of capacity kept before retiring pieces
 const FADE_TIME := 1.2  ## seconds a retired piece takes to shrink away
@@ -124,6 +124,7 @@ func _build_pool() -> void:
 	_multimesh = MultiMesh.new()
 	_multimesh.transform_format = MultiMesh.TRANSFORM_3D
 	_multimesh.use_colors = true
+	_multimesh.use_custom_data = true  # same shader as blocks (crack slot)
 	_multimesh.mesh = box
 	_multimesh.instance_count = capacity
 	var mmi := MultiMeshInstance3D.new()

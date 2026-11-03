@@ -27,5 +27,5 @@ glow_bloom = 0.02
 glow_hdr_threshold = 1.2
 fog_enabled = true
 fog_light_color = Color(0.86, 0.88, 0.92, 1)
-fog_density = 0.0035
+fog_density = 0.0016
 fog_sky_affect = 0.0

@@ -2,6 +2,10 @@ extends Node
 ## Scripted runs used by CI and for rendering previews:
 ##   --mode=showcase [--shots=DIR]  scripted blasts, optional screenshots
 ##   --mode=bench [--max=N]         body-count benchmark, prints BENCH lines
+##   --mode=shot [--wait=S]         one screenshot of whatever is on screen
+##   --mode=play --level=PATH --throws="x,y,z@charge;..." [--from=x,y,z]
+##        plays a level with scripted throws (waits for each to settle),
+##        prints the result: used to tune star thresholds.
 
 var options := {}
 var world: GameWorld
@@ -13,14 +17,19 @@ var _label: Label
 func _ready() -> void:
 	world = get_parent() as GameWorld
 	player = world.player
-	if options.get("mode", "") == "probe":
-		_probe()
-		return
-	player.input_enabled = false
-	player.power.auto_input = true
 	_shot_dir = options.get("shots", "")
 	if _shot_dir != "":
 		DirAccess.make_dir_recursive_absolute(_shot_dir)
+	if options.get("mode", "") == "probe":
+		_probe()
+		return
+	if options.get("mode", "") == "shot":
+		await _wait(float(options.get("wait", "2.0")))
+		await _shot(options.get("name", "shot"))
+		get_tree().quit()
+		return
+	player.input_enabled = false
+	player.power.auto_input = true
 	match options.get("mode", ""):
 		"showcase":
 			_showcase()
@@ -28,6 +37,8 @@ func _ready() -> void:
 			_bench()
 		"still":
 			_still()
+		"play":
+			_play()
 
 
 func _wait(seconds: float) -> void:
@@ -141,6 +152,47 @@ func _probe() -> void:
 				]
 			)
 		)
+
+
+## Plays the current level with scripted throws and reports the outcome.
+func _play() -> void:
+	var run := world.get_node_or_null("Run") as LevelRun
+	if options.has("from"):
+		player.global_position = _vec(options["from"])
+	await _wait(0.6)
+	await _shot("00_start")
+	var k := 0
+	for spec: String in String(options.get("throws", "")).split(";", false):
+		var parts := spec.split("@")
+		var target := _vec(parts[0])
+		var charge := float(parts[1]) if parts.size() > 1 else 1.0
+		k += 1
+		# Lead the target for the ball's slight drop.
+		var eye := player.global_position + Vector3(0, 1.6, 0)
+		var speed := BlastParams.from_charge(charge).throw_speed
+		var t := eye.distance_to(target) / speed
+		await _aim(target + Vector3.UP * 0.5 * PowerBall.GRAVITY * t * t, 0.5)
+		player.power.begin_charge()
+		await _wait(1.6 * charge)
+		player.power.release()
+		await world.detonated
+		await _wait(0.5)
+		await _shot("%02d_blast" % k)
+		await _wait(2.5)
+		await _shot("%02d_after" % k)
+		print("THROW %d destruction=%.3f" % [k, world.structures.destruction()])
+	if run and not run.level.is_sandbox():
+		if run.state != LevelRun.State.RESULT:
+			await run.finished
+		await _wait(2.0)
+		await _shot("99_result")
+		print(
+			(
+				"RESULT stars=%d score=%d destruction=%.3f"
+				% [run.result_stars, run.result_score, world.structures.destruction()]
+			)
+		)
+	get_tree().quit()
 
 
 ## One screenshot from --pos=x,y,z looking at --at=x,y,z.

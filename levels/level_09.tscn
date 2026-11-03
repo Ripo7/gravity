@@ -1,0 +1,86 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/game/level.gd" id="1_level"]
+[ext_resource type="Script" path="res://scripts/destruction/structure.gd" id="2_structure"]
+
+[node name="Level" type="Node3D"]
+script = ExtResource("1_level")
+title = "Fortress"
+hint = "Walls, towers, no gaps. Bring it all down."
+charges = 3
+star_thresholds = Vector3(0.3, 0.5, 0.7)
+
+[node name="PlayerStart" type="Marker3D" parent="."]
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 0, 0.05, 18)
+
+[node name="WallS" type="Node3D" parent="."]
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 0, 0, 6)
+script = ExtResource("2_structure")
+counts = Vector3i(12, 8, 1)
+block = Vector3(1, 0.5, 0.5)
+strength = 3.0
+seed_value = 24
+
+[node name="WallN" type="Node3D" parent="."]
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 0, 0, -6)
+script = ExtResource("2_structure")
+counts = Vector3i(12, 8, 1)
+block = Vector3(1, 0.5, 0.5)
+strength = 3.0
+seed_value = 25
+
+[node name="WallW" type="Node3D" parent="."]
+transform = Transform3D(0.0, 0, 1.0, 0, 1, 0, -1.0, 0, 0.0, -6.25, 0, 0)
+script = ExtResource("2_structure")
+counts = Vector3i(11, 8, 1)
+block = Vector3(1, 0.5, 0.5)
+strength = 3.0
+seed_value = 26
+
+[node name="WallE" type="Node3D" parent="."]
+transform = Transform3D(0.0, 0, 1.0, 0, 1, 0, -1.0, 0, 0.0, 6.25, 0, 0)
+script = ExtResource("2_structure")
+counts = Vector3i(11, 8, 1)
+block = Vector3(1, 0.5, 0.5)
+strength = 3.0
+seed_value = 27
+
+[node name="TowerSW" type="Node3D" parent="."]
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, -7.5, 0, 7.5)
+script = ExtResource("2_structure")
+kind = 1
+counts = Vector3i(2, 14, 1)
+block = Vector3(1.2, 0.8, 0.45)
+strength = 3.5
+accent_material = 1
+seed_value = 28
+
+[node name="TowerSE" type="Node3D" parent="."]
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 7.5, 0, 7.5)
+script = ExtResource("2_structure")
+kind = 1
+counts = Vector3i(2, 14, 1)
+block = Vector3(1.2, 0.8, 0.45)
+strength = 3.5
+accent_material = 1
+seed_value = 29
+
+[node name="TowerNW" type="Node3D" parent="."]
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, -7.5, 0, -7.5)
+script = ExtResource("2_structure")
+kind = 1
+counts = Vector3i(2, 14, 1)
+block = Vector3(1.2, 0.8, 0.45)
+strength = 3.5
+accent_material = 1
+seed_value = 30
+
+[node name="TowerNE" type="Node3D" parent="."]
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 7.5, 0, -7.5)
+script = ExtResource("2_structure")
+kind = 1
+counts = Vector3i(2, 14, 1)
+block = Vector3(1.2, 0.8, 0.45)
+strength = 3.5
+accent_material = 1
+seed_value = 31

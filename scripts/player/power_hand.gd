@@ -14,6 +14,7 @@ var charge := 0.0
 var charging := false
 var auto_input := false  ## true when a script (demo/bench) drives the hand
 var touch_held := false  ## set by TouchControls while the charge button is held
+var enabled := true  ## false when the level is out of charges
 var _cooldown_left := 0.0
 var _ball: MeshInstance3D
 var _light: OmniLight3D
@@ -43,25 +44,29 @@ func _process(delta: float) -> void:
 	_cooldown_left = maxf(_cooldown_left - delta, 0.0)
 	if not auto_input:
 		var held := touch_held or (Input.is_action_pressed("charge") and _input_allowed())
-		if held and not charging and _cooldown_left <= 0.0:
+		if held and not charging and _cooldown_left <= 0.0 and enabled:
 			begin_charge()
 		elif not held and charging:
 			release()
 	if charging:
 		charge = minf(charge + delta / charge_time, 1.0)
 		charge_changed.emit(charge)
+		Sfx.update_charge(charge)
 	_update_visual(delta)
 
 
 func begin_charge() -> void:
 	charging = true
 	charge = 0.0
+	Sfx.start_charge()
 
 
 func release() -> void:
 	if not charging:
 		return
 	charging = false
+	Sfx.stop_charge()
+	Sfx.play("throw", global_position, -6.0 + charge * 4.0, 1.1 - charge * 0.2)
 	var params := BlastParams.from_charge(_eased(charge))
 	var cam := get_viewport().get_camera_3d()
 	var dir := -cam.global_basis.z if cam else -global_basis.z

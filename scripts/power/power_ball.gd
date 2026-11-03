@@ -3,7 +3,7 @@ extends Node3D
 ## The thrown ball. Moves with a sphere shape-cast each physics step and
 ## detonates a GravityBlast on the first hit (or when its fuse runs out).
 
-const GRAVITY := 5.0
+const GRAVITY := 2.5
 const FUSE := 3.5
 const HIT_MASK := DebrisSystem.LAYER_WORLD | DebrisSystem.LAYER_STRUCTURES | DebrisSystem.LAYER_DEBRIS
 
@@ -69,5 +69,5 @@ func _physics_process(delta: float) -> void:
 func _detonate() -> void:
 	var world := GameWorld.of(self)
 	if world:
-		world.detonate(global_position, params)
+		world.detonate(global_position, params, velocity)
 	queue_free()

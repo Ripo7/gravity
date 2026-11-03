@@ -7,6 +7,7 @@ func test_everything_scales_with_charge() -> void:
 	check(big.radius > small.radius, "radius")
 	check(big.burst_speed > small.burst_speed, "burst")
 	check(big.damage > small.damage * 4.0, "damage grows faster than linear")
+	check(big.break_radius < big.radius * 0.5, "damage reaches less far than the pull")
 	check(big.pull_time > small.pull_time, "pull time")
 	check(big.ball_radius > small.ball_radius, "ball size")
 	check(big.slow_motion and not small.slow_motion, "slow motion only on big blasts")

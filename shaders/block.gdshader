@@ -2,6 +2,7 @@ shader_type spatial;
 // Every block and piece of debris, all materials, in one draw call.
 // Per-instance COLOR: r = shade, g = material (0 / 0.5 / 1, see materials.gd),
 // b = random seed, a = violet glow from the power.
+// INSTANCE_CUSTOM.r = damage (0..1), drawn as cracks.
 // Patterns are procedural in the block's own space (scaled to metres), so
 // they stay put on moving debris and need no textures.
 
@@ -21,6 +22,8 @@ varying float shade;
 varying float material_id;
 varying float seed;
 varying float tint;
+varying float damage;
+varying float world_y;
 
 float hash(vec3 p) {
 	p = fract(p * 0.3183099 + 0.1);
@@ -58,6 +61,47 @@ void vertex() {
 	material_id = COLOR.g < 0.1 ? 0.0 : (COLOR.g < 0.6 ? 1.0 : 2.0);
 	seed = COLOR.b;
 	tint = COLOR.a;
+	damage = INSTANCE_CUSTOM.r;
+	world_y = (MODEL_MATRIX * vec4(VERTEX, 1.0)).y;
+}
+
+vec2 hash22(vec2 p) {
+	p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
+	return fract(sin(p) * 43758.5453);
+}
+
+// Distance to the nearest Voronoi cell edge, and that cell's random id.
+vec2 voronoi_edge(vec2 x) {
+	vec2 n = floor(x);
+	vec2 f = fract(x);
+	vec2 mg;
+	vec2 mr;
+	float md = 8.0;
+	for (int j = -1; j <= 1; j++) {
+		for (int i = -1; i <= 1; i++) {
+			vec2 g = vec2(float(i), float(j));
+			vec2 o = hash22(n + g);
+			vec2 r = g + o - f;
+			float d = dot(r, r);
+			if (d < md) {
+				md = d;
+				mr = r;
+				mg = g;
+			}
+		}
+	}
+	md = 8.0;
+	for (int j = -2; j <= 2; j++) {
+		for (int i = -2; i <= 2; i++) {
+			vec2 g = mg + vec2(float(i), float(j));
+			vec2 o = hash22(n + g);
+			vec2 r = g + o - f;
+			if (dot(mr - r, mr - r) > 0.00001) {
+				md = min(md, dot(0.5 * (mr + r), normalize(r - mr)));
+			}
+		}
+	}
+	return vec2(md, hash22(n + mg).x);
 }
 
 void fragment() {
@@ -107,6 +151,19 @@ void fragment() {
 	if (face.z < 0.5) { edge_dist = min(edge_dist, d.z); }
 	float edge = 1.0 - smoothstep(0.0, 0.05, edge_dist);
 	albedo *= 1.0 - edge * 0.22;
+
+	// Cracks: more and wider with damage, on the face's own plane.
+	if (damage > 0.02) {
+		vec2 uv = face.x > 0.5 ? local_pos.yz : (face.y > 0.5 ? local_pos.xz : local_pos.xy);
+		vec2 e = voronoi_edge(uv * 3.2 + seed * 11.0);
+		float shown = step(e.y, damage * 1.3);
+		float w = 0.015 + 0.05 * damage;
+		float crack = (1.0 - smoothstep(w * 0.5, w, e.x)) * shown;
+		albedo *= 1.0 - crack * 0.65;
+	}
+
+	// Cheap contact shadow where blocks meet the ground.
+	albedo *= mix(0.72, 1.0, smoothstep(0.0, 0.6, world_y));
 
 	albedo *= shade;
 	float t = clamp(tint, 0.0, 1.0);

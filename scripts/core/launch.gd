@@ -1,7 +1,8 @@
 extends Node
-## Reads launch options and, if a scripted mode is requested, attaches a
-## Director to the main scene. Desktop: `godot -- --mode=bench`.
-## Web: `index.html?mode=bench`.
+## Reads launch options and, if a scripted mode is requested, opens the
+## game scene and attaches a Director to it.
+## Desktop: `godot -- --mode=bench [--level=res://levels/level_04.tscn]`.
+## Web: `index.html?mode=bench`. `--level` alone jumps straight into a level.
 
 var options := {}
 
@@ -14,8 +15,22 @@ func _ready() -> void:
 			options.merge(parse_query(query), true)
 	if options.get("mode", "") == "bench":
 		DebrisSystem.capacity_override = int(options.get("max", "3000"))
-	if options.has("mode"):
-		get_tree().process_frame.connect(_attach, CONNECT_ONE_SHOT)
+	if options.has("level"):
+		GameState.current_level = options["level"]
+	if options.has("mode") or options.has("level"):
+		_open_game.call_deferred()
+
+
+func _open_game() -> void:
+	var stay: bool = options.get("mode", "") == "shot" and not options.has("level")
+	if not stay and not (get_tree().current_scene is GameWorld and not get_tree().current_scene.attract):
+		get_tree().change_scene_to_file(GameState.GAME_SCENE)
+	if not options.has("mode"):
+		return
+	# Wait for the game scene to be ready, then attach the director.
+	while not (get_tree().current_scene is GameWorld and get_tree().current_scene.is_node_ready()):
+		await get_tree().process_frame
+	_attach()
 
 
 func _attach() -> void:

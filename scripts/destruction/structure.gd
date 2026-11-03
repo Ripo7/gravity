@@ -5,7 +5,7 @@ extends Node3D
 ## StructureSet owns the physics bodies and rendering at runtime.
 ## Move, rotate and tweak these nodes in the editor to lay out an arena.
 
-enum Kind { WALL, TOWER, STACK, PILLARS }
+enum Kind { WALL, TOWER, STACK, PILLARS, BUILDING }
 
 @export var kind := Kind.WALL:
 	set(v):
@@ -13,6 +13,8 @@ enum Kind { WALL, TOWER, STACK, PILLARS }
 		_refresh_preview()
 ## WALL: (columns, rows, -). TOWER: (blocks per side, layers, -).
 ## STACK: (base x, -, base z). PILLARS: (pillars, drums per pillar, -).
+## BUILDING: (bays along x, storeys, bays along z); block = (bay width,
+## storey height, column width).
 @export var counts := Vector3i(8, 6, 1):
 	set(v):
 		counts = v
@@ -29,6 +31,8 @@ enum Kind { WALL, TOWER, STACK, PILLARS }
 ## Used for tower floor slabs and colonnade lintels.
 @export var accent_material := Materials.Kind.CONCRETE
 @export var seed_value := 0
+## Counts toward the level's destruction score.
+@export var scored := true
 
 var _preview: MultiMeshInstance3D
 
@@ -52,6 +56,8 @@ func build_segments() -> Array[Dictionary]:
 			_build_stack(out)
 		Kind.PILLARS:
 			_build_pillars(out)
+		Kind.BUILDING:
+			_build_building(out)
 	for seg in out:
 		seg["strength"] = seg.get("strength", strength)
 		seg["material"] = seg.get("material", material)
@@ -85,14 +91,17 @@ func _build_wall(out: Array[Dictionary]) -> void:
 				_seg(out, Vector3(x0 + (c + 0.5) * block.x, y, 0), block)
 
 
-## Hollow square tower with window gaps and a floor slab every 4 layers.
+## Hollow square tower with window gaps. Every 4 layers a floor slab spans
+## the whole tower and rests on the walls; the next layers stand on it.
 func _build_tower(out: Array[Dictionary]) -> void:
 	var n := maxi(counts.x, 2)
 	var side := n * block.x
 	var half := side * 0.5
 	var t := block.z
+	var slab_t := 0.2
+	var base := 0.0
 	for layer in counts.y:
-		var y := (layer + 0.5) * block.y
+		var y := base + 0.5 * block.y
 		var window_row := layer % 4 == 2 and layer < counts.y - 1
 		for i in n:
 			var along := -half + (i + 0.5) * block.x
@@ -107,13 +116,13 @@ func _build_tower(out: Array[Dictionary]) -> void:
 			if not is_window or layer % 8 == 6:
 				_seg(out, Vector3(half - t * 0.5, y, z), Vector3(t, block.y, piece))
 				_seg(out, Vector3(-half + t * 0.5, y, -z), Vector3(t, block.y, piece))
-		if layer % 4 == 3:
-			var slab_y := (layer + 1) * block.y + 0.1
-			var inner_side := side - 2.0 * t
-			var q := inner_side * 0.5
+		base += block.y
+		if layer % 4 == 3 and layer < counts.y - 1:
+			var q := side * 0.5
 			for sx: float in [-0.5, 0.5]:
 				for sz: float in [-0.5, 0.5]:
-					_seg(out, Vector3(sx * q, slab_y - 0.1, sz * q), Vector3(q, 0.2, q), 0.8, true)
+					_seg(out, Vector3(sx * q, base + slab_t * 0.5, sz * q), Vector3(q, slab_t, q), 0.8, true)
+			base += slab_t
 
 
 ## Pyramid of crates.
@@ -144,6 +153,38 @@ func _build_pillars(out: Array[Dictionary]) -> void:
 	for p in counts.x - 1:
 		var x := (p + 0.5 - (counts.x - 1) * 0.5) * gap
 		_seg(out, Vector3(x, top + 0.25, 0), Vector3(gap + block.x, 0.5, block.z * 1.1), 1.5, true)
+
+
+## Frame building: columns at every bay corner, a floor slab per bay on
+## each storey, and some facade panels (accent material) between columns.
+func _build_building(out: Array[Dictionary]) -> void:
+	var bay := block.x
+	var storey := block.y
+	var cw := block.z
+	var slab_t := 0.25
+	var nx := maxi(counts.x, 1)
+	var nz := maxi(counts.z, 1)
+	var x0 := -nx * bay * 0.5
+	var z0 := -nz * bay * 0.5
+	var col_h := storey - slab_t
+	for s in counts.y:
+		var base := s * storey
+		for ix in nx + 1:
+			for iz in nz + 1:
+				var c := Vector3(x0 + ix * bay, base + col_h * 0.5, z0 + iz * bay)
+				_seg(out, c, Vector3(cw, col_h, cw), 1.2)
+		# Facade panels on the long sides, every other bay, offset per storey.
+		for ix in nx:
+			if (ix + s) % 2 == 1:
+				continue
+			var px := x0 + (ix + 0.5) * bay
+			var panel := Vector3(bay - cw, col_h, 0.12)
+			_seg(out, Vector3(px, base + col_h * 0.5, z0), panel, 0.5, true)
+			_seg(out, Vector3(px, base + col_h * 0.5, -z0), panel, 0.5, true)
+		for ix in nx:
+			for iz in nz:
+				var c := Vector3(x0 + (ix + 0.5) * bay, base + col_h + slab_t * 0.5, z0 + (iz + 0.5) * bay)
+				_seg(out, c, Vector3(bay, slab_t, bay), 0.9)
 
 
 ## Editor-only preview so the layout is visible while editing scenes.

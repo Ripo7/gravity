@@ -5,7 +5,7 @@ var world: GameWorld
 
 
 func _load_world() -> void:
-	world = load("res://scenes/main.tscn").instantiate()
+	world = load("res://scenes/game.tscn").instantiate()
 	add_child(world)
 	world.player.input_enabled = false
 	await frames(2)

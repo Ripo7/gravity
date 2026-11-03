@@ -8,13 +8,15 @@ config_version=5
 config/name="Gravity"
 config/description="First-person gravity-blast destruction sandbox."
 config/version="0.1.0"
-run/main_scene="res://scenes/main.tscn"
+run/main_scene="res://scenes/menu.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 config/icon="res://icon.svg"
 
 [autoload]
 
 InputSetup="*res://scripts/core/input_setup.gd"
+GameState="*res://scripts/game/game_state.gd"
+Sfx="*res://scripts/core/sfx.gd"
 Launch="*res://scripts/core/launch.gd"
 
 [debug]

@@ -4,6 +4,7 @@ extends Node
 
 
 func _ready() -> void:
+	GameState.persist = false
 	var failed := 0
 	var passed := 0
 	var files := DirAccess.get_files_at("res://tests")
