@@ -225,7 +225,8 @@ func _still() -> void:
 		var s := world.structures
 		for i in s.segment_count():
 			var bp := s.transform_of(i).origin
-			if s.is_alive(i) and bp.y < 2.9 and absf(bp.x - at.x) < 6.5 and absf(bp.z - at.z) < 6.5:
+			var h := float(options.get("collapse_h", "2.9"))
+			if s.is_alive(i) and bp.y < h and absf(bp.x - at.x) < 6.5 and absf(bp.z - at.z) < 6.5:
 				s.break_segment(i)
 	if options.has("shieldat"):
 		# A shield seen from outside: --shieldat=x,y,z --shieldyaw=deg

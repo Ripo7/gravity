@@ -5,6 +5,10 @@ extends Node3D
 
 signal vortex_opened(vortex: Vortex)
 
+## Collapses this big (pieces) can trigger a beat of slow motion.
+const SLOWMO_MIN_PIECES := 40
+const SLOWMO_COOLDOWN := 6.0  ## real seconds
+
 @export var structures: StructureSet
 @export var debris: DebrisSystem
 @export var player: Player
@@ -19,6 +23,9 @@ var level: Level
 ## Path of the level scene that was loaded.
 var level_file := ""
 var blasts_total := 0
+## Slow motion and other camera drama; off for the menu backdrop.
+var cinematic := true
+var _last_slowmo := -100.0
 
 
 static func of(node: Node) -> GameWorld:
@@ -64,12 +71,14 @@ func build_structures() -> void:
 	for st in level.structures():
 		structures.add_structure(st.global_transform, st.build_segments(), st.scored)
 		st.visible = false
+	structures.link_anchors()
 
 
 ## Dust, chips, camera shake and sound for breaks and collapses.
 func _connect_juice() -> void:
 	if dust:
 		dust.structures = structures
+		structures.dust = dust
 	structures.shattered.connect(
 		func(at: Vector3, size: Vector3, kind: int) -> void:
 			var r := size.length() * 0.5
@@ -79,6 +88,18 @@ func _connect_juice() -> void:
 				var vol := size.x * size.y * size.z
 				dust.chips_box(at, size, kind, clampi(int(8 + vol * 30.0), 8, 40), 3.0 + r * 2.0)
 			Sfx.play_break(kind, at, r)
+	)
+	structures.about_to_fail.connect(
+		func(at: Vector3, count: int) -> void:
+			# It creaks, sheds a little dust and gravel, and holds a moment.
+			Sfx.play("creak", at, -2.0 + minf(count, 120) * 0.05, 0.8)
+			if dust:
+				dust.puff(at, 1.5, Materials.Kind.CONCRETE, 8)
+				dust.chips(at, 2.0, Materials.Kind.CONCRETE, 1.0, 14)
+			var cam := get_viewport().get_camera_3d() as CameraShake
+			if cam:
+				var d := cam.global_position.distance_to(at)
+				cam.add_trauma(0.12 * clampf(1.0 - d / 40.0, 0.0, 1.0))
 	)
 	structures.cluster_released.connect(
 		func(at: Vector3, count: int, toppled: bool) -> void:
@@ -102,7 +123,29 @@ func _connect_juice() -> void:
 				var d := cam.global_position.distance_to(at)
 				var near := clampf(1.0 - d / 45.0, 0.0, 1.0)
 				cam.add_trauma(clampf(mass / 4000.0, 0.1, 0.6) * near)
+				# The big ones get a beat of slow motion when you are close.
+				if count >= SLOWMO_MIN_PIECES and near > 0.2:
+					slow_motion()
 	)
+
+
+## A short beat of slow motion (big collapses). Not in headless runs
+## (tests), and not again for a few seconds.
+func slow_motion(scale := 0.35, hold := 0.35, back := 0.5) -> void:
+	if DisplayServer.get_name() == "headless" or not cinematic:
+		return
+	var now := Time.get_ticks_msec() / 1000.0
+	if now - _last_slowmo < SLOWMO_COOLDOWN:
+		return
+	_last_slowmo = now
+	Engine.time_scale = scale
+	var tw := create_tween().set_ignore_time_scale(true)
+	tw.tween_interval(hold)
+	tw.tween_property(Engine, "time_scale", 1.0, back).set_ease(Tween.EASE_IN_OUT)
+
+
+func _exit_tree() -> void:
+	Engine.time_scale = 1.0
 
 
 # --- Powers --------------------------------------------------------------------
@@ -134,6 +177,7 @@ func cast_shield(base: Transform3D) -> IceShield:
 
 
 func _start_attract() -> void:
+	cinematic = false
 	player.input_enabled = false
 	player.invulnerable = true
 	player.power.auto_input = true

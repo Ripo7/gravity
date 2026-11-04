@@ -492,6 +492,15 @@ func thaw(i: int) -> void:
 	_sleeping[i] = 0
 
 
+## Active pieces whose centre is inside `box`.
+func pieces_in(box: AABB) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	for i in capacity:
+		if _active[i] and box.has_point(_pos[i]):
+			out.append(i)
+	return out
+
+
 func is_frozen(i: int) -> bool:
 	return _frozen[i] == 1
 

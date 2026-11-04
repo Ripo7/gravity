@@ -30,7 +30,9 @@ func test_resting_rubble_freezes_and_thaws() -> void:
 	var y := d.position_of(top).y
 	d.despawn(bottom)
 	await get_tree().create_timer(1.0).timeout
-	check(d.position_of(top).y < y - 0.6, "what rested on it falls (%.2f -> %.2f)" % [y, d.position_of(top).y])
+	check(
+		d.position_of(top).y < y - 0.6, "what rested on it falls (%.2f -> %.2f)" % [y, d.position_of(top).y]
+	)
 	await _unload()
 
 
@@ -61,4 +63,59 @@ func test_breaks_spray_chips_that_land() -> void:
 	check(low > 20, "most landed on the ground (%d)" % low)
 	await get_tree().create_timer(7.5).timeout
 	check_eq(chips.active, 0, "and faded away")
+	await _unload()
+
+
+func test_tall_building_creaks_then_pancakes_floor_by_floor() -> void:
+	await _load_world()
+	var st := Structure.new()
+	st.kind = Structure.Kind.APARTMENT
+	st.counts = Vector3i(2, 7, 2)
+	st.block = Vector3(4.0, 3.2, 0.45)
+	var s := world.structures
+	var first := s.segment_count()
+	s.add_structure(Transform3D(Basis(), SPOT + Vector3(0, 0, -12)), st.build_segments())
+	st.free()
+	var events := {"fail": 0, "crush": 0}
+	s.about_to_fail.connect(func(_a: Vector3, _n: int) -> void: events["fail"] += 1)
+	s.floor_crushed.connect(func(_a: Vector3, _n: int, _sp: float) -> void: events["crush"] += 1)
+	await frames(5)
+	# Blow out the two lowest storeys: the five above drop 6 m.
+	for i in range(first, s.segment_count()):
+		if s.is_alive(i) and s.transform_of(i).origin.y < 6.3:
+			s.break_segment(i)
+	world.debris.clear()
+	await frames(3)
+	check_eq(events["fail"], 1, "it creaks and holds a moment first")
+	var standing := 0
+	for i in range(first, s.segment_count()):
+		if s.is_alive(i):
+			standing += 1
+	check(standing > 50, "still up during the creak (%d)" % standing)
+	await get_tree().create_timer(4.0).timeout
+	check(events["crush"] >= 2, "floors crush one after another (%d)" % events["crush"])
+	await _unload()
+
+
+func test_roof_water_tower_falls_with_its_building() -> void:
+	await _load_world()
+	var s := world.structures
+	var roof := Vector3(12, 0, -14)  # building with a water tower on top
+	var tower_before := 0
+	for i in s.segment_count():
+		var p := s.transform_of(i).origin
+		if s.is_alive(i) and p.y > 19.0 and absf(p.x - roof.x) < 2.0 and absf(p.z - roof.z) < 2.0:
+			tower_before += 1
+	check(tower_before > 10, "water tower on the roof (%d)" % tower_before)
+	for i in s.segment_count():
+		var p := s.transform_of(i).origin
+		if s.is_alive(i) and p.y < 6.3 and absf(p.x - roof.x) < 6.5 and absf(p.z - roof.z) < 6.5:
+			s.break_segment(i)
+	await get_tree().create_timer(3.0).timeout
+	var left := 0
+	for i in s.segment_count():
+		var p := s.transform_of(i).origin
+		if s.is_alive(i) and p.y > 19.0 and absf(p.x - roof.x) < 2.0 and absf(p.z - roof.z) < 2.0:
+			left += 1
+	check_eq(left, 0, "it comes down with the building")
 	await _unload()

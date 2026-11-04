@@ -9,7 +9,6 @@ enum Kind { WALL, TOWER, STACK, PILLARS, BUILDING, RAMP, BRIDGE, APARTMENT }
 
 const LANDING_DEPTH := 2.0
 const SLAB := 0.3
-const BRIDGE_END_GAP := 0.12
 
 @export var kind := Kind.WALL:
 	set(v):
@@ -46,6 +45,11 @@ const BRIDGE_END_GAP := 0.12
 @export var seed_value := 0
 ## Counts toward the level's destruction score.
 @export var scored := true
+## BRIDGE: how far the deck reaches past the end columns.
+@export var end_overhang := 0.0:
+	set(v):
+		end_overhang = v
+		_refresh_preview()
 ## APARTMENT: extra open bays, each (side, bay, storey); sides are
 ## 0 = -z, 1 = +z, 2 = -x, 3 = +x.
 @export var doors := PackedVector3Array():
@@ -321,12 +325,13 @@ func _build_bridge(out: Array[Dictionary]) -> void:
 	for j in spans:
 		var a := x0 + j * span
 		var b := a + span
-		# The ends stop just short of whatever they lead to: overlapping a
-		# building would fling both apart the moment either one falls.
+		# The ends reach past the last columns to just short of whatever
+		# they lead to: overlapping a building would fling both apart the
+		# moment either one falls.
 		if j == 0:
-			a += BRIDGE_END_GAP
+			a -= end_overhang
 		if j == spans - 1:
-			b -= BRIDGE_END_GAP
+			b += end_overhang
 		var piece_len := b - a
 		var cx := (a + b) * 0.5
 		_seg(out, Vector3(cx, top + SLAB * 0.5, 0), Vector3(piece_len, SLAB, w))

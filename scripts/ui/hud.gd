@@ -18,6 +18,7 @@ var deaths := 0
 var _stats: Label
 var _title: Label
 var _pause_button: Button
+var _slots := {}  # popup slot -> its label
 var _meter_pulse := 0.0
 var _hurt_flash := 0.0
 var _hurt_dir := 0.0
@@ -86,8 +87,16 @@ func hurt(amount: float, from: Vector3) -> void:
 
 
 ## Big centred callout that floats up and fades.
-func popup(text: String, color := UiTheme.INK, font_size := 40, offset := Vector2.ZERO) -> void:
+## A word that pops up and floats away. Popups sharing a `slot` replace
+## each other instead of piling up on top of one another.
+func popup(text: String, color := UiTheme.INK, font_size := 40, offset := Vector2.ZERO, slot := "") -> void:
+	if slot != "":
+		var old: Variant = _slots.get(slot)
+		if old != null and is_instance_valid(old):
+			(old as Node).queue_free()
 	var l := Label.new()
+	if slot != "":
+		_slots[slot] = l
 	l.text = text
 	l.add_theme_font_override("font", UiTheme.bold())
 	l.add_theme_font_size_override("font_size", font_size)
