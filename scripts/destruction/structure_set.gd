@@ -646,6 +646,17 @@ func _dissolve(c: Cluster, hit: Vector3, severity: float) -> void:
 			_dislodge(i, vel, w, 0.0)
 
 
+## Centres of the falling pieces of building moving faster than `speed`
+## (for dust trails).
+func falling_cluster_positions(speed: float) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	for c in _clusters:
+		if c.prev_velocity.length_squared() > speed * speed:
+			var xf: Transform3D = PhysicsServer3D.body_get_state(c.body, PhysicsServer3D.BODY_STATE_TRANSFORM)
+			out.append(xf.origin)
+	return out
+
+
 func _update_clusters(delta: float) -> void:
 	for c: Cluster in _clusters.duplicate():
 		c.age += delta

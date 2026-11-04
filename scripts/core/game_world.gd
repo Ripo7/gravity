@@ -68,6 +68,8 @@ func build_structures() -> void:
 
 ## Dust, chips, camera shake and sound for breaks and collapses.
 func _connect_juice() -> void:
+	if dust:
+		dust.structures = structures
 	structures.shattered.connect(
 		func(at: Vector3, size: Vector3, kind: int) -> void:
 			var r := size.length() * 0.5
@@ -87,13 +89,12 @@ func _connect_juice() -> void:
 		func(at: Vector3, mass: float, speed: float, count: int) -> void:
 			var r := clampf(1.0 + count * 0.04, 1.0, 5.0)
 			if dust:
-				dust.puff(at, r, Materials.Kind.CONCRETE, int(12 + count * 0.5))
-				dust.puff(
-					at + Vector3(randf_range(-1, 1), 0, randf_range(-1, 1)) * r,
-					r * 0.7,
-					Materials.Kind.CONCRETE,
-					10
-				)
+				# Big pieces of building landing raise a rolling wall of dust
+				# and leave a veil over the rubble.
+				var strength := clampf(mass / 20000.0, 0.2, 1.0)
+				dust.roll(at, r * 1.2, strength)
+				if count > 12:
+					dust.haze(at, r * 1.5)
 				dust.chips(at, r, Materials.Kind.CONCRETE, 3.0 + speed * 0.5, int(10 + count * 0.3))
 			Sfx.play("collapse", at, -10.0 + minf(mass / 400.0, 12.0))
 			var cam := get_viewport().get_camera_3d() as CameraShake

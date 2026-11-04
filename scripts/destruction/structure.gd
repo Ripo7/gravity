@@ -9,6 +9,7 @@ enum Kind { WALL, TOWER, STACK, PILLARS, BUILDING, RAMP, BRIDGE, APARTMENT }
 
 const LANDING_DEPTH := 2.0
 const SLAB := 0.3
+const BRIDGE_END_GAP := 0.12
 
 @export var kind := Kind.WALL:
 	set(v):
@@ -320,11 +321,12 @@ func _build_bridge(out: Array[Dictionary]) -> void:
 	for j in spans:
 		var a := x0 + j * span
 		var b := a + span
-		# The end pieces overhang a little to meet whatever they lead to.
+		# The ends stop just short of whatever they lead to: overlapping a
+		# building would fling both apart the moment either one falls.
 		if j == 0:
-			a -= 0.45
+			a += BRIDGE_END_GAP
 		if j == spans - 1:
-			b += 0.45
+			b -= BRIDGE_END_GAP
 		var piece_len := b - a
 		var cx := (a + b) * 0.5
 		_seg(out, Vector3(cx, top + SLAB * 0.5, 0), Vector3(piece_len, SLAB, w))

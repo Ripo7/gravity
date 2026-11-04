@@ -214,6 +214,19 @@ func _still() -> void:
 	if options.has("vortex"):
 		await _wait(0.2)
 		world.cast_vortex(t)
+	if options.has("dust"):
+		await _wait(0.1)
+		world.dust.roll(_vec(options["dust"]), 4.0, 1.0)
+		world.dust.puff(_vec(options["dust"]) + Vector3(-6, 2, 0), 1.0, Materials.Kind.CONCRETE, 20)
+	if options.has("collapse"):
+		# Knock out the ground floor of the building at --collapse=x,z.
+		var at := _vec(options["collapse"] + ",0")
+		at = Vector3(at.x, 0, at.y)
+		var s := world.structures
+		for i in s.segment_count():
+			var bp := s.transform_of(i).origin
+			if s.is_alive(i) and bp.y < 2.9 and absf(bp.x - at.x) < 6.5 and absf(bp.z - at.z) < 6.5:
+				s.break_segment(i)
 	if options.has("shieldat"):
 		# A shield seen from outside: --shieldat=x,y,z --shieldyaw=deg
 		var yaw := deg_to_rad(float(options.get("shieldyaw", "0")))
