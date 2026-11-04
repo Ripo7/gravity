@@ -119,3 +119,30 @@ func test_roof_water_tower_falls_with_its_building() -> void:
 			left += 1
 	check_eq(left, 0, "it comes down with the building")
 	await _unload()
+
+
+func test_a_resting_block_breaking_up_does_not_fling_pieces() -> void:
+	await _load_world()
+	var s := world.structures
+	var d := world.debris
+	var st := Structure.new()
+	st.kind = Structure.Kind.BRIDGE
+	st.counts = Vector3i(5, 8, 1)
+	st.block = Vector3(2.9, 1.56, 2.6)
+	var first := s.segment_count()
+	s.add_structure(Transform3D(Basis(), SPOT + Vector3(-4, 0, -14)), st.build_segments())
+	st.free()
+	var comp := PackedInt32Array()
+	for i in range(first, s.segment_count()):
+		comp.append(i)
+	s._release(comp, false)
+	await get_tree().create_timer(1.0).timeout
+	s._dissolve(s._clusters[s._clusters.size() - 1], Vector3.ZERO, 0.0)
+	var vmax := 0.0
+	for k in 10:
+		await get_tree().physics_frame
+		for i in d.capacity:
+			if d.is_active(i):
+				vmax = maxf(vmax, d.velocity_of(i).length())
+	check(vmax < 10.0, "the pile slumps, nothing flies (max %.1f m/s)" % vmax)
+	await _unload()

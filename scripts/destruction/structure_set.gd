@@ -753,12 +753,15 @@ func _dissolve(c: Cluster, hit: Vector3, severity: float) -> void:
 		if severity > 4.0 and (close or randf() < shatter_chance):
 			_shatter(i, hit, severity * 0.3, vel * 0.6)
 		else:
+			var spin := w
 			if severity <= 0.0:
 				# Came to rest without a real hit (leaning on rubble): loosen
 				# the blocks so the pile slumps instead of standing in mid-air.
+				# (Per piece: adding to `w` itself made it grow with every
+				# block and flung big pieces across the city.)
 				vel += Vector3(randf_range(-1, 1), randf_range(0, 0.5), randf_range(-1, 1)) * 0.8
-				w += Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * 2.0
-			_dislodge(i, vel, w, 0.0)
+				spin += Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * 2.0
+			_dislodge(i, vel, spin, 0.0)
 
 
 ## Centres of the falling pieces of building moving faster than `speed`
