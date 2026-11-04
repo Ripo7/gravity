@@ -1,11 +1,11 @@
 class_name DustSystem
 extends Node3D
-## Pooled dust clouds and flying chips for breaks and impacts.
+## Pooled dust clouds for breaks and impacts, and the chip system (gravel
+## and splinters without physics).
 ## CPU particles behave the same on desktop and WebGL; a fixed pool and a
 ## per-second budget keep big collapses from flooding the screen.
 
 const POOL := 20
-const CHIP_POOL := 16
 const MAX_PER_SECOND := 30
 
 const DUST_COLORS := {
@@ -13,22 +13,15 @@ const DUST_COLORS := {
 	Materials.Kind.WOOD: Color(0.8, 0.68, 0.52, 0.45),
 	Materials.Kind.METAL: Color(0.7, 0.72, 0.76, 0.35),
 }
-const CHIP_COLORS := {
-	Materials.Kind.CONCRETE: Color(0.7, 0.68, 0.64),
-	Materials.Kind.WOOD: Color(0.72, 0.52, 0.32),
-	Materials.Kind.METAL: Color(0.62, 0.66, 0.72),
-}
 
+var chip_system: ChipSystem
 var _dust: Array[CPUParticles3D] = []
-var _chips: Array[CPUParticles3D] = []
 var _next_dust := 0
-var _next_chip := 0
 var _spent := 0.0  # budget used, drains every second
 
 
 func _ready() -> void:
 	var dust_mesh := _dust_mesh()
-	var chip_mesh := _chip_mesh()
 	for i in POOL:
 		var p := CPUParticles3D.new()
 		p.mesh = dust_mesh
@@ -49,25 +42,8 @@ func _ready() -> void:
 		p.color_ramp = _fade_ramp()
 		_dust.append(p)
 		add_child(p)
-	for i in CHIP_POOL:
-		var c := CPUParticles3D.new()
-		c.mesh = chip_mesh
-		c.one_shot = true
-		c.emitting = false
-		c.explosiveness = 1.0
-		c.lifetime = 0.9
-		c.local_coords = false
-		c.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-		c.direction = Vector3.UP
-		c.spread = 160.0
-		c.gravity = Vector3(0, -18, 0)
-		c.angular_velocity_min = -720.0
-		c.angular_velocity_max = 720.0
-		c.particle_flag_rotate_y = true
-		c.scale_amount_min = 0.5
-		c.scale_amount_max = 1.4
-		_chips.append(c)
-		add_child(c)
+	chip_system = ChipSystem.new()
+	add_child(chip_system)
 
 
 func _process(delta: float) -> void:
@@ -95,18 +71,14 @@ func puff(at: Vector3, radius: float, kind: int, amount := 10) -> void:
 
 ## Small flying fragments that are not simulated as bodies.
 func chips(at: Vector3, radius: float, kind: int, speed := 5.0, amount := 12) -> void:
-	if _spent > MAX_PER_SECOND:
-		return
-	_spent += 0.5
-	var c := _chips[_next_chip]
-	_next_chip = (_next_chip + 1) % CHIP_POOL
-	c.global_position = at
-	c.amount = clampi(amount, 4, 32)
-	c.emission_sphere_radius = maxf(radius * 0.4, 0.05)
-	c.initial_velocity_min = speed * 0.4
-	c.initial_velocity_max = speed
-	c.color = CHIP_COLORS.get(kind, CHIP_COLORS[Materials.Kind.CONCRETE])
-	c.restart()
+	chip_system.burst(at, Vector3.ONE * radius, kind, amount, speed)
+
+
+## Gravel and splinters spraying out of a broken block of `size`.
+func chips_box(
+	at: Vector3, size: Vector3, kind: int, amount: int, speed := 4.0, kick := Vector3.ZERO
+) -> void:
+	chip_system.burst(at, size, kind, amount, speed, kick)
 
 
 func _dust_mesh() -> Mesh:
@@ -133,16 +105,6 @@ func _dust_mesh() -> Mesh:
 	quad.size = Vector2(1, 1)
 	quad.material = mat
 	return quad
-
-
-func _chip_mesh() -> Mesh:
-	var mat := StandardMaterial3D.new()
-	mat.vertex_color_use_as_albedo = true
-	mat.roughness = 0.9
-	var box := BoxMesh.new()
-	box.size = Vector3(0.07, 0.05, 0.06)
-	box.material = mat
-	return box
 
 
 static func _grow_curve() -> Curve:

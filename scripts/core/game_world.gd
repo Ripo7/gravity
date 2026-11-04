@@ -73,7 +73,9 @@ func _connect_juice() -> void:
 			var r := size.length() * 0.5
 			if dust:
 				dust.puff(at, r, kind, int(6 + r * 8))
-				dust.chips(at, r, kind, 4.0 + r * 2.0, int(6 + r * 10))
+				# Gravel scales with the volume that broke.
+				var vol := size.x * size.y * size.z
+				dust.chips_box(at, size, kind, clampi(int(8 + vol * 30.0), 8, 40), 3.0 + r * 2.0)
 			Sfx.play_break(kind, at, r)
 	)
 	structures.cluster_released.connect(

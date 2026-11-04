@@ -373,6 +373,9 @@ func _remove(i: int) -> void:
 		_score_dirty = true
 		PhysicsServer3D.body_set_space(_bodies[i], RID())
 		_dirty_groups[_group[i]] = true
+		# Rubble frozen on or against it must be free to fall.
+		if debris:
+			debris.thaw_near(_xform[i].origin, _size[i].length() * 0.5 + 0.5)
 	_state[i] = State.GONE
 	var o := i * FLOATS_PER_INSTANCE
 	for k in FLOATS_PER_INSTANCE:
@@ -562,9 +565,13 @@ func _release(comp: PackedInt32Array, toppled: bool) -> int:
 		_dissolve(_clusters[0], Vector3.ZERO, 0.0)
 	var c := Cluster.new()
 	var com := Vector3.ZERO
+	var bounds := AABB(_xform[comp[0]].origin, Vector3.ZERO)
 	for i in comp:
 		com += _xform[i].origin * _mass[i]
 		c.mass += _mass[i]
+		bounds = bounds.expand(_xform[i].origin)
+	# Rubble resting on what now falls must fall with it.
+	debris.thaw_box(bounds.grow(1.0))
 	com /= c.mass
 	var body_xf := Transform3D(Basis(), com)
 	var inv := body_xf.affine_inverse()
@@ -703,6 +710,8 @@ func _impact(c: Cluster, xf: Transform3D, speed: float) -> void:
 				struck = seg  # hitting a standing structure matters most
 				break
 	cluster_impact.emit(hit, c.mass, speed, c.members.size())
+	if debris:
+		debris.thaw_near(hit, 3.0)
 	# Heavy pieces hit harder: chain reactions and dominoes.
 	var heft := clampf(c.mass / 800.0, 1.0, 3.0)
 	var reach := clampf(0.8 + c.members.size() * 0.02, 1.0, 2.5)

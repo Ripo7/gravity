@@ -29,6 +29,8 @@ func _ready() -> void:
 		return
 	player.input_enabled = false
 	player.power.auto_input = true
+	if options.has("prof"):
+		_profile()
 	match options.get("mode", ""):
 		"showcase":
 			_showcase()
@@ -303,6 +305,45 @@ func _measure(seconds: float) -> Vector2:
 		await get_tree().physics_frame
 		total += Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0
 	return Vector2(total / maxf(frames, 1), Engine.get_frames_per_second())
+
+
+## --prof: once a second, average frame costs and live piece counts.
+func _profile() -> void:
+	var proc := 0.0
+	var phys := 0.0
+	var worst := 0.0
+	var n := 0
+	var t := 0.0
+	while is_inside_tree():
+		await get_tree().process_frame
+		var p := Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0
+		var f := Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0
+		proc += p
+		phys += f
+		worst = maxf(worst, p + f)
+		n += 1
+		t += get_process_delta_time()
+		if t >= 1.0:
+			var chips := world.dust.chip_system.active if world.dust else 0
+			print(
+				(
+					"PROF process %.1f  physics %.1f  worst %.1f ms  debris %d (awake %d, frozen %d)  chips %d"
+					% [
+						proc / n,
+						phys / n,
+						worst,
+						world.debris.active_count,
+						world.debris.awake_count,
+						world.debris.frozen_count,
+						chips,
+					]
+				)
+			)
+			proc = 0.0
+			phys = 0.0
+			worst = 0.0
+			n = 0
+			t = 0.0
 
 
 func _report(text: String) -> void:

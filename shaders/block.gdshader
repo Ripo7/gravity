@@ -9,6 +9,9 @@ shader_type spatial;
 uniform vec3 violet : source_color = vec3(0.55, 0.24, 1.0);
 uniform vec3 violet_deep : source_color = vec3(0.32, 0.08, 0.78);
 uniform float glow_strength = 0.9;
+// Debris and chips: the unit box (subdivided once) is cut into an
+// irregular faceted chunk, different for every piece.
+uniform bool chunky = false;
 
 uniform vec3 concrete : source_color = vec3(0.78, 0.76, 0.72);
 uniform vec3 wood : source_color = vec3(0.78, 0.58, 0.38);
@@ -53,7 +56,24 @@ float fbm(vec3 p) {
 	return v;
 }
 
+// Cuts the corners and bends the edges of the unit box inward, by amounts
+// that depend on the vertex position and the piece's seed. Shared corners
+// move together, so the chunk stays closed; nothing grows past the box, so
+// it never pokes through what it rests on.
+vec3 chunk(vec3 v, float s) {
+	vec3 a = abs(v) * 2.0;
+	float k = a.x + a.y + a.z;  // 3 corner, 2 edge middle, 1 face centre
+	vec3 h = vec3(hash(v * 7.13 + s * 31.7), hash(v * 3.71 + s * 17.3 + 5.0), hash(v * 5.27 + s * 11.9 + 9.0));
+	float pull = k > 2.5 ? 0.16 + 0.34 * h.x : (k > 1.5 ? 0.03 + 0.17 * h.y : 0.02 * h.z);
+	vec3 o = v * (1.0 - pull);
+	o += (h - 0.5) * 0.1 * step(1.5, k);
+	return clamp(o, vec3(-0.5), vec3(0.5));
+}
+
 void vertex() {
+	if (chunky) {
+		VERTEX = chunk(VERTEX, COLOR.b);
+	}
 	vec3 scale = vec3(length(MODEL_MATRIX[0].xyz), length(MODEL_MATRIX[1].xyz), length(MODEL_MATRIX[2].xyz));
 	local_pos = VERTEX * scale;
 	half_size = scale * 0.5;
@@ -107,6 +127,11 @@ vec2 voronoi_edge(vec2 x) {
 }
 
 void fragment() {
+	if (chunky) {
+		// Flat facets: the face normal from screen-space derivatives.
+		vec3 n = normalize(cross(dFdx(VERTEX), dFdy(VERTEX)));
+		NORMAL = dot(n, VIEW) < 0.0 ? -n : n;
+	}
 	vec3 p = local_pos + seed * 37.0;
 	vec3 albedo;
 	vec3 face = abs(local_normal);
