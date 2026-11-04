@@ -4,13 +4,15 @@ First-person destruction game in Godot 4.7 (GDScript, Jolt physics).
 You have overpowered powers. Flatten each map as fast as you can, without
 getting crushed by what you bring down.
 
-One sandbox map, rich and multi-storey: office and car-park buildings with
-switchback ramps, a walkway between them, towers, a fort, a village, a viaduct.
+One sandbox map: a dense city district you stand inside. Streets and alleys
+between closed multi-storey buildings you can walk into, switchback ramps in
+the alleys, walkways across the avenue and over the boulevard, water towers
+on the roofs; the rest of the city fades into the haze around it.
 
 **Powers** (one size each, each with its own cooldown):
 
-1. **Black hole** – opens where you aim. Everything inside its radius is
-   torn loose and orbits it; there is no explosion. The band just outside
+1. **Black hole** – a black ball opens where you aim. Everything inside its
+   radius is torn loose and orbits it fast; there is no explosion. The band just outside
    the radius (red ring) is not pulled but takes damage – including you.
 2. **Portal** – a horizontal portal opens above the aimed zone and huge
    mysterious stones fall out of it.

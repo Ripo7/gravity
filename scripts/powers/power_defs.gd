@@ -22,11 +22,13 @@ const COOLDOWN := {
 const VORTEX_RADIUS := 10.0
 ## Just outside the radius, a band that shreds instead of pulling.
 const VORTEX_BAND := 4.0
-const VORTEX_CORE := 1.4
+const VORTEX_CORE := 1.8
 const VORTEX_SPINUP := 0.5  ## seconds before it starts pulling
 const VORTEX_DURATION := 7.0
 ## Orbit speed (m/s) at the core and at the radius.
-const VORTEX_SPEED := Vector2(16.0, 9.0)
+## Orbit angular speed (rad/s) at the core and at the radius.
+const VORTEX_SPIN := Vector2(7.0, 3.2)
+const VORTEX_MAX_SPEED := 34.0
 ## Structural damage per second inside the radius and in the band.
 const VORTEX_DPS_INSIDE := 9.0
 const VORTEX_DPS_BAND := 3.0

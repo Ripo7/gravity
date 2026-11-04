@@ -5,7 +5,7 @@ extends Node3D
 ## StructureSet owns the physics bodies and rendering at runtime.
 ## Move, rotate and tweak these nodes in the editor to lay out an arena.
 
-enum Kind { WALL, TOWER, STACK, PILLARS, BUILDING, RAMP, BRIDGE }
+enum Kind { WALL, TOWER, STACK, PILLARS, BUILDING, RAMP, BRIDGE, APARTMENT }
 
 const LANDING_DEPTH := 2.0
 const SLAB := 0.3
@@ -23,6 +23,10 @@ const SLAB := 0.3
 ## along +z, landings every `rise` metres (match a building's storeys).
 ## BRIDGE: (spans, column drums, -); block = (span length, drum height,
 ## deck width). A walkway along x on columns, deck top at drums * height + 0.3.
+## APARTMENT: (bays along x, storeys, bays along z); block = (bay width,
+## storey height, column width). A closed city building: ribbon windows
+## above a sill band, some solid bays, open shop fronts on the ground floor,
+## a floor slab per storey and a roof parapet. `doors` opens more bays.
 @export var counts := Vector3i(8, 6, 1):
 	set(v):
 		counts = v
@@ -41,6 +45,12 @@ const SLAB := 0.3
 @export var seed_value := 0
 ## Counts toward the level's destruction score.
 @export var scored := true
+## APARTMENT: extra open bays, each (side, bay, storey); sides are
+## 0 = -z, 1 = +z, 2 = -x, 3 = +x.
+@export var doors := PackedVector3Array():
+	set(v):
+		doors = v
+		_refresh_preview()
 
 var _preview: MultiMeshInstance3D
 
@@ -70,6 +80,8 @@ func build_segments() -> Array[Dictionary]:
 			_build_ramp(out)
 		Kind.BRIDGE:
 			_build_bridge(out)
+		Kind.APARTMENT:
+			_build_apartment(out, rng)
 	for seg in out:
 		seg["strength"] = seg.get("strength", strength)
 		seg["material"] = seg.get("material", material)
@@ -200,6 +212,61 @@ func _build_building(out: Array[Dictionary]) -> void:
 			var panel := Vector3(bay - cw, col_h, 0.12)
 			_seg(out, Vector3(px, base + col_h * 0.5, z0), panel, 0.5, true)
 			_seg(out, Vector3(px, base + col_h * 0.5, -z0), panel, 0.5, true)
+		for ix in nx:
+			for iz in nz:
+				var c := Vector3(x0 + (ix + 0.5) * bay, base + col_h + slab_t * 0.5, z0 + (iz + 0.5) * bay)
+				_seg(out, c, Vector3(bay, slab_t, bay), 0.9)
+
+
+func _build_apartment(out: Array[Dictionary], rng: RandomNumberGenerator) -> void:
+	var bay := block.x
+	var storey := block.y
+	var cw := block.z
+	var slab_t := 0.25
+	var wall_t := 0.22
+	var sill := 1.05
+	var nx := maxi(counts.x, 1)
+	var nz := maxi(counts.z, 1)
+	var x0 := -nx * bay * 0.5
+	var z0 := -nz * bay * 0.5
+	var col_h := storey - slab_t
+	var open := {}
+	for d in doors:
+		open[Vector3i(d)] = true
+	for s in counts.y + 1:
+		var base := s * storey
+		var roof := s == counts.y
+		if not roof:
+			for ix in nx + 1:
+				for iz in nz + 1:
+					var c := Vector3(x0 + ix * bay, base + col_h * 0.5, z0 + iz * bay)
+					_seg(out, c, Vector3(cw, col_h, cw), 1.2)
+		for side in 4:
+			var along_x := side < 2
+			var n := nx if along_x else nz
+			for b in n:
+				var t := (b + 0.5) * bay
+				var c := Vector3(x0 + t, 0, z0 if side == 0 else -z0)
+				if not along_x:
+					c = Vector3(x0 if side == 2 else -x0, 0, z0 + t)
+				var w := bay - cw
+				var size_of := func(h: float) -> Vector3:
+					return Vector3(w, h, wall_t) if along_x else Vector3(wall_t, h, w)
+				var roll := rng.randf()
+				if open.has(Vector3i(side, b, s)) or (s == 0 and roll < 0.45):
+					continue
+				if roof:
+					c.y = base + 0.45
+					_seg(out, c, size_of.call(0.9), 0.5, true)
+					continue
+				if roll > 0.8:
+					c.y = base + col_h * 0.5
+					_seg(out, c, size_of.call(col_h), 0.6, true)
+				else:
+					c.y = base + sill * 0.5
+					_seg(out, c, size_of.call(sill), 0.5, true)
+		if roof:
+			break
 		for ix in nx:
 			for iz in nz:
 				var c := Vector3(x0 + (ix + 0.5) * bay, base + col_h + slab_t * 0.5, z0 + (iz + 0.5) * bay)

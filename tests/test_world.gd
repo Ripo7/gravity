@@ -30,21 +30,18 @@ func test_arena_builds_structures() -> void:
 func test_unsupported_blocks_fall() -> void:
 	await _load_world()
 	var s := world.structures
-	# Break the ground row of one tower: the rest has nothing to stand on.
-	var first := -1
-	for st in world.level.structures():
-		if st.name == "TourO":
-			first = 0
-	check(first == 0, "sandbox has TourO")
+	# Knock out the ground floor of one building: the floors above have
+	# nothing left to stand on.
+	var at := Vector3(-29, 0, -31)
 	var broke := 0
 	for i in s.segment_count():
 		var p := s.transform_of(i).origin
-		if s.is_alive(i) and p.y < 0.5 and p.distance_to(Vector3(-13, 0, -28)) < 3.0:
+		if s.is_alive(i) and p.y < 2.9 and absf(p.x - at.x) < 6.5 and absf(p.z - at.z) < 6.5:
 			s.break_segment(i)
 			broke += 1
 	var fell := s.settle()
-	check(broke > 5, "broke the tower's base row (%d)" % broke)
-	check(fell > 50, "rest of the tower lost support (%d fell)" % fell)
+	check(broke > 15, "broke the ground floor (%d)" % broke)
+	check(fell > 60, "the storeys above lost support (%d fell)" % fell)
 	await _unload()
 
 
@@ -52,24 +49,25 @@ func test_ramps_and_walkway_stand_and_lead_up() -> void:
 	await _load_world()
 	await frames(60)
 	check_eq(world.structures.cluster_count(), 0, "nothing falls on its own")
-	# The walkway deck is walkable at 6 m between the two buildings.
-	var q := PhysicsRayQueryParameters3D.create(Vector3(0, 12, -4), Vector3(0, 0, -4))
+	# The walkway over the avenue is walkable at the 2nd floor (6.4 m).
+	var q := PhysicsRayQueryParameters3D.create(Vector3(0, 12, -14), Vector3(0, 0, -14))
 	var hit := world.get_world_3d().direct_space_state.intersect_ray(q)
 	check(not hit.is_empty(), "something under the walkway centre")
 	if not hit.is_empty():
-		check_near(hit["position"].y, 6.0, 0.05, "walkway deck at 6 m")
-	# Walk the player up ramp A's first flight (it climbs toward +z to 3 m).
+		check_near(hit["position"].y, 6.4, 0.05, "walkway deck at 6.4 m")
+	# Walk the player up the south-east alley ramp's first flight (it climbs
+	# toward +z to the first floor, 3.2 m).
 	var p := world.player
 	p.input_enabled = true
-	p.global_position = Vector3(-24.1, 0.1, -8.0)
+	p.global_position = Vector3(19.4, 0.1, 8.8)
 	p.rotation.y = PI
 	p.touch_move = Vector2(0, -1)
 	var top := 0.0
-	for k in 75:
+	for k in 120:
 		await get_tree().physics_frame
 		top = maxf(top, p.global_position.y)
 	p.touch_move = Vector2.ZERO
-	check(top > 2.5, "climbed the ramp (reached y %.2f)" % top)
+	check(top > 2.9, "climbed the ramp (reached y %.2f)" % top)
 	await _unload()
 
 

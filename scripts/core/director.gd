@@ -100,37 +100,39 @@ func _cast(power: int, target := Vector3.INF, shot_name := "") -> void:
 
 func _showcase() -> void:
 	await _wait(0.3)
-	_place(Vector3(0, 0.05, 36), Vector3(0, 4, 0))
+	_place(Vector3(0, 0.05, 34), Vector3(0, 5, 0))
 	await _wait(0.4)
 	await _shot("01_start")
-	# 1: black hole on the colonnade.
-	await _cast(PowerDefs.Power.VORTEX, Vector3(0, 2.5, 10), "02_aim")
+	# 1: black hole in the south avenue, between the buildings.
+	await _cast(PowerDefs.Power.VORTEX, Vector3(0, 5, 16), "02_aim")
 	await _wait(1.5)
 	await _shot("02_vortex")
 	await _wait(2.5)
 	await _shot("02_spin")
 	await _wait(4.0)
 	await _shot("02_after")
-	# 2: portal over the office block.
-	await _cast(PowerDefs.Power.PORTAL, Vector3(-16, 0, -4), "03_aim")
+	# 2: portal over a building on the boulevard.
+	_place(Vector3(0, 0.05, 4), Vector3(14, 6, -12))
+	await _wait(0.3)
+	await _cast(PowerDefs.Power.PORTAL, Vector3(12, 0, -14), "03_aim")
 	await _wait(1.2)
 	await _shot("03_portal")
 	await _wait(1.5)
 	await _shot("03_stones")
 	await _wait(3.0)
 	await _shot("03_after")
-	# 3: up the ramp onto the walkway, shield, black hole on the towers.
-	_place(Vector3(0, 6.1, -4), Vector3(0, 6, -30))
+	# 3: on the north walkway, shield, black hole in the far block.
+	_place(Vector3(0, 6.5, -12.5), Vector3(-10, 8, -31))
 	await _wait(0.3)
 	await _shot("04_walkway")
 	await _cast(PowerDefs.Power.SHIELD)
 	await _wait(0.6)
 	await _shot("04_shield")
-	await _cast(PowerDefs.Power.VORTEX, Vector3(0, 8, -28))
+	await _cast(PowerDefs.Power.VORTEX, Vector3(-10, 8, -31))
 	await _wait(3.0)
 	await _shot("04_towers")
 	await _wait(5.0)
-	_place(Vector3(30, 0.05, 40), Vector3(-6, 4, -10))
+	_place(Vector3(0, 0.05, 40), Vector3(0, 6, 0))
 	await _wait(0.5)
 	await _shot("05_overview")
 	print("SHOWCASE_DONE pieces=%d standing=%d" % [world.debris.active_count, world.structures.alive_count])
@@ -249,7 +251,8 @@ func _bench() -> void:
 	debris.retire_min_age = INF  # measure raw body counts, no soft budget
 	var step := int(options.get("step", "150"))
 	var limit := mini(int(options.get("max", "3000")), debris.capacity)
-	_place(Vector3(0, 0.05, 75), Vector3(0, 1, 55))
+	# A pile in the north avenue, between the buildings.
+	_place(Vector3(0, 0.05, -12), Vector3(0, 1, -30))
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 7
 	var over := 0
@@ -258,9 +261,9 @@ func _bench() -> void:
 	while debris.active_count + step <= limit:
 		for k in step:
 			var n := debris.active_count
-			var x := float(n % 12) * 1.1 - 6.0 + rng.randf_range(-0.2, 0.2)
-			var z := 55.0 + float(floori(n / 12.0) % 12) * 1.1 - 6.0
-			var y := 1.5 + float(floori(n / 144.0)) * 1.2 + rng.randf_range(0.0, 0.5)
+			var x := float(n % 10) * 1.1 - 5.0 + rng.randf_range(-0.2, 0.2)
+			var z := -30.0 + float(floori(n / 10.0) % 12) * 1.1 - 6.0
+			var y := 1.5 + float(floori(n / 120.0)) * 1.2 + rng.randf_range(0.0, 0.5)
 			var s := Vector3(rng.randf_range(0.3, 0.7), rng.randf_range(0.3, 0.7), rng.randf_range(0.3, 0.7))
 			debris.spawn(
 				Transform3D(Basis.from_euler(Vector3(rng.randf(), rng.randf(), 0)), Vector3(x, y, z)), s
@@ -268,7 +271,7 @@ func _bench() -> void:
 		var falling := await _measure(2.0)
 		await _wait(2.0)
 		var settled := await _measure(1.0)
-		world.cast_vortex(Vector3(0, 1.0, 55))
+		world.cast_vortex(Vector3(0, 1.0, -30))
 		await _wait(PowerDefs.VORTEX_SPINUP + 1.0)
 		var blast := await _measure(2.0)
 		await _wait(PowerDefs.VORTEX_DURATION)

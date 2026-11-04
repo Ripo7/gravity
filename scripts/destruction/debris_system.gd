@@ -22,7 +22,7 @@ const RETIRE_PER_FRAME := 4
 ## Set before the scene loads to force a pool size (benchmarks).
 static var capacity_override := 0
 
-@export var capacity_desktop := 2000
+@export var capacity_desktop := 1500
 @export var capacity_web := 900
 @export var capacity_mobile := 700
 ## Pieces younger than this are never retired by the soft budget.
@@ -49,6 +49,7 @@ var _pos := PackedVector3Array()
 var _mass := PackedFloat32Array()
 var _born := PackedFloat64Array()
 var _tint := PackedFloat32Array()
+var _storm := PackedByteArray()  ## 1 while spun by a black hole
 var _shade := PackedFloat32Array()
 var _kind := PackedByteArray()
 var _seed := PackedFloat32Array()
@@ -93,6 +94,8 @@ func _build_pool() -> void:
 	_mass.resize(capacity)
 	_born.resize(capacity)
 	_tint.resize(capacity)
+	_storm.resize(capacity)
+	_storm.fill(0)
 	_shade.resize(capacity)
 	_kind.resize(capacity)
 	_seed.resize(capacity)
@@ -151,6 +154,7 @@ func spawn(
 	var i := _take_slot()
 	if i < 0:
 		return -1
+	set_storm(i, false)
 	var body := _bodies[i]
 	PhysicsServer3D.shape_set_data(_shapes[i], size * 0.5)
 	var mass := maxf(size.x * size.y * size.z * Materials.prop(kind, "density"), 0.5)
@@ -227,6 +231,26 @@ func position_of(i: int) -> Vector3:
 
 func size_of(i: int) -> Vector3:
 	return _size[i]
+
+
+## Pieces spun by a black hole pass through each other (a dense storm of
+## colliding pieces costs far too much); they still hit everything else.
+func set_storm(i: int, on: bool) -> void:
+	var v := 1 if on else 0
+	if _storm[i] == v:
+		return
+	_storm[i] = v
+	var mask := LAYER_WORLD | LAYER_STRUCTURES | LAYER_PLAYER
+	if not on:
+		mask |= LAYER_DEBRIS
+	PhysicsServer3D.body_set_collision_mask(_bodies[i], mask)
+	# Sweeping hundreds of fast orbiting pieces every step is the other big
+	# cost; inside the storm a piece may as well cut through a thin panel.
+	PhysicsServer3D.body_set_enable_continuous_collision_detection(_bodies[i], not on)
+
+
+func in_storm(i: int) -> bool:
+	return _storm[i] == 1
 
 
 func mass_of(i: int) -> float:

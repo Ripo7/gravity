@@ -106,6 +106,13 @@ func _connect_juice() -> void:
 
 
 func cast_vortex(at: Vector3) -> Vortex:
+	# The ball floats: never half buried in the floor it was aimed at.
+	var lift := PowerDefs.VORTEX_CORE + 0.8
+	var down := PhysicsRayQueryParameters3D.create(at + Vector3.UP * 0.2, at + Vector3.DOWN * lift)
+	down.exclude = [player.get_rid()] if player else []
+	var hit := get_world_3d().direct_space_state.intersect_ray(down)
+	if not hit.is_empty():
+		at.y = maxf(at.y, (hit["position"] as Vector3).y + lift)
 	var v := Vortex.new()
 	v.setup(self, at)
 	add_child(v)
