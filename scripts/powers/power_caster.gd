@@ -1,10 +1,9 @@
 class_name PowerCaster
 extends Node3D
-## The player's three powers. Pick the black hole or the portal (1/2, wheel,
-## LB/RB, touch slots) and press cast: it goes off where you aim. The shield
-## is not picked: pressing its slot (3) raises it in front of you at once.
-## Each power has its own cooldown. A faint marker shows where the black
-## hole or portal would land.
+## The player's two powers. Cast (click, RT, violet button) opens a black
+## hole where you aim. Shield (right click, E, LT/LB/RB, its touch slot)
+## raises a curved shell of black ice around your front at once. Each power
+## has its own cooldown. A faint marker shows where the black hole would land.
 
 signal selection_changed(power: int)
 signal cast(power: int)
@@ -14,7 +13,7 @@ const MARK_ALPHA := 0.28
 
 var selected := PowerDefs.Power.VORTEX
 ## Seconds left before each power can be cast again.
-var cooldown_left := [0.0, 0.0, 0.0]
+var cooldown_left := [0.0, 0.0]
 var auto_input := false  ## true when a script (demo, tests) drives the caster
 var touch_held := false  ## set by TouchControls while the cast button is held
 var enabled := true
@@ -31,7 +30,7 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	for k in 3:
+	for k in 2:
 		if cooldown_left[k] > 0.0:
 			cooldown_left[k] = maxf(cooldown_left[k] - delta, 0.0)
 			if cooldown_left[k] == 0.0:
@@ -52,14 +51,8 @@ func _read_input() -> void:
 	if player and not player.input_enabled:
 		_was_held = false
 		return
-	if Input.is_action_just_pressed("power_1"):
-		select(PowerDefs.Power.VORTEX)
-	elif Input.is_action_just_pressed("power_2"):
-		select(PowerDefs.Power.PORTAL)
-	elif Input.is_action_just_pressed("power_3"):
-		select(PowerDefs.Power.SHIELD)
-	elif Input.is_action_just_pressed("power_next") or Input.is_action_just_pressed("power_prev"):
-		select(PowerDefs.Power.PORTAL if selected == PowerDefs.Power.VORTEX else PowerDefs.Power.VORTEX)
+	if Input.is_action_just_pressed("shield") and _pointer_ready():
+		cast_power(PowerDefs.Power.SHIELD)
 	var held := touch_held or (Input.is_action_pressed("cast") and _pointer_ready())
 	if held and not _was_held:
 		cast_selected()
@@ -112,8 +105,6 @@ func cast_power(power: int) -> bool:
 	match power:
 		PowerDefs.Power.VORTEX:
 			world.cast_vortex(target)
-		PowerDefs.Power.PORTAL:
-			world.cast_portal(target)
 		PowerDefs.Power.SHIELD:
 			world.cast_shield(shield_base())
 	cooldown_left[power] = PowerDefs.cooldown(power)
@@ -149,22 +140,14 @@ func _update_aim() -> void:
 	q.exclude = skip
 	var hit := get_world_3d().direct_space_state.intersect_ray(q)
 	if hit.is_empty():
-		if selected == PowerDefs.Power.PORTAL:
-			var flat := Vector3(dir.x, 0, dir.z).normalized()
-			target = Vector3(from.x, 0, from.z) + flat * 40.0
-		else:
-			target = from + dir * 30.0
+		target = from + dir * 30.0
 		return
-	var p: Vector3 = hit["position"]
-	if selected == PowerDefs.Power.VORTEX:
-		# Open just off the surface so the core is visible.
-		target = p - dir * 1.0
-	else:
-		target = p
+	# Open just off the surface so the core is visible.
+	target = (hit["position"] as Vector3) - dir * 1.0
 
 
-## Where the shield rises: on the ground just in front of you, facing the
-## way you look. You never place it yourself.
+## Where the shield rises: around you, curving across the way you look.
+## You never place it yourself.
 func shield_base() -> Transform3D:
 	var cam := get_viewport().get_camera_3d()
 	var player := _player()
@@ -172,9 +155,8 @@ func shield_base() -> Transform3D:
 	var fwd := -cam.global_basis.z if cam else -global_basis.z
 	fwd.y = 0.0
 	fwd = fwd.normalized() if fwd.length() > 0.01 else Vector3.FORWARD
-	var at := origin + fwd * PowerDefs.SHIELD_DISTANCE
-	at.y = origin.y
-	return Transform3D(Basis.looking_at(fwd, Vector3.UP), at)
+	# Centred on the player's feet, facing where they look.
+	return Transform3D(Basis.looking_at(fwd, Vector3.UP), origin)
 
 
 # --- Marker ---------------------------------------------------------------------
@@ -208,7 +190,7 @@ func _update_mark() -> void:
 	_mark.visible = selected != PowerDefs.Power.SHIELD and player != null and player.input_enabled
 	if not _mark.visible:
 		return
-	var r := PowerDefs.VORTEX_RADIUS if selected == PowerDefs.Power.VORTEX else PowerDefs.PORTAL_RADIUS
+	var r := PowerDefs.VORTEX_RADIUS
 	_mark.global_position = target + Vector3(0, 0.05, 0)
 	_mark.scale = Vector3(r, 1, r)
 	_mark_mat.albedo_color.a = MARK_ALPHA if is_ready(selected) else MARK_ALPHA * 0.35

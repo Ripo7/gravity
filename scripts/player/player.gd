@@ -1,7 +1,7 @@
 class_name Player
 extends CharacterBody3D
 ## First-person controller (mouse + keyboard, gamepad, touch) with health.
-## Heavy debris, stones, falling pieces, your own blasts and hard landings
+## Heavy debris, falling pieces, your own blasts and hard landings
 ## hurt; health comes back after a few seconds without being hit.
 
 signal damaged(amount: float, from: Vector3)
@@ -13,6 +13,7 @@ const REGEN_RATE := 14.0  ## health per second
 const SAFE_FALL_SPEED := 11.0  ## m/s landing speed before falls hurt
 const FALL_DAMAGE := 10.0  ## per m/s above the safe speed
 const PUSH_MAX_SPEED := 2.0  ## m/s, debris you walk into
+const TOUCH_GRACE := 1.0  ## s; see _check_hazards
 const KILL_Y := -25.0
 
 @export var walk_speed := 7.0
@@ -40,6 +41,7 @@ var _since_hit := 99.0
 var _air_speed := 0.0
 var _was_on_floor := true
 var _hit_from := {}  # rid -> time, so one body hurts once per contact
+var _touched := {}  # debris rid -> time you last walked into or on it
 var _clock := 0.0
 var _probe := PhysicsShapeQueryParameters3D.new()
 
@@ -170,6 +172,10 @@ func _check_hazards() -> void:
 		var rid: RID = h["rid"]
 		if _clock - float(_hit_from.get(rid, -10.0)) < 0.5:
 			continue
+		# Rubble you are walking on can rock and flip up against your legs:
+		# pieces you touched a moment ago never count as hits.
+		if _clock - float(_touched.get(rid, -10.0)) < TOUCH_GRACE:
+			continue
 		var motion := Hazards.motion_of(world, rid, h["collider"])
 		if motion.is_empty():
 			continue
@@ -196,6 +202,7 @@ func _push_debris() -> void:
 		var c := get_slide_collision(k)
 		var idx := world.debris.index_of(c.get_collider_rid())
 		if idx >= 0:
+			_touched[c.get_collider_rid()] = _clock
 			var push := -c.get_normal() * push_strength
 			push.y = maxf(push.y, 0.0)
 			var v := world.debris.velocity_of(idx) + push * 0.2

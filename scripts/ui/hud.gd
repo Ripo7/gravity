@@ -4,7 +4,7 @@ extends Control
 ## cooldowns, damage flash, callouts, F3 stats and the touch controls.
 
 ## Touch: where each slot sits around the cast button (degrees, y down).
-const SLOT_ANGLES := [160.0, 195.0, 230.0]
+const SLOT_ANGLES := [168.0, 212.0]
 
 @export var world: GameWorld
 
@@ -21,7 +21,7 @@ var _pause_button: Button
 var _meter_pulse := 0.0
 var _hurt_flash := 0.0
 var _hurt_dir := 0.0
-var _denied := [0.0, 0.0, 0.0]
+var _denied := [0.0, 0.0]
 var _shown_health := 100.0
 var _flash: ColorRect
 var _last_hurt_sound := 0
@@ -125,7 +125,7 @@ func _process(delta: float) -> void:
 	shown_destruction = move_toward(shown_destruction, destruction, maxf(0.4 * real, gap * 6.0 * real))
 	_meter_pulse = move_toward(_meter_pulse, 0.0, real * 3.0)
 	_hurt_flash = move_toward(_hurt_flash, 0.0, real * 1.6)
-	for k in 3:
+	for k in 2:
 		_denied[k] = move_toward(_denied[k], 0.0, real * 3.0)
 	(_flash.material as ShaderMaterial).set_shader_parameter("amount", _hurt_flash)
 	(_flash.material as ShaderMaterial).set_shader_parameter("dir", _hurt_dir)
@@ -213,22 +213,18 @@ func _draw_health() -> void:
 
 func _draw_powers() -> void:
 	var p := world.player.power
-	var first := power_slot_rect(0, size, touch)
-	var total := power_slot_rect(2, size, touch).end.x - first.position.x
-	var x0 := first.position.x
-	var y := first.position.y
-	var slot := first.size.x
 	var font := UiTheme.bold()
-	for k in 3:
+	for k in 2:
 		var r := power_slot_rect(k, size, touch)
-		var selected := p.selected == k
+		var slot := r.size.x
 		var shake := Vector2(sin(Time.get_ticks_msec() / 25.0) * 4.0 * _denied[k], 0)
 		r.position += shake
+		var ready := p.is_ready(k)
 		draw_rect(r, Color(1, 1, 1, 0.9))
-		draw_rect(
-			r, UiTheme.VIOLET if selected else Color(UiTheme.INK, 0.15), false, 3.0 if selected else 1.5
+		draw_rect(r, UiTheme.VIOLET if ready else Color(UiTheme.INK, 0.15), false, 3.0 if ready else 1.5)
+		_draw_icon(
+			k, r.get_center(), slot * 0.3, UiTheme.VIOLET if k == PowerDefs.Power.VORTEX else UiTheme.INK
 		)
-		_draw_icon(k, r.get_center(), slot * 0.3, UiTheme.VIOLET if selected else UiTheme.INK)
 		var left: float = p.cooldown_left[k]
 		if left > 0.0:
 			var frac := p.cooldown_fraction(k)
@@ -245,24 +241,23 @@ func _draw_powers() -> void:
 				24,
 				Color.WHITE
 			)
-		if not touch:
-			draw_string(
-				font,
-				r.position + Vector2(5, 17),
-				PowerDefs.KEYS[k],
-				HORIZONTAL_ALIGNMENT_LEFT,
-				-1,
-				14,
-				Color(UiTheme.INK, 0.5)
-			)
-	var name: String = PowerDefs.NAMES[p.selected]
-	var ns := font.get_string_size(name, HORIZONTAL_ALIGNMENT_LEFT, -1, 18)
-	var at := Vector2(x0 + (total - ns.x) * 0.5, y - 10)
-	if touch:
-		# Left of the arc of slots, level with the middle one.
-		var mid := power_slot_rect(1, size, true)
-		at = Vector2(mid.position.x - ns.x - 14.0, mid.get_center().y + 6.0)
-	_text(at, name, 18, UiTheme.INK)
+		if touch:
+			continue
+		# Name above, key below.
+		var name: String = PowerDefs.NAMES[k]
+		var ns := font.get_string_size(name, HORIZONTAL_ALIGNMENT_LEFT, -1, 16)
+		_text(Vector2(r.get_center().x - ns.x * 0.5, r.position.y - 8.0), name, 16, UiTheme.INK)
+		var key: String = PowerDefs.KEYS[k]
+		var ks := font.get_string_size(key, HORIZONTAL_ALIGNMENT_LEFT, -1, 13)
+		draw_string(
+			font,
+			Vector2(r.get_center().x - ks.x * 0.5, r.end.y + 16.0),
+			key,
+			HORIZONTAL_ALIGNMENT_LEFT,
+			-1,
+			13,
+			Color(UiTheme.INK, 0.6)
+		)
 
 
 ## Screen rect of power slot `k`; on touch screens they are tap targets
@@ -275,10 +270,10 @@ static func power_slot_rect(k: int, view: Vector2, is_touch: bool) -> Rect2:
 		var c := cast + Vector2(cos(angle), sin(angle)) * view.y * 0.215
 		return Rect2(c - Vector2.ONE * slot * 0.5, Vector2(slot, slot))
 	var size := 64.0
-	var gap := 12.0
-	var total := size * 3 + gap * 2
+	var gap := 40.0
+	var total := size * 2 + gap
 	var x0 := (view.x - total) * 0.5
-	return Rect2(Vector2(x0 + k * (size + gap), view.y - size - 26.0), Vector2(size, size))
+	return Rect2(Vector2(x0 + k * (size + gap), view.y - size - 34.0), Vector2(size, size))
 
 
 ## Text with a white outline so it reads on dark debris and black ice too.
@@ -294,20 +289,11 @@ func _draw_icon(power: int, c: Vector2, r: float, col: Color) -> void:
 		PowerDefs.Power.VORTEX:
 			draw_circle(c, r * 0.4, col)
 			draw_arc(c, r, 0, TAU, 32, col, 2.5, true)
-		PowerDefs.Power.PORTAL:
-			draw_set_transform(c + Vector2(0, -r * 0.55), 0.0, Vector2(1.0, 0.35))
-			draw_arc(Vector2.ZERO, r, 0, TAU, 32, col, 5.0, true)
-			draw_set_transform(Vector2.ZERO)
-			for k in 3:
-				var p := c + Vector2((k - 1) * r * 0.6, r * (0.2 + 0.25 * (k % 2)))
-				var tri := PackedVector2Array(
-					[p + Vector2(0, -r * 0.3), p + Vector2(r * 0.2, r * 0.2), p + Vector2(-r * 0.2, r * 0.2)]
-				)
-				draw_colored_polygon(tri, col)
 		PowerDefs.Power.SHIELD:
-			var rect := Rect2(c - Vector2(r, r * 0.8), Vector2(r * 2.0, r * 1.6))
-			draw_rect(rect, col)
-			draw_line(c + Vector2(-r * 0.5, -r * 0.4), c + Vector2(r * 0.1, r * 0.5), Color.WHITE, 1.5)
+			# A curved dome of ice over a small figure.
+			draw_arc(c + Vector2(0, r * 0.7), r * 1.1, PI * 1.05, PI * 1.95, 24, col, r * 0.3, true)
+			draw_circle(c + Vector2(0, r * 0.25), r * 0.17, col)
+			draw_line(c + Vector2(0, r * 0.4), c + Vector2(0, r * 0.75), col, 2.5)
 
 
 static func _flash_material() -> ShaderMaterial:

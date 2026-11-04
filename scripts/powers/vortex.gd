@@ -14,7 +14,6 @@ const HALO := 2.4  ## halo radius / core radius
 const DISC := 3.6  ## accretion disc radius / core radius
 const FADE := 0.6
 const TICK := 0.1  ## seconds between damage passes
-const STONE_DPS := 45.0  ## a portal stone caught in the storm breaks up
 const RELEASE_SPEED := 0.3  ## share of orbit speed kept when it closes
 
 var center := Vector3.ZERO
@@ -126,7 +125,6 @@ func _physics_process(delta: float) -> void:
 		_pull_started = true
 		Sfx.play("implode", center, 4.0, 0.7)
 	_spin_debris(delta)
-	_spin_stones(delta)
 	_tick += delta
 	if _tick >= TICK:
 		var r := PowerDefs.VORTEX_RADIUS
@@ -188,20 +186,6 @@ func _spin_debris(delta: float) -> void:
 		v.y += 18.0 * delta
 		debris.set_velocity(i, v)
 		debris.set_tint(i, 0.8)
-
-
-func _spin_stones(delta: float) -> void:
-	for node in get_tree().get_nodes_in_group("meteor_stone"):
-		var stone := node as RigidBody3D
-		var p := stone.global_position
-		if p.distance_to(center) > PowerDefs.VORTEX_RADIUS:
-			continue
-		var layer := fmod(float(stone.get_instance_id() % 1000) * 0.6180339, 1.0) * 2.0 - 1.0
-		var lane := 0.4 + 0.5 * fmod(float(stone.get_instance_id() % 997) * 0.7548777, 1.0)
-		var v := stone.linear_velocity.lerp(_orbit_velocity(p, layer, lane, delta), 0.25)
-		(stone as MeteorStone).damage(STONE_DPS * delta)
-		v.y += 18.0 * delta
-		stone.linear_velocity = v
 
 
 ## The storm ends: pieces collide with each other again and fly off.

@@ -123,44 +123,11 @@ func cast_vortex(at: Vector3) -> Vortex:
 	return v
 
 
-func cast_portal(at: Vector3) -> MeteorPortal:
-	var portal := MeteorPortal.new()
-	portal.setup(self, at)
-	add_child(portal)
-	return portal
-
-
 func cast_shield(base: Transform3D) -> IceShield:
 	var shield := IceShield.new()
 	shield.setup(self, base)
 	add_child(shield)
 	return shield
-
-
-## Radial kick to loose pieces around a heavy landing.
-func shove_debris(at: Vector3, radius: float, speed: float) -> void:
-	for i in debris.capacity:
-		if not debris.is_active(i):
-			continue
-		var to := debris.position_of(i) - at
-		var d := to.length()
-		if d > radius or d < 0.01:
-			continue
-		var f := 1.0 - d / radius
-		var dir := (to / d + Vector3.UP * 0.6).normalized()
-		debris.set_velocity(i, debris.velocity_of(i) + dir * speed * f)
-
-
-## Dust, shake and sound when a meteor stone hits.
-func stone_landed(at: Vector3, size: float, speed: float) -> void:
-	if dust:
-		dust.puff(at, size, Materials.Kind.CONCRETE, int(10 + size * 6))
-		dust.chips(at, size, Materials.Kind.CONCRETE, speed * 0.4, int(10 + size * 5))
-	Sfx.play("stone", at, -6.0 + size * 3.0, 1.2 - size * 0.12)
-	var cam := get_viewport().get_camera_3d() as CameraShake
-	if cam:
-		var d := cam.global_position.distance_to(at)
-		cam.add_trauma(clampf(size * speed / 120.0, 0.05, 0.5) * clampf(1.0 - d / 50.0, 0.0, 1.0))
 
 
 func _start_attract() -> void:
@@ -183,17 +150,14 @@ func _start_attract() -> void:
 		var dt := get_process_delta_time()
 		t += dt
 		var a := t * 0.05
-		cam.global_position = Vector3(sin(a) * 42.0, 16.0, cos(a) * 42.0)
+		cam.global_position = Vector3(sin(a) * 40.0, 26.0, cos(a) * 40.0)
 		cam.look_at(Vector3(0, 4, -6))
 		next_blast -= dt
 		if next_blast <= 0.0:
 			next_blast = randf_range(3.5, 5.5)
 			var target := _random_block_position()
 			if target != Vector3.INF:
-				if randf() < 0.4:
-					cast_portal(target)
-				else:
-					cast_vortex(target)
+				cast_vortex(target)
 		# Rebuild the backdrop once it is mostly rubble.
 		if structures.destruction() > 0.5 and next_blast > 3.0:
 			reset()

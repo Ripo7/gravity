@@ -21,8 +21,6 @@ const SOUNDS := {
 	"fanfare": preload("res://audio/fanfare.wav"),
 	"chain": preload("res://audio/chain.wav"),
 	"orb": preload("res://audio/orb.wav"),
-	"portal": preload("res://audio/portal.wav"),
-	"stone": preload("res://audio/stone.wav"),
 	"ice_rise": preload("res://audio/ice_rise.wav"),
 	"ice_hit": preload("res://audio/ice_hit.wav"),
 	"ice_break": preload("res://audio/ice_break.wav"),

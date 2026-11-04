@@ -103,27 +103,22 @@ func test_touch_controls_move_look_and_cast() -> void:
 	tc._on_touch(_touch(1, Vector2(1100, 400), true))
 	tc._on_drag(_drag(1, Vector2(1000, 400), Vector2(-100, 0)))
 	check(p.rotation.y > yaw, "drag left turns left")
-	# The shield slot raises the shield at once; other slots pick the power
-	# the violet button casts.
+	# The violet button opens a black hole; the shield slot raises the
+	# shield at once.
 	var casts: Array[int] = []
 	p.power.cast.connect(func(pw: int) -> void: casts.append(pw))
-	var shield_slot := Hud.power_slot_rect(PowerDefs.Power.SHIELD, tc.size, true).get_center()
-	tc._on_touch(_touch(3, shield_slot, true))
-	tc._on_touch(_touch(3, shield_slot, false))
-	check_eq(casts, [PowerDefs.Power.SHIELD] as Array[int], "tapping the shield slot raises the shield")
-	check_eq(p.power.selected, PowerDefs.Power.VORTEX, "and keeps the selected power")
-	var portal_slot := Hud.power_slot_rect(PowerDefs.Power.PORTAL, tc.size, true).get_center()
-	tc._on_touch(_touch(3, portal_slot, true))
-	tc._on_touch(_touch(3, portal_slot, false))
-	check_eq(p.power.selected, PowerDefs.Power.PORTAL, "tapping a slot selects the power")
 	tc._on_touch(_touch(2, tc.charge_center(), true))
 	await get_tree().process_frame
 	await get_tree().process_frame
-	check_eq(casts.size(), 2, "pressing casts")
-	check_eq(casts[-1], PowerDefs.Power.PORTAL, "the selected power")
 	tc._on_touch(_touch(2, tc.charge_center(), false))
+	check_eq(casts, [PowerDefs.Power.VORTEX] as Array[int], "the violet button opens a black hole")
+	var shield_slot := Hud.power_slot_rect(PowerDefs.Power.SHIELD, tc.size, true).get_center()
+	tc._on_touch(_touch(3, shield_slot, true))
+	tc._on_touch(_touch(3, shield_slot, false))
+	check_eq(casts.size(), 2, "tapping the shield slot raises it")
+	check_eq(casts[-1], PowerDefs.Power.SHIELD, "the shield")
 	# The slots sit right next to the cast button.
-	for k in 3:
+	for k in 2:
 		var d := Hud.power_slot_rect(k, tc.size, true).get_center().distance_to(tc.charge_center())
 		check(d < tc.size.y * 0.25, "slot %d next to the cast button" % k)
 	# Releasing the stick stops movement input.

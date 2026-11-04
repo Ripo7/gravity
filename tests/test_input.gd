@@ -3,17 +3,7 @@ extends TestCase
 const LaunchScript := preload("res://scripts/core/launch.gd")
 
 const REQUIRED := [
-	"move_forward",
-	"move_back",
-	"move_left",
-	"move_right",
-	"jump",
-	"cast",
-	"power_1",
-	"power_2",
-	"power_3",
-	"power_next",
-	"reset_arena"
+	"move_forward", "move_back", "move_left", "move_right", "jump", "cast", "shield", "reset_arena"
 ]
 
 

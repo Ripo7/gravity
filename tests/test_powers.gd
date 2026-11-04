@@ -28,11 +28,11 @@ func test_press_casts_and_cooldown_blocks_recast() -> void:
 	var denied := [0]
 	c.cast.connect(func(_p: int) -> void: casts[0] += 1)
 	c.denied.connect(func(_p: int) -> void: denied[0] += 1)
-	check(c.cast_now(PowerDefs.Power.PORTAL), "first cast")
-	check(not c.is_ready(PowerDefs.Power.PORTAL), "on cooldown")
+	check(c.cast_now(PowerDefs.Power.VORTEX), "first cast")
+	check(not c.is_ready(PowerDefs.Power.VORTEX), "on cooldown")
 	check(not c.cast_selected(), "cannot recast while cooling down")
 	check_eq(denied[0], 1, "denied feedback")
-	check(c.is_ready(PowerDefs.Power.VORTEX), "other powers unaffected")
+	check(c.is_ready(PowerDefs.Power.SHIELD), "the shield is unaffected")
 	check_eq(casts[0], 1, "one cast")
 	await _unload()
 
@@ -95,63 +95,66 @@ func test_vortex_breaks_blocks_inside() -> void:
 	await _unload()
 
 
-func test_portal_drops_one_destructible_rock() -> void:
-	await _load()
-	var standing := world.structures.alive_count
-	world.cast_portal(Vector3(12, 0, 14))  # a building on the avenue
-	await get_tree().create_timer(1.0).timeout
-	var stones := get_tree().get_nodes_in_group("meteor_stone")
-	check_eq(stones.size(), 1, "one big rock")
-	await get_tree().create_timer(3.0).timeout
-	check(
-		world.structures.alive_count < standing - 10,
-		"it broke blocks (%d)" % (standing - world.structures.alive_count)
-	)
-	# It may already have burst on its hard landings; otherwise break it.
-	var left := get_tree().get_nodes_in_group("meteor_stone")
-	if not left.is_empty():
-		var pieces := world.debris.active_count
-		(left[0] as MeteorStone).damage(10000.0)
-		await frames(3)
-		check(world.debris.active_count > pieces, "into chunks")
-	check_eq(get_tree().get_nodes_in_group("meteor_stone").size(), 0, "the rock breaks apart")
-	await _unload()
-
-
-func test_shield_slot_raises_it_without_selecting() -> void:
+func test_shield_button_raises_it_at_once() -> void:
 	await _load()
 	var c := world.player.power
-	c.select(PowerDefs.Power.PORTAL)
 	c.select(PowerDefs.Power.SHIELD)
 	await frames(2)
 	check_eq(get_tree().get_nodes_in_group("ice_shield").size(), 1, "shield up")
-	check_eq(c.selected, PowerDefs.Power.PORTAL, "portal still selected")
+	check_eq(c.selected, PowerDefs.Power.VORTEX, "the cast button still opens black holes")
+	check(c.is_ready(PowerDefs.Power.VORTEX), "and the black hole is not on cooldown")
 	await _unload()
 
 
-func test_shield_rises_in_front_by_itself_and_blocks() -> void:
+func test_shield_is_a_tall_curved_shell_that_blocks() -> void:
 	await _load()
 	var p := world.player
 	p.global_position = FAR
 	p.rotation.y = 0.0  # looking toward -z
 	await frames(3)
 	world.player.power.cast_now(PowerDefs.Power.SHIELD)
-	await get_tree().create_timer(IceShield.RISE_TIME + 0.1).timeout
+	await get_tree().create_timer(IceShield.RISE_TIME + 0.15).timeout
 	var shields := get_tree().get_nodes_in_group("ice_shield")
 	check_eq(shields.size(), 1, "one shield")
 	var shield := shields[0] as IceShield
-	var ahead := shield.global_position - p.global_position
-	check(ahead.z < -2.0 and absf(ahead.x) < 0.5, "it stands in front of the player (%s)" % ahead)
-	check(shield.global_position.y > 1.0, "rose out of the ground")
+	check(shield.global_position.distance_to(p.global_position) < 0.5, "centred on the player")
+	# Rays from the player hit ice ahead, to the sides and overhead-front,
+	# but not behind: a curved shell, open at the back.
+	var space := world.get_world_3d().direct_space_state
+	var head := p.global_position + Vector3(0, 1.5, 0)
+	var hits := {}
+	for dir_name: String in ["ahead", "left", "right", "up_front", "behind"]:
+		var d: Vector3 = {
+			"ahead": Vector3(0, 0, -1),
+			"left": Vector3(-1, 0, 0),
+			"right": Vector3(1, 0, 0),
+			"up_front": Vector3(0, 1.4, -1).normalized(),
+			"behind": Vector3(0, 0, 1),
+		}[dir_name]
+		var q := PhysicsRayQueryParameters3D.create(head, head + d * 8.0, DebrisSystem.LAYER_STRUCTURES)
+		q.exclude = [p.get_rid()]
+		var hit := space.intersect_ray(q)
+		hits[dir_name] = not hit.is_empty() and hit["collider"] == shield
+	check(hits["ahead"] and hits["left"] and hits["right"], "wraps around the front (%s)" % hits)
+	check(hits["up_front"], "curves up over the front")
+	check(not hits["behind"], "open at the back")
+	# Taller than you.
+	var q := PhysicsRayQueryParameters3D.create(
+		FAR + Vector3(0, 4.2, 0), FAR + Vector3(0, 4.2, -6.0), DebrisSystem.LAYER_STRUCTURES
+	)
+	check(not space.intersect_ray(q).is_empty(), "reaches over 4 m")
 	var i := world.debris.spawn(
 		Transform3D(Basis(), FAR + Vector3(0, 1.5, -8)), Vector3.ONE * 0.8, Vector3(0, 0, 20)
 	)
 	await get_tree().create_timer(0.6).timeout
-	check(world.debris.position_of(i).z < shield.global_position.z, "debris did not pass through")
+	check(world.debris.position_of(i).z < FAR.z - 2.0, "debris did not pass through")
 	check(shield.hp < shield.max_hp, "shield took the hit")
+	check_eq(p.health, Player.MAX_HEALTH, "you are safe behind it")
 	shield.hit(100000.0)
 	await frames(2)
 	check(not is_instance_valid(shield), "shattered")
+	await get_tree().create_timer(1.5).timeout
+	check_eq(p.health, Player.MAX_HEALTH, "its shards do not hurt you")
 	await _unload()
 
 

@@ -219,26 +219,6 @@ def orb():
     return x * env(n, 0.03, 2.0)
 
 
-def portal():
-    sec = 1.6
-    n = int(SR * sec)
-    tt = t(sec)
-    whoosh = bp(noise(sec), 300, 2500) * np.sin(np.pi * tt / sec) ** 2
-    hum = sum(a * np.sin(2 * np.pi * f * tt + 3 * np.sin(2 * np.pi * 0.7 * tt)) for f, a in [(98, 1), (147, 0.6), (196, 0.4)])
-    shimmer = 0.25 * hp(noise(sec), 5000) * np.sin(np.pi * tt / sec)
-    return 0.9 * whoosh + 0.6 * hum * env(n, 0.2, 1.2) + shimmer
-
-
-def stone():
-    # Huge stone landing: sub thump + rock crack + gravel.
-    sec = 1.6
-    n = int(SR * sec)
-    thump = sweep(80, 28, sec) * env(n, 0.002, 0.25)
-    crack = hp(noise(sec), 1200) * env(n, 0.0005, 0.04)
-    gravel = crumble(sec, 400, 4000, 50, 0.025, 0.25)
-    return 1.6 * thump + 0.8 * crack + 0.6 * gravel
-
-
 def ice_rise():
     sec = 0.8
     n = int(SR * sec)
@@ -324,8 +304,6 @@ if __name__ == "__main__":
     save("fanfare", fanfare(), 0.8)
     save("chain", chain(), 0.6)
     save("orb", orb(), 0.8)
-    save("portal", portal(), 0.85)
-    save("stone", stone(), 0.95)
     save("ice_rise", ice_rise(), 0.8)
     save("ice_hit", ice_hit(), 0.6)
     save("ice_break", ice_break(), 0.85)

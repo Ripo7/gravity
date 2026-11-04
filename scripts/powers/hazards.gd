@@ -12,16 +12,16 @@ const MOMENTUM_PER_HP := 4.0
 const MIN_SPEED := 2.5
 
 
-## {mass, velocity} for a debris piece, a falling structure piece or a
-## meteor stone; empty if `rid` is none of those.
+## {mass, velocity} for a debris piece or a falling structure piece; empty
+## if `rid` is neither (or is a shard of black ice).
 static func motion_of(world: GameWorld, rid: RID, body: Object) -> Dictionary:
-	if body is MeteorStone:
-		var s := body as MeteorStone
-		return {"mass": s.mass, "velocity": s.linear_velocity}
-	if world == null:
+	if world == null or body is RigidBody3D:
 		return {}
 	var i := world.debris.index_of(rid)
 	if i >= 0:
+		# Your own shield's shards never hurt you (or wear another shield).
+		if world.debris.kind_of(i) == Materials.Kind.ICE:
+			return {}
 		return {"mass": world.debris.mass_of(i), "velocity": world.debris.velocity_of(i)}
 	return world.structures.cluster_motion(rid)
 

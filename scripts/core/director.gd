@@ -3,7 +3,7 @@ extends Node
 ##   --mode=showcase [--shots=DIR]  scripted blasts, optional screenshots
 ##   --mode=bench [--max=N]         body-count benchmark, prints BENCH lines
 ##   --mode=shot [--wait=S]         one screenshot of whatever is on screen
-##   --mode=play --steps="v@x,y,z;w1;p@x,y,z;s" [--from=x,y,z] [--god]
+##   --mode=play --steps="v@x,y,z;w1;s" [--from=x,y,z] [--god]
 ##        plays with scripted casts and prints destruction, health, deaths.
 
 var options := {}
@@ -90,12 +90,11 @@ func _cast(power: int, target := Vector3.INF, shot_name := "") -> void:
 	var caster := player.power
 	if target != Vector3.INF:
 		await _aim(target, 0.4)
-	caster.select(power)
 	while not caster.is_ready(power):
 		await get_tree().process_frame
 	if shot_name != "":
 		await _shot(shot_name)
-	caster.cast_selected()
+	caster.cast_now(power)
 
 
 func _showcase() -> void:
@@ -111,15 +110,17 @@ func _showcase() -> void:
 	await _shot("02_spin")
 	await _wait(4.0)
 	await _shot("02_after")
-	# 2: portal over a building on the boulevard.
-	_place(Vector3(0, 0.05, 4), Vector3(14, 6, -12))
+	# 2: shield up on the boulevard, then a black hole tears the building
+	# ahead apart.
+	_place(Vector3(2, 0.05, 2), Vector3(10, 4, -12))
 	await _wait(0.3)
-	await _cast(PowerDefs.Power.PORTAL, Vector3(12, 0, -14), "03_aim")
-	await _wait(1.2)
-	await _shot("03_portal")
-	await _wait(1.5)
-	await _shot("03_stones")
-	await _wait(3.0)
+	await _cast(PowerDefs.Power.SHIELD)
+	await _wait(0.5)
+	await _shot("03_shield")
+	await _cast(PowerDefs.Power.VORTEX, Vector3(9, 4, -11))
+	await _wait(2.5)
+	await _shot("03_storm")
+	await _wait(4.0)
 	await _shot("03_after")
 	# 3: on the north walkway, shield, black hole in the far block.
 	_place(Vector3(0, 6.5, -12.5), Vector3(-10, 8, -31))
@@ -171,7 +172,7 @@ func _play() -> void:
 	await _wait(0.6)
 	await _shot("00_start")
 	var k := 0
-	var codes := {"v": PowerDefs.Power.VORTEX, "p": PowerDefs.Power.PORTAL, "s": PowerDefs.Power.SHIELD}
+	var codes := {"v": PowerDefs.Power.VORTEX, "s": PowerDefs.Power.SHIELD}
 	for spec: String in String(options.get("steps", "")).split(";", false):
 		var kind := spec.substr(0, 1)
 		if kind == "w":
@@ -211,6 +212,10 @@ func _still() -> void:
 	if options.has("vortex"):
 		await _wait(0.2)
 		world.cast_vortex(t)
+	if options.has("shieldat"):
+		# A shield seen from outside: --shieldat=x,y,z --shieldyaw=deg
+		var yaw := deg_to_rad(float(options.get("shieldyaw", "0")))
+		world.cast_shield(Transform3D(Basis(Vector3.UP, yaw), _vec(options["shieldat"])))
 	await _wait(float(options.get("wait", "0.5")))
 	await _shot(options.get("name", "still"))
 	get_tree().quit()

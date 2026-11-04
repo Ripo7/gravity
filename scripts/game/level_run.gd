@@ -78,11 +78,11 @@ func _show_intro() -> void:
 func _controls_text() -> String:
 	if hud.touch:
 		return (
-			"pouce gauche : bouger · glisser à droite : viser · touche un pouvoir pour le choisir\n"
-			+ "bouton violet : lancer · bouclier : il sort dès que tu le touches · flèche : sauter"
+			"pouce gauche : bouger · glisser à droite : viser\n"
+			+ "bouton violet : trou noir · bouton bouclier : bouclier · flèche : sauter"
 		)
 	return (
-		"1 Trou noir · 2 Portail (molette, A/E) · clic : lancer · 3 Bouclier : tout de suite\n"
+		"clic : trou noir · clic droit ou E : bouclier\n"
 		+ "ZQSD bouger · Espace sauter · R tout reconstruire"
 	)
 

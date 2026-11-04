@@ -1,18 +1,17 @@
 class_name PowerDefs
 extends RefCounted
-## Every tunable number of the three powers. One size each.
+## Every tunable number of the two powers.
 
-enum Power { VORTEX, PORTAL, SHIELD }
+enum Power { VORTEX, SHIELD }
 
-const NAMES := ["Trou noir", "Portail", "Bouclier"]
-const KEYS := ["1", "2", "3"]
+const NAMES := ["Trou noir", "Bouclier"]
+const KEYS := ["clic", "E"]
 
 ## How far you can target, metres.
 const RANGE := 80.0
 
 const COOLDOWN := {
 	Power.VORTEX: 8.0,
-	Power.PORTAL: 10.0,
 	Power.SHIELD: 6.0,
 }
 
@@ -34,19 +33,15 @@ const VORTEX_DPS_BAND := 3.0
 const VORTEX_HURT_INSIDE := 70.0
 const VORTEX_HURT_BAND := 30.0
 
-# --- Meteor portal -----------------------------------------------------------------
-const PORTAL_RADIUS := 5.0
-## One big rock; it breaks apart after a few hard hits.
-const PORTAL_STONE_SIZE := 5.0  ## metres, longest edge
-const PORTAL_STONE_HP := 120.0
-const PORTAL_HEIGHT := 26.0  ## above the target
-
 # --- Ice shield --------------------------------------------------------------------
-const SHIELD_WIDTH := 3.75
-const SHIELD_HEIGHT := 2.1
+## A curved shell of black ice, close to a half dome, rising around the front
+## of the player. Horizontal radius, height and how far it wraps around.
+const SHIELD_RADIUS := 2.7
+const SHIELD_HEIGHT := 4.8
+const SHIELD_ARC := 200.0  ## degrees
+const SHIELD_THICKNESS := 0.35
 const SHIELD_HP := 700.0
 const SHIELD_LIFETIME := 14.0
-const SHIELD_DISTANCE := 3.2  ## in front of the player
 
 
 static func cooldown(power: int) -> float:
