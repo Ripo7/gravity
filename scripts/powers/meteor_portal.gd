@@ -1,7 +1,7 @@
 class_name MeteorPortal
 extends Node3D
 ## Portal power: a horizontal portal opens high above the target zone and
-## huge stones fall out of it onto everything inside the zone.
+## one huge stone falls out of it onto whatever is below.
 
 const SHADER := preload("res://shaders/portal.gdshader")
 const OPEN_TIME := 0.45
@@ -28,9 +28,8 @@ func setup(world: GameWorld, target: Vector3) -> void:
 	_world = world
 	_target = target
 	radius = PowerDefs.PORTAL_RADIUS
-	stones_left = PowerDefs.PORTAL_STONES
+	stones_left = 1
 	_height = PowerDefs.PORTAL_HEIGHT
-	_gap = PowerDefs.PORTAL_SPREAD / maxf(stones_left - 1, 1)
 	_next_stone = OPEN_TIME
 	# Never open inside the ground, and keep a clear drop above tall targets.
 	position = Vector3(target.x, maxf(target.y, 0.0) + _height, target.z)
@@ -123,12 +122,10 @@ func _process(delta: float) -> void:
 func _drop_stone() -> void:
 	if _world == null:
 		return
-	var a := _rng.randf() * TAU
-	var r := sqrt(_rng.randf()) * radius * 0.8
-	var at := global_position + Vector3(cos(a) * r, -1.5, sin(a) * r)
-	var size: float = PowerDefs.PORTAL_STONE_SIZE * _rng.randf_range(0.8, 1.2)
+	var at := global_position + Vector3(0, -PowerDefs.PORTAL_STONE_SIZE * 0.6, 0)
+	var size: float = PowerDefs.PORTAL_STONE_SIZE
 	var stone := MeteorStone.make(_world, at, size, _rng)
 	_world.add_child(stone)
 	stone.rotation = Vector3(_rng.randf() * TAU, _rng.randf() * TAU, _rng.randf() * TAU)
-	stone.linear_velocity = Vector3(0, -_rng.randf_range(10.0, 16.0), 0)
-	stone.angular_velocity = Vector3(_rng.randf() - 0.5, _rng.randf() - 0.5, _rng.randf() - 0.5) * 3.0
+	stone.linear_velocity = Vector3(0, -14.0, 0)
+	stone.angular_velocity = Vector3(_rng.randf() - 0.5, _rng.randf() - 0.5, _rng.randf() - 0.5) * 1.5

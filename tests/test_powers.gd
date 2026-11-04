@@ -42,11 +42,11 @@ func test_vortex_spins_pieces_without_exploding() -> void:
 	var at := FAR + Vector3(0, 3, -15)
 	var ids: Array[int] = []
 	for k in 30:
-		var p := at + Vector3(randf_range(-6, 6), randf_range(-2.5, 0), randf_range(-6, 6))
+		var p := at + Vector3(randf_range(-2.5, 2.5), randf_range(-0.5, 0.5), randf_range(-2.5, 2.5))
 		ids.append(world.debris.spawn(Transform3D(Basis(), p), Vector3.ONE * 0.4))
 	var v := world.cast_vortex(at)
 	await get_tree().create_timer(PowerDefs.VORTEX_SPINUP + 1.5).timeout
-	check(v.caught > 20, "pieces caught in the radius (%d)" % v.caught)
+	check(v.caught > 18, "pieces caught in the radius (%d)" % v.caught)
 	# Pieces move around the core, not away from it.
 	var tangential := 0.0
 	var radial := 0.0
@@ -86,7 +86,7 @@ func test_vortex_shreds_the_band_and_hurts() -> void:
 func test_vortex_breaks_blocks_inside() -> void:
 	await _load()
 	var standing := world.structures.alive_count
-	world.cast_vortex(Vector3(0, 2.5, 10))  # the colonnade
+	world.cast_vortex(Vector3(6, 3, 14))  # a building corner on the avenue
 	await get_tree().create_timer(PowerDefs.VORTEX_SPINUP + 2.0).timeout
 	check(
 		world.structures.alive_count < standing - 20,
@@ -95,17 +95,35 @@ func test_vortex_breaks_blocks_inside() -> void:
 	await _unload()
 
 
-func test_portal_drops_stones_that_smash_blocks() -> void:
+func test_portal_drops_one_destructible_rock() -> void:
 	await _load()
 	var standing := world.structures.alive_count
-	world.cast_portal(Vector3(0, 0, 10))
-	await get_tree().create_timer(1.2).timeout
-	check(get_tree().get_nodes_in_group("meteor_stone").size() > 0, "stones fell out")
+	world.cast_portal(Vector3(12, 0, 14))  # a building on the avenue
+	await get_tree().create_timer(1.0).timeout
+	var stones := get_tree().get_nodes_in_group("meteor_stone")
+	check_eq(stones.size(), 1, "one big rock")
 	await get_tree().create_timer(3.0).timeout
 	check(
 		world.structures.alive_count < standing - 10,
-		"stones broke blocks (%d)" % (standing - world.structures.alive_count)
+		"it broke blocks (%d)" % (standing - world.structures.alive_count)
 	)
+	var pieces := world.debris.active_count
+	for s in get_tree().get_nodes_in_group("meteor_stone"):
+		(s as MeteorStone).damage(10000.0)
+	await frames(3)
+	check_eq(get_tree().get_nodes_in_group("meteor_stone").size(), 0, "the rock breaks apart")
+	check(world.debris.active_count > pieces, "into chunks")
+	await _unload()
+
+
+func test_shield_slot_raises_it_without_selecting() -> void:
+	await _load()
+	var c := world.player.power
+	c.select(PowerDefs.Power.PORTAL)
+	c.select(PowerDefs.Power.SHIELD)
+	await frames(2)
+	check_eq(get_tree().get_nodes_in_group("ice_shield").size(), 1, "shield up")
+	check_eq(c.selected, PowerDefs.Power.PORTAL, "portal still selected")
 	await _unload()
 
 

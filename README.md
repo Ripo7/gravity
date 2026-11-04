@@ -14,10 +14,12 @@ on the roofs; the rest of the city fades into the haze around it.
 1. **Black hole** – a black ball opens where you aim. Everything inside its
    radius is torn loose and orbits it fast; there is no explosion. The band just outside
    the radius (red ring) is not pulled but takes damage – including you.
-2. **Portal** – a horizontal portal opens above the aimed zone and huge
-   mysterious stones fall out of it.
-3. **Shield** – a slab of black ice bursts out of the ground in front of you
-   by itself and stops debris, stones and falling pieces until it breaks.
+2. **Portal** – a horizontal portal opens above the aimed zone and one huge
+   mysterious rock falls out of it. The rock is destructible: hard hits and
+   black holes wear it down until it bursts into heavy chunks.
+3. **Shield** – not aimed and not picked: pressing its slot (3) makes a slab
+   of black ice burst out of the ground in front of you, stopping debris,
+   rocks and falling pieces until it breaks.
 
 **Rules:** you are fragile. Anything heavy that hits you (debris, stones,
 collapsing floors), the black hole's band and hard landings hurt; health
@@ -31,12 +33,14 @@ respawn at the start; the HUD counts destruction and K.O.s.
 | Move | WASD / arrows (physical keys: ZQSD on AZERTY) | Left stick |
 | Look | Mouse | Right stick |
 | Jump / sprint | Space / Shift | A / L3 |
-| Pick power | 1 2 3, wheel, Q / E (A / E on AZERTY) | D-pad, LB / RB |
+| Pick power | 1 2, wheel, Q / E (A / E on AZERTY) | D-pad, LB / RB |
+| Shield (instant) | 3 | D-pad right |
 | Cast | Left mouse | RT |
 | Restart · pause · stats | R · Esc · F3 | Back · Start |
 
 **Phones and tablets** (landscape): left thumb moves, drag on the right to
-aim, tap a power slot to pick it, tap the violet button to cast, arrow to jump, II to pause.
+aim, tap a power slot (curved around the violet button) to pick it, tap the
+violet button to cast, tap the shield slot to raise it at once, arrow to jump, II to pause.
 
 ## Play builds
 
@@ -53,7 +57,7 @@ aim, tap a power slot to pick it, tap the violet button to cast, arrow to jump, 
 | Sandbox map (open in the editor; structures preview) | `levels/sandbox.tscn`, `scripts/game/level.gd`, `scripts/destruction/structure.gd` |
 | Sandbox flow, K.O. and respawn, callouts | `scripts/game/level_run.gd`, `scripts/game/game_state.gd` |
 | Powers: tuning, cooldowns, aiming | `scripts/powers/power_defs.gd`, `scripts/powers/power_caster.gd` |
-| Black hole / portal + stones / black ice shield | `scripts/powers/vortex.gd`, `meteor_portal.gd`, `meteor_stone.gd`, `ice_shield.gd` |
+| Black hole / portal + rock / black ice shield | `scripts/powers/vortex.gd`, `meteor_portal.gd`, `meteor_stone.gd`, `ice_shield.gd` |
 | Health and what hurts | `scripts/player/player.gd`, `scripts/powers/hazards.gd` |
 | Menu (live attract-mode backdrop) | `scenes/menu.tscn`, `scripts/ui/main_menu.gd` |
 | Structural physics: health, loads, toppling, falling pieces | `scripts/destruction/structure_set.gd` |

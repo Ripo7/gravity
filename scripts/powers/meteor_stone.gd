@@ -1,7 +1,9 @@
 class_name MeteorStone
 extends RigidBody3D
-## A huge mysterious stone dropped by the portal. Heavy and fast: it smashes
-## the blocks it lands on, shoves debris aside and crushes the unwary.
+## The huge mysterious stone dropped by the portal. Heavy and fast: it
+## smashes the blocks it lands on, shoves debris aside and crushes the
+## unwary. It is destructible too: hard hits and black holes wear it down
+## until it bursts into heavy chunks.
 
 const SHADER := preload("res://shaders/stone.gdshader")
 const DENSITY := 900.0
@@ -9,8 +11,11 @@ const LIFETIME := 18.0
 const MAX_ALIVE := 40
 const IMPACT_DROP := 4.0  ## m/s of sudden slow-down that counts as a hit
 const IMPACT_MIN := 6.0
+const CHUNKS := 18
+const HP_PER_SPEED := 2.2  ## hit points lost per m/s of impact
 
 var size := 2.0
+var hp := PowerDefs.PORTAL_STONE_HP
 var _mat: ShaderMaterial
 var _mesh: MeshInstance3D
 var _prev_speed := 0.0
@@ -107,8 +112,10 @@ func _physics_process(delta: float) -> void:
 	_prev_speed = speed
 	if _hits > 0:
 		_mat.set_shader_parameter("glow", maxf(0.0, 1.0 - (_age - _last_hit) * 0.5))
-	if _age > LIFETIME or global_position.y < DebrisSystem.KILL_Y:
+	if global_position.y < DebrisSystem.KILL_Y:
 		vanish()
+	elif _age > LIFETIME:
+		shatter()
 
 
 func _impact(speed: float) -> void:
@@ -123,6 +130,45 @@ func _impact(speed: float) -> void:
 	_world.structures.apply_impact(at, reach, damage)
 	_world.shove_debris(at, reach * 1.8, speed * 0.35)
 	_world.stone_landed(at, size, speed)
+	damage(speed * HP_PER_SPEED)
+
+
+## Wears the stone down; at zero it bursts.
+func damage(amount: float) -> void:
+	hp -= amount
+	if hp <= 0.0:
+		shatter.call_deferred()
+
+
+## Bursts into heavy dark chunks that keep the stone's momentum.
+func shatter() -> void:
+	if is_queued_for_deletion() or not is_inside_tree() or _world == null:
+		return
+	remove_from_group("meteor_stone")
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var v := linear_velocity
+	for k in CHUNKS:
+		var dir := (
+			Vector3(rng.randf_range(-1, 1), rng.randf_range(-0.6, 1), rng.randf_range(-1, 1)).normalized()
+		)
+		var at := global_position + dir * size * rng.randf_range(0.05, 0.28)
+		var edge := size * rng.randf_range(0.13, 0.24)
+		var chunk := Vector3(edge, edge * rng.randf_range(0.6, 1.0), edge * rng.randf_range(0.7, 1.2))
+		var basis := Basis.from_euler(Vector3(rng.randf() * TAU, rng.randf() * TAU, rng.randf() * TAU))
+		_world.debris.spawn(
+			Transform3D(basis, at),
+			chunk,
+			v * 0.5 + dir * rng.randf_range(2.0, 6.0),
+			dir.cross(Vector3.UP) * 4.0,
+			0.6,
+			0.38,
+			Materials.Kind.CONCRETE
+		)
+	if _world.dust:
+		_world.dust.puff(global_position, size * 0.7, Materials.Kind.CONCRETE, 18)
+	Sfx.play("break_concrete", global_position, 6.0, 0.6)
+	queue_free()
 
 
 ## Sinks into violet dust and disappears.

@@ -3,6 +3,9 @@ extends Control
 ## In-game HUD: destruction counter, health, the three power slots with
 ## cooldowns, damage flash, callouts, F3 stats and the touch controls.
 
+## Touch: where each slot sits around the cast button (degrees, y down).
+const SLOT_ANGLES := [160.0, 195.0, 230.0]
+
 @export var world: GameWorld
 
 var show_stats := false
@@ -254,26 +257,28 @@ func _draw_powers() -> void:
 			)
 	var name: String = PowerDefs.NAMES[p.selected]
 	var ns := font.get_string_size(name, HORIZONTAL_ALIGNMENT_LEFT, -1, 18)
-	draw_string(
-		font, Vector2(x0 + (total - ns.x) * 0.5, y - 10), name, HORIZONTAL_ALIGNMENT_LEFT, -1, 18, UiTheme.INK
-	)
+	var at := Vector2(x0 + (total - ns.x) * 0.5, y - 10)
+	if touch:
+		# Left of the arc of slots, level with the middle one.
+		var mid := power_slot_rect(1, size, true)
+		at = Vector2(mid.position.x - ns.x - 14.0, mid.get_center().y + 6.0)
+	_text(at, name, 18, UiTheme.INK)
 
 
-## Screen rect of power slot `k`; on touch screens they are tap targets,
-## laid out left of the cast button.
+## Screen rect of power slot `k`; on touch screens they are tap targets
+## curved around the cast button, under the right thumb.
 static func power_slot_rect(k: int, view: Vector2, is_touch: bool) -> Rect2:
-	var slot := 64.0
-	var gap := 12.0
-	var total := slot * 3 + gap * 2
-	var x0 := (view.x - total) * 0.5
-	var y := view.y - slot - 26.0
 	if is_touch:
-		slot = clampf(view.y * 0.12, 56.0, 96.0)
-		gap = slot * 0.18
-		total = slot * 3 + gap * 2
-		x0 = view.x - total - view.y * 0.36
-		y = view.y - slot - 20.0
-	return Rect2(Vector2(x0 + k * (slot + gap), y), Vector2(slot, slot))
+		var slot := clampf(view.y * 0.1, 48.0, 84.0)
+		var cast := TouchControls.charge_center_for(view)
+		var angle := deg_to_rad(SLOT_ANGLES[k])
+		var c := cast + Vector2(cos(angle), sin(angle)) * view.y * 0.215
+		return Rect2(c - Vector2.ONE * slot * 0.5, Vector2(slot, slot))
+	var size := 64.0
+	var gap := 12.0
+	var total := size * 3 + gap * 2
+	var x0 := (view.x - total) * 0.5
+	return Rect2(Vector2(x0 + k * (size + gap), view.y - size - 26.0), Vector2(size, size))
 
 
 ## Text with a white outline so it reads on dark debris and black ice too.

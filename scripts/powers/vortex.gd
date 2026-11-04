@@ -14,6 +14,7 @@ const HALO := 2.4  ## halo radius / core radius
 const DISC := 3.6  ## accretion disc radius / core radius
 const FADE := 0.6
 const TICK := 0.1  ## seconds between damage passes
+const STONE_DPS := 45.0  ## a portal stone caught in the storm breaks up
 const RELEASE_SPEED := 0.3  ## share of orbit speed kept when it closes
 
 var center := Vector3.ZERO
@@ -198,6 +199,7 @@ func _spin_stones(delta: float) -> void:
 		var layer := fmod(float(stone.get_instance_id() % 1000) * 0.6180339, 1.0) * 2.0 - 1.0
 		var lane := 0.4 + 0.5 * fmod(float(stone.get_instance_id() % 997) * 0.7548777, 1.0)
 		var v := stone.linear_velocity.lerp(_orbit_velocity(p, layer, lane, delta), 0.25)
+		(stone as MeteorStone).damage(STONE_DPS * delta)
 		v.y += 18.0 * delta
 		stone.linear_velocity = v
 

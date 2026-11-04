@@ -7,7 +7,7 @@
 [node name="Sandbox" type="Node3D"]
 script = ExtResource("1_level")
 title = "Bac à sable"
-hint = "Tu es en pleine ville. Tout se casse. Le trou noir fait tourner tout ce qui entre dans son rayon et broie ce qui est autour. Le portail fait pleuvoir des pierres. Le bouclier sort tout seul devant toi. Entre dans les immeubles, monte par les rampes des ruelles, traverse les passerelles. Un débris lancé suffit à te mettre K.O."
+hint = "Tu es en pleine ville. Tout se casse. Le trou noir fait tourner tout ce qui entre dans son rayon et broie ce qui est autour. Le portail lâche un énorme rocher, qui finit par éclater. Le bouclier sort devant toi dès que tu touches son bouton. Entre dans les immeubles, monte par les rampes des ruelles, traverse les passerelles. Un débris lancé suffit à te mettre K.O."
 
 [node name="PlayerStart" type="Marker3D" parent="."]
 transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 0, 0.05, 34)

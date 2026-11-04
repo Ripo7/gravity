@@ -43,7 +43,11 @@ func stick_radius() -> float:
 
 
 func charge_center() -> Vector2:
-	return Vector2(size.x - size.y * 0.2, size.y * 0.76)
+	return charge_center_for(size)
+
+
+static func charge_center_for(view: Vector2) -> Vector2:
+	return Vector2(view.x - view.y * 0.2, view.y * 0.76)
 
 
 func charge_radius() -> float:

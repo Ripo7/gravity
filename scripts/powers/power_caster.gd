@@ -1,8 +1,10 @@
 class_name PowerCaster
 extends Node3D
-## The player's three powers. Pick one (1/2/3, wheel, LB/RB, touch slots),
-## press cast: it goes off at full size right away. Each power has its own
-## cooldown. A faint marker shows where the black hole or portal would land.
+## The player's three powers. Pick the black hole or the portal (1/2, wheel,
+## LB/RB, touch slots) and press cast: it goes off where you aim. The shield
+## is not picked: pressing its slot (3) raises it in front of you at once.
+## Each power has its own cooldown. A faint marker shows where the black
+## hole or portal would land.
 
 signal selection_changed(power: int)
 signal cast(power: int)
@@ -56,10 +58,8 @@ func _read_input() -> void:
 		select(PowerDefs.Power.PORTAL)
 	elif Input.is_action_just_pressed("power_3"):
 		select(PowerDefs.Power.SHIELD)
-	elif Input.is_action_just_pressed("power_next"):
-		select((selected + 1) % 3)
-	elif Input.is_action_just_pressed("power_prev"):
-		select((selected + 2) % 3)
+	elif Input.is_action_just_pressed("power_next") or Input.is_action_just_pressed("power_prev"):
+		select(PowerDefs.Power.PORTAL if selected == PowerDefs.Power.VORTEX else PowerDefs.Power.VORTEX)
 	var held := touch_held or (Input.is_action_pressed("cast") and _pointer_ready())
 	if held and not _was_held:
 		cast_selected()
@@ -71,7 +71,12 @@ func _pointer_ready() -> bool:
 	return captured or not Input.get_connected_joypads().is_empty()
 
 
+## Picks the power the cast button fires. The shield goes up right away
+## instead: it is never the selected power.
 func select(power: int) -> void:
+	if power == PowerDefs.Power.SHIELD:
+		cast_power(power)
+		return
 	if power == selected:
 		return
 	selected = power
@@ -89,32 +94,38 @@ func cooldown_fraction(power: int) -> float:
 
 ## Casts the selected power now if it is ready.
 func cast_selected() -> bool:
+	return cast_power(selected)
+
+
+## Casts `power` now if it is ready.
+func cast_power(power: int) -> bool:
 	if not enabled:
 		return false
-	if not is_ready(selected):
-		denied.emit(selected)
+	if not is_ready(power):
+		denied.emit(power)
 		Sfx.ui("denied", -8.0)
 		return false
 	var world := GameWorld.of(self)
 	if world == null:
 		return false
 	_update_aim()
-	match selected:
+	match power:
 		PowerDefs.Power.VORTEX:
 			world.cast_vortex(target)
 		PowerDefs.Power.PORTAL:
 			world.cast_portal(target)
 		PowerDefs.Power.SHIELD:
 			world.cast_shield(shield_base())
-	cooldown_left[selected] = PowerDefs.cooldown(selected)
-	cast.emit(selected)
+	cooldown_left[power] = PowerDefs.cooldown(power)
+	cast.emit(power)
 	return true
 
 
-## Selects and casts `power` (scripts, tests).
+## Selects (unless it is the shield) and casts `power` (scripts, tests).
 func cast_now(power: int) -> bool:
-	selected = power
-	return cast_selected()
+	if power != PowerDefs.Power.SHIELD:
+		selected = power
+	return cast_power(power)
 
 
 # --- Aiming --------------------------------------------------------------------
