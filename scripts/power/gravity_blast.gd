@@ -15,7 +15,7 @@ const SWIRL := 0.6
 const PLAYER_PULL := 0.1
 const PLAYER_BURST := 0.45
 const LINGER := 0.8
-const SHIELD_DAMAGE := 500.0
+const SHIELD_DAMAGE := 300.0
 const HURT_REACH := 0.35  ## fraction of the blast radius that hurts
 const HURT_MAX := 85.0
 

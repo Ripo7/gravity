@@ -131,10 +131,11 @@ func shatter() -> void:
 	Sfx.play("ice_break", global_position, -2.0 + tier * 3.0)
 	if _world:
 		var size := Vector3(width, height, THICKNESS)
-		var count := clampi(int(width * height * 1.2), 6, 18)
+		# Many hand-sized shards rather than a few slabs in your face.
+		var count := clampi(int(width * height * 3.0), 10, 40)
 		for piece: AABB in Fracture.pattern(size, count, tier):
 			var xf := global_transform * Transform3D(Basis(), piece.get_center())
-			var kick := (global_transform.basis.z * randf_range(-1.0, 1.0) + Vector3.UP) * 1.5
+			var kick := (global_transform.basis.z * randf_range(-0.5, 0.5) + Vector3.UP * 0.6) * 1.2
 			var spin := Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * 4.0
 			_world.debris.spawn(xf, piece.size * 0.97, kick, spin, 0.3, 1.0, Materials.Kind.ICE)
 		if _world.dust:

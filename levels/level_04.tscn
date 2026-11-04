@@ -7,7 +7,7 @@
 script = ExtResource("1_level")
 title = "Bureaux"
 hint = "Les colonnes portent tout. Fais-les céder et les étages s'écrasent… sur toi, si tu restes devant."
-target = 0.75
+target = 0.7
 star_times = Vector2(25, 45)
 
 [node name="PlayerStart" type="Marker3D" parent="."]

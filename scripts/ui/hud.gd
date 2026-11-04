@@ -206,14 +206,15 @@ func _draw_meter() -> void:
 		font, Vector2((size.x - ts.x) * 0.5, top - 12), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 36, UiTheme.INK
 	)
 	var pct := "%d%% / %d%%" % [roundi(shown_destruction * 100.0), roundi(target * 100.0)]
-	draw_string(font, Vector2(rect.end.x + 14, top + h), pct, HORIZONTAL_ALIGNMENT_LEFT, -1, 20, UiTheme.INK)
+	_text(Vector2(rect.end.x + 14, top + h), pct, 20, UiTheme.INK)
 
 
 func _draw_health() -> void:
 	var p := world.player
 	var w := 220.0
 	var rect := Rect2(Vector2(28, size.y - 44), Vector2(w, 14))
-	draw_rect(rect.grow(3), Color(1, 1, 1, 0.85))
+	# White card behind label and bar: readable over anything.
+	draw_rect(Rect2(rect.position - Vector2(12, 34), rect.size + Vector2(24, 46)), Color(1, 1, 1, 0.82))
 	draw_rect(rect, Color(UiTheme.INK, 0.12))
 	var k := clampf(_shown_health / Player.MAX_HEALTH, 0.0, 1.0)
 	var low := k < 0.35
@@ -303,6 +304,13 @@ static func power_slot_rect(k: int, view: Vector2, is_touch: bool) -> Rect2:
 		x0 = view.x - total - view.y * 0.36
 		y = view.y - slot - 20.0
 	return Rect2(Vector2(x0 + k * (slot + gap), y), Vector2(slot, slot))
+
+
+## Text with a white outline so it reads on dark debris and black ice too.
+func _text(pos: Vector2, text: String, font_size: int, color: Color) -> void:
+	var font := UiTheme.bold()
+	draw_string_outline(font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, 6, Color(1, 1, 1, 0.9))
+	draw_string(font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, color)
 
 
 ## Tiny vector icons so no texture assets are needed.
