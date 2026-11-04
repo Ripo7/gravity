@@ -170,7 +170,7 @@ func _on_cleared() -> void:
 	cleared = true
 	result_stars = level.stars_for(elapsed)
 	_end_timer = 0.0
-	hud.popup("OBJECTIF !", UiTheme.VIOLET, 60, Vector2(0, -40))
+	hud.popup("OBJECTIF !", UiTheme.VIOLET, 60, Vector2(0, -130))
 	Sfx.ui("fanfare", -6.0)
 
 
