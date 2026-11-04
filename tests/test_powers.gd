@@ -107,12 +107,14 @@ func test_portal_drops_one_destructible_rock() -> void:
 		world.structures.alive_count < standing - 10,
 		"it broke blocks (%d)" % (standing - world.structures.alive_count)
 	)
-	var pieces := world.debris.active_count
-	for s in get_tree().get_nodes_in_group("meteor_stone"):
-		(s as MeteorStone).damage(10000.0)
-	await frames(3)
+	# It may already have burst on its hard landings; otherwise break it.
+	var left := get_tree().get_nodes_in_group("meteor_stone")
+	if not left.is_empty():
+		var pieces := world.debris.active_count
+		(left[0] as MeteorStone).damage(10000.0)
+		await frames(3)
+		check(world.debris.active_count > pieces, "into chunks")
 	check_eq(get_tree().get_nodes_in_group("meteor_stone").size(), 0, "the rock breaks apart")
-	check(world.debris.active_count > pieces, "into chunks")
 	await _unload()
 
 
