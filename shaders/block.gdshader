@@ -1,6 +1,6 @@
 shader_type spatial;
 // Every block and piece of debris, all materials, in one draw call.
-// Per-instance COLOR: r = shade, g = material (0 / 0.5 / 1, see materials.gd),
+// Per-instance COLOR: r = shade, g = material kind / 3 (see materials.gd),
 // b = random seed, a = violet glow from the power.
 // INSTANCE_CUSTOM.r = damage (0..1), drawn as cracks.
 // Patterns are procedural in the block's own space (scaled to metres), so
@@ -14,6 +14,7 @@ uniform vec3 concrete : source_color = vec3(0.78, 0.76, 0.72);
 uniform vec3 wood : source_color = vec3(0.78, 0.58, 0.38);
 uniform vec3 wood_dark : source_color = vec3(0.55, 0.36, 0.2);
 uniform vec3 metal : source_color = vec3(0.62, 0.66, 0.72);
+uniform vec3 ice : source_color = vec3(0.035, 0.03, 0.06);
 
 varying vec3 local_pos;   // metres, centred on the block
 varying vec3 half_size;   // metres
@@ -58,7 +59,8 @@ void vertex() {
 	half_size = scale * 0.5;
 	local_normal = NORMAL;
 	shade = COLOR.r;
-	material_id = COLOR.g < 0.1 ? 0.0 : (COLOR.g < 0.6 ? 1.0 : 2.0);
+	// Undo the sRGB->linear conversion applied to instance colours.
+	material_id = floor(pow(max(COLOR.g, 0.0), 1.0 / 2.2) * 3.0 + 0.5);
 	seed = COLOR.b;
 	tint = COLOR.a;
 	damage = INSTANCE_CUSTOM.r;
@@ -107,6 +109,7 @@ vec2 voronoi_edge(vec2 x) {
 void fragment() {
 	vec3 p = local_pos + seed * 37.0;
 	vec3 albedo;
+	vec3 face = abs(local_normal);
 	float rough;
 	float metallic = 0.0;
 
@@ -131,6 +134,13 @@ void fragment() {
 		float streak = noise(vec3(q.x * 0.8, q.y * 40.0, q.z * 40.0));
 		albedo = mix(wood, wood_dark, rings * 0.55 + streak * 0.2);
 		rough = 0.75;
+	} else if (material_id > 2.5) {
+		// Black ice: glassy near-black with faint violet veins inside.
+		vec2 e = voronoi_edge((face.x > 0.5 ? local_pos.yz : (face.y > 0.5 ? local_pos.xz : local_pos.xy)) * 1.6 + seed * 7.0);
+		float vein = 1.0 - smoothstep(0.0, 0.05, e.x);
+		albedo = ice + violet * vein * 0.18;
+		rough = 0.08 + 0.1 * fbm(p * 1.5);
+		metallic = 0.35;
 	} else {
 		// Metal: brushed steel along the longest axis, slight panel tint.
 		vec3 hs = half_size;
@@ -144,7 +154,6 @@ void fragment() {
 
 	// Soft darkening near block edges: reads as a bevel / contact shadow.
 	vec3 d = half_size - abs(local_pos);
-	vec3 face = abs(local_normal);
 	float edge_dist = 10.0;
 	if (face.x < 0.5) { edge_dist = min(edge_dist, d.x); }
 	if (face.y < 0.5) { edge_dist = min(edge_dist, d.y); }

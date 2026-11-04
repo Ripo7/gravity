@@ -17,8 +17,9 @@ func test_every_level_loads_and_stands() -> void:
 			continue
 		check(lv.get_node_or_null("PlayerStart") != null, "%s has a PlayerStart" % path)
 		check(world.structures.segment_count() > 20, "%s has structures" % path)
-		var t := lv.star_thresholds
-		check(t.x < t.y and t.y < t.z and t.z <= 1.0, "%s thresholds ascend" % path)
+		if not lv.is_sandbox():
+			check(lv.star_times.x < lv.star_times.y, "%s star times ascend" % path)
+			check(lv.target > 0.3 and lv.target <= 1.0, "%s target sensible" % path)
 		# Intact level must not fall down on its own.
 		await frames(60)
 		check_eq(world.structures.alive_count, world.structures.segment_count(), "%s stands" % path)
@@ -27,13 +28,13 @@ func test_every_level_loads_and_stands() -> void:
 		await frames(2)
 
 
-func test_stars_for_destruction() -> void:
+func test_stars_for_time() -> void:
 	var lv := Level.new()
-	lv.star_thresholds = Vector3(0.4, 0.65, 0.85)
-	check_eq(lv.stars_for(0.2), 0, "below one star")
-	check_eq(lv.stars_for(0.4), 1, "exactly one star")
-	check_eq(lv.stars_for(0.7), 2, "two stars")
-	check_eq(lv.stars_for(1.0), 3, "three stars")
+	lv.star_times = Vector2(30, 60)
+	check_eq(lv.stars_for(20.0), 3, "fast = 3 stars")
+	check_eq(lv.stars_for(30.0), 3, "exactly gold")
+	check_eq(lv.stars_for(45.0), 2, "two stars")
+	check_eq(lv.stars_for(200.0), 1, "slow but cleared = 1 star")
 	lv.free()
 
 
@@ -43,37 +44,59 @@ func test_progress_unlocks_next_level() -> void:
 	var second := GameState.LEVELS[1]
 	check(GameState.is_unlocked(first), "first level open")
 	check(not GameState.is_unlocked(second), "second locked")
-	check(GameState.record(first, 0, 200, 0.2), "first record is a best")
-	check(not GameState.is_unlocked(second), "no star, still locked")
-	GameState.record(first, 2, 700, 0.7)
-	check(GameState.is_unlocked(second), "a star unlocks the next")
-	check(not GameState.record(first, 1, 500, 0.5), "worse score is not a best")
-	check_eq(GameState.stars(first), 2, "keeps the best stars")
+	check(GameState.record(first, 1, 80.0), "first clear is a record")
+	check(GameState.is_unlocked(second), "a clear unlocks the next")
+	check(GameState.record(first, 3, 25.0), "faster is a record")
+	check(not GameState.record(first, 2, 40.0), "slower is not a record")
+	check_eq(GameState.stars(first), 3, "keeps the best stars")
+	check_near(GameState.best_time(first), 25.0, 0.001, "keeps the best time")
 	check_eq(GameState.continue_level(), second, "continue goes to the next unfinished level")
 	GameState.reset_progress()
 
 
-func test_running_out_of_charges_ends_the_level() -> void:
+func _start(path: String) -> GameWorld:
 	var world: GameWorld = GAME.instantiate()
-	world.level_path = GameState.LEVELS[0]
+	world.level_path = path
 	add_child(world)
 	await frames(3)
+	(world.get_node("Run") as LevelRun)._begin_play()
+	return world
+
+
+func test_reaching_the_target_clears_the_level() -> void:
+	var world := await _start(GameState.LEVELS[0])
 	var run := world.get_node("Run") as LevelRun
-	run._begin_play()
-	var charges := run.charges_left
-	check(charges > 0, "level has charges")
-	for k in charges:
-		world.player.power.thrown.emit(BlastParams.from_charge(0.5))
-	check_eq(run.charges_left, 0, "all charges used")
-	check(not world.player.power.enabled, "power disabled")
-	var done := [false]
-	run.finished.connect(func(_s: int, _sc: int) -> void: done[0] = true)
-	for k in 60:
-		await get_tree().create_timer(0.25).timeout
-		if done[0]:
+	await get_tree().create_timer(0.3).timeout
+	# Knock down blocks until the goal is met.
+	var s := world.structures
+	for i in s.segment_count():
+		if s.destruction() >= run.level.target:
 			break
-	check(done[0], "results shown once things settle")
-	check_eq(run.state, LevelRun.State.RESULT, "in result state")
+		s.remove_segment(i)
+	await frames(2)
+	check(run.cleared, "cleared at the target")
+	check(run.elapsed > 0.2, "clock ran (%.2f s)" % run.elapsed)
+	var done := [false]
+	run.finished.connect(func(_c: bool, _s: int, _t: float) -> void: done[0] = true)
+	await get_tree().create_timer(LevelRun.RESULT_DELAY + 0.5).timeout
+	check(done[0], "results shown")
+	check(GameState.stars(GameState.LEVELS[0]) >= 1, "clear saved")
+	get_tree().paused = false
+	world.queue_free()
+	await frames(2)
+	GameState.reset_progress()
+
+
+func test_dying_fails_the_level() -> void:
+	var world := await _start(GameState.LEVELS[0])
+	var run := world.get_node("Run") as LevelRun
+	world.player.hurt(500.0, world.player.global_position)
+	check(world.player.dead, "player dead")
+	check_eq(run.state, LevelRun.State.DEAD, "level failed")
+	await get_tree().create_timer(LevelRun.RESULT_DELAY + 0.5).timeout
+	check_eq(run.state, LevelRun.State.RESULT, "results shown")
+	check(not run.cleared, "not cleared")
+	check_eq(GameState.stars(GameState.LEVELS[0]), 0, "no stars saved")
 	get_tree().paused = false
 	world.queue_free()
 	await frames(2)

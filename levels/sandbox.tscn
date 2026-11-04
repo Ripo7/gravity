@@ -5,9 +5,9 @@
 
 [node name="Sandbox" type="Node3D"]
 script = ExtResource("1_level")
-title = "Sandbox"
-hint = "Unlimited charges. Break everything."
-charges = 0
+title = "Bac à sable"
+hint = "Pas de chrono, pas d'objectif. Essaie les trois pouvoirs et leurs tailles. Si tu te fais écraser, tu reviens."
+sandbox = true
 
 [node name="PlayerStart" type="Marker3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 15)

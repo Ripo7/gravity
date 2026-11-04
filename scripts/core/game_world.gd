@@ -20,6 +20,8 @@ const SLOWMO_RECOVER := 0.7  ## real seconds to ease back to 1x
 @export var attract := false
 
 var level: Level
+## Path of the level scene that was loaded.
+var level_file := ""
 var blasts_total := 0
 var _slowmo_left := 0.0
 var _slowmo_total := 0.0
@@ -49,6 +51,7 @@ func _ready() -> void:
 
 func _load_level() -> void:
 	var path := level_path if level_path != "" else GameState.current_level
+	level_file = path
 	var scene := load(path) as PackedScene
 	if scene == null:
 		push_error("Cannot load level %s" % path)
@@ -134,6 +137,56 @@ func detonate(at: Vector3, params: BlastParams, travel := Vector3.ZERO) -> Gravi
 	return blast
 
 
+# --- Powers --------------------------------------------------------------------
+
+
+func cast_gravity(at: Vector3, tier: int) -> GravityOrb:
+	var orb := GravityOrb.new()
+	orb.setup(self, at, tier)
+	add_child(orb)
+	return orb
+
+
+func cast_portal(at: Vector3, tier: int) -> MeteorPortal:
+	var portal := MeteorPortal.new()
+	portal.setup(self, at, tier)
+	add_child(portal)
+	return portal
+
+
+func cast_shield(base: Transform3D, tier: int) -> IceShield:
+	var shield := IceShield.new()
+	shield.setup(self, base, tier)
+	add_child(shield)
+	return shield
+
+
+## Radial kick to loose pieces around a heavy landing.
+func shove_debris(at: Vector3, radius: float, speed: float) -> void:
+	for i in debris.capacity:
+		if not debris.is_active(i):
+			continue
+		var to := debris.position_of(i) - at
+		var d := to.length()
+		if d > radius or d < 0.01:
+			continue
+		var f := 1.0 - d / radius
+		var dir := (to / d + Vector3.UP * 0.6).normalized()
+		debris.set_velocity(i, debris.velocity_of(i) + dir * speed * f)
+
+
+## Dust, shake and sound when a meteor stone hits.
+func stone_landed(at: Vector3, size: float, speed: float) -> void:
+	if dust:
+		dust.puff(at, size, Materials.Kind.CONCRETE, int(10 + size * 6))
+		dust.chips(at, size, Materials.Kind.CONCRETE, speed * 0.4, int(10 + size * 5))
+	Sfx.play("stone", at, -6.0 + size * 3.0, 1.2 - size * 0.12)
+	var cam := get_viewport().get_camera_3d() as CameraShake
+	if cam:
+		var d := cam.global_position.distance_to(at)
+		cam.add_trauma(clampf(size * speed / 120.0, 0.05, 0.5) * clampf(1.0 - d / 50.0, 0.0, 1.0))
+
+
 func slow_motion(scale := SLOWMO_SCALE) -> void:
 	_slowmo_scale = scale
 	_slowmo_total = SLOWMO_HOLD + SLOWMO_RECOVER
@@ -166,7 +219,8 @@ func _start_attract() -> void:
 	var t := 0.0
 	var next_blast := 2.5
 	while is_inside_tree():
-		await get_tree().process_frame
+		var tree := get_tree()
+		await tree.process_frame
 		if not is_inside_tree() or not is_instance_valid(cam):
 			return
 		var dt := get_process_delta_time()
@@ -179,7 +233,10 @@ func _start_attract() -> void:
 			next_blast = randf_range(3.5, 5.5)
 			var target := _random_block_position()
 			if target != Vector3.INF:
-				detonate(target, BlastParams.from_charge(randf_range(0.45, 1.0)))
+				if randf() < 0.3:
+					cast_portal(target, randi_range(0, 1))
+				else:
+					cast_gravity(target, randi_range(1, 2))
 		# Rebuild the backdrop once it is mostly rubble, unless the player is
 		# busy in a sub-menu (a reload would reset it).
 		var busy := get_tree().get_first_node_in_group("menu_busy") != null

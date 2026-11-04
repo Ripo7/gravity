@@ -12,9 +12,12 @@ signal burst
 enum Phase { PULL, BURST, DONE }
 
 const SWIRL := 0.6
-const PLAYER_PULL := 0.25
+const PLAYER_PULL := 0.1
 const PLAYER_BURST := 0.45
 const LINGER := 0.8
+const SHIELD_DAMAGE := 500.0
+const HURT_REACH := 0.35  ## fraction of the blast radius that hurts
+const HURT_MAX := 85.0
 
 var params: BlastParams
 var phase := Phase.PULL
@@ -83,6 +86,13 @@ func _pull(delta: float) -> void:
 		var tumble := Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5)
 		debris.add_spin(i, tumble * 14.0 * delta)
 		debris.set_tint(i, 0.6 + 0.4 * (1.0 - d / r))
+	# Meteor stones get dragged in too (they are heavy: half strength).
+	for node in get_tree().get_nodes_in_group("meteor_stone"):
+		var stone := node as RigidBody3D
+		var to_core := c - stone.global_position
+		var d := to_core.length()
+		if d < r and d > hold:
+			stone.linear_velocity += to_core / d * params.pull_accel * 0.5 * sqrt(1.0 - d / r) * ramp * delta
 	_push_player(PLAYER_PULL * delta * params.pull_accel, true)
 
 
@@ -120,8 +130,34 @@ func _burst() -> void:
 		debris.add_spin(i, Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * 10.0 * f)
 		debris.set_tint(i, 1.0)
 	_world.structures.push_clusters(c, params.radius * 1.2, params.burst_speed * 0.6, direction)
+	for node in get_tree().get_nodes_in_group("meteor_stone"):
+		var stone := node as RigidBody3D
+		var off := stone.global_position - c
+		var d := off.length()
+		if d < params.radius and d > 0.01:
+			stone.linear_velocity += (
+				(off / d + Vector3.UP * 0.3).normalized() * params.burst_speed * 0.5 * params.falloff(d)
+			)
+	for node in get_tree().get_nodes_in_group("ice_shield"):
+		var shield := node as IceShield
+		var d := shield.global_position.distance_to(c)
+		if d < params.radius:
+			shield.hit(SHIELD_DAMAGE * params.charge * params.falloff(d))
 	_push_player(PLAYER_BURST * params.burst_speed, false)
+	_hurt_player()
 	burst.emit()
+
+
+## Standing too close to your own singularity when it bursts hurts.
+func _hurt_player() -> void:
+	var player := _world.player
+	if player == null:
+		return
+	var reach := params.radius * HURT_REACH
+	var d := player.global_position.distance_to(global_position)
+	if d < reach:
+		var k := 1.0 - d / reach
+		player.hurt(HURT_MAX * k * (0.5 + 0.5 * params.charge), global_position)
 
 
 func _push_player(amount: float, toward: bool) -> void:

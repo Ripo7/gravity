@@ -208,10 +208,110 @@ def chain():
     return (sweep(600, 1400, sec) + 0.4 * sweep(900, 2100, sec)) * env(n, 0.002, 0.09)
 
 
+def orb():
+    # Gravity orb appearing: a deep swell with a shimmering top.
+    sec = 1.4
+    n = int(SR * sec)
+    rise = np.linspace(0, 1, n) ** 1.5
+    x = sweep(55, 110, sec) * (0.4 + 0.6 * rise)
+    x += 0.35 * sweep(440, 880, sec) * rise * (0.5 + 0.5 * np.sin(2 * np.pi * 14 * t(sec)))
+    x += 0.2 * lp(noise(sec), 1500) * rise
+    return x * env(n, 0.03, 2.0)
+
+
+def portal():
+    sec = 1.6
+    n = int(SR * sec)
+    tt = t(sec)
+    whoosh = bp(noise(sec), 300, 2500) * np.sin(np.pi * tt / sec) ** 2
+    hum = sum(a * np.sin(2 * np.pi * f * tt + 3 * np.sin(2 * np.pi * 0.7 * tt)) for f, a in [(98, 1), (147, 0.6), (196, 0.4)])
+    shimmer = 0.25 * hp(noise(sec), 5000) * np.sin(np.pi * tt / sec)
+    return 0.9 * whoosh + 0.6 * hum * env(n, 0.2, 1.2) + shimmer
+
+
+def stone():
+    # Huge stone landing: sub thump + rock crack + gravel.
+    sec = 1.6
+    n = int(SR * sec)
+    thump = sweep(80, 28, sec) * env(n, 0.002, 0.25)
+    crack = hp(noise(sec), 1200) * env(n, 0.0005, 0.04)
+    gravel = crumble(sec, 400, 4000, 50, 0.025, 0.25)
+    return 1.6 * thump + 0.8 * crack + 0.6 * gravel
+
+
+def ice_rise():
+    sec = 0.8
+    n = int(SR * sec)
+    tt = t(sec)
+    crack = hp(noise(sec), 2500) * env(n, 0.001, 0.05)
+    grind = bp(noise(sec), 200, 1500) * np.clip(1 - tt / 0.35, 0, 1)
+    ring = sum(a * np.sin(2 * np.pi * f * tt) for f, a in [(1320, 0.4), (1760, 0.3), (2640, 0.2)]) * env(n, 0.01, 0.3)
+    return 0.8 * crack + 0.9 * grind + 0.5 * ring
+
+
+def ice_hit():
+    sec = 0.4
+    n = int(SR * sec)
+    tt = t(sec)
+    tick = hp(noise(sec), 3000) * env(n, 0.0005, 0.02)
+    ring = sum(a * np.sin(2 * np.pi * f * tt) for f, a in [(1900, 0.5), (2850, 0.3)]) * env(n, 0.001, 0.12)
+    return tick + ring
+
+
+def ice_break():
+    # Glassy shatter: many bright grains and a falling tinkle.
+    sec = 1.3
+    n = int(SR * sec)
+    burst_ = hp(noise(sec), 2000) * env(n, 0.0005, 0.08)
+    tinkle = crumble(sec, 2500, 9000, 70, 0.02, 0.35)
+    return 0.9 * burst_ + 0.8 * tinkle
+
+
+def hurt():
+    sec = 0.35
+    n = int(SR * sec)
+    thud = sweep(140, 60, sec) * env(n, 0.002, 0.08)
+    grit = lp(noise(sec), 1500) * env(n, 0.001, 0.05)
+    return 1.2 * thud + 0.5 * grit
+
+
+def death():
+    sec = 1.8
+    n = int(SR * sec)
+    down = sweep(220, 40, sec) * env(n, 0.005, 0.7)
+    rumble = lp(noise(sec), 200) * env(n, 0.01, 0.8)
+    return down + 0.8 * rumble
+
+
+def denied():
+    sec = 0.18
+    n = int(SR * sec)
+    tt = t(sec)
+    return signal.square(2 * np.pi * 140 * tt) * 0.4 * env(n, 0.002, 0.06)
+
+
+def select():
+    sec = 0.09
+    n = int(SR * sec)
+    return np.sin(2 * np.pi * 1200 * t(sec)) * env(n, 0.001, 0.02) + 0.5 * np.sin(2 * np.pi * 2400 * t(sec)) * env(n, 0.001, 0.01)
+
+
+def tier():
+    sec = 0.15
+    n = int(SR * sec)
+    return sweep(700, 1100, sec) * env(n, 0.002, 0.05)
+
+
+def ready():
+    sec = 0.25
+    n = int(SR * sec)
+    tt = t(sec)
+    return (np.sin(2 * np.pi * 1568 * tt) + 0.4 * np.sin(2 * np.pi * 2352 * tt)) * env(n, 0.002, 0.07)
+
+
 if __name__ == "__main__":
     os.makedirs(OUT, exist_ok=True)
     save("charge_loop", charge_loop(), 0.6)
-    save("throw", throw())
     save("implode", implode())
     save("burst", burst(), 0.95)
     save("break_concrete", break_concrete())
@@ -223,4 +323,16 @@ if __name__ == "__main__":
     save("star", star())
     save("fanfare", fanfare(), 0.8)
     save("chain", chain(), 0.6)
+    save("orb", orb(), 0.8)
+    save("portal", portal(), 0.85)
+    save("stone", stone(), 0.95)
+    save("ice_rise", ice_rise(), 0.8)
+    save("ice_hit", ice_hit(), 0.6)
+    save("ice_break", ice_break(), 0.85)
+    save("hurt", hurt(), 0.8)
+    save("death", death(), 0.85)
+    save("denied", denied(), 0.4)
+    save("select", select(), 0.4)
+    save("tier", tier(), 0.4)
+    save("ready", ready(), 0.4)
     print("ok", sorted(os.listdir(OUT)))

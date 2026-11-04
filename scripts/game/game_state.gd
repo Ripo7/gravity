@@ -14,10 +14,9 @@ const LEVELS: Array[String] = [
 	"res://levels/level_06.tscn",
 	"res://levels/level_07.tscn",
 	"res://levels/level_08.tscn",
-	"res://levels/level_09.tscn",
-	"res://levels/level_10.tscn",
 ]
-const SAVE_PATH := "user://progress.cfg"
+## v2: time attack rules; old star/score saves do not carry over.
+const SAVE_PATH := "user://progress_v2.cfg"
 
 var current_level := SANDBOX
 ## Set to false by tests so they never touch the player's save.
@@ -66,12 +65,9 @@ func stars(path: String) -> int:
 	return _cfg.get_value(path, "stars", 0)
 
 
-func best_score(path: String) -> int:
-	return _cfg.get_value(path, "score", 0)
-
-
-func best_destruction(path: String) -> float:
-	return _cfg.get_value(path, "destruction", 0.0)
+## Best clear time in seconds, or 0 if never cleared.
+func best_time(path: String) -> float:
+	return _cfg.get_value(path, "time", 0.0)
 
 
 func total_stars() -> int:
@@ -89,12 +85,13 @@ func continue_level() -> String:
 	return LEVELS[LEVELS.size() - 1]
 
 
-## Stores a result. Returns true when it beat the previous best score.
-func record(path: String, star_count: int, score: int, destruction: float) -> bool:
-	var better := score > best_score(path)
+## Stores a clear. Returns true when it beat the previous best time.
+func record(path: String, star_count: int, seconds: float) -> bool:
+	var best := best_time(path)
+	var better := best <= 0.0 or seconds < best
 	_cfg.set_value(path, "stars", maxi(star_count, stars(path)))
-	_cfg.set_value(path, "score", maxi(score, best_score(path)))
-	_cfg.set_value(path, "destruction", maxf(destruction, best_destruction(path)))
+	if better:
+		_cfg.set_value(path, "time", seconds)
 	if persist:
 		_cfg.save(SAVE_PATH)
 	return better

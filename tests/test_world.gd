@@ -86,7 +86,7 @@ func _mean_distance(c: Vector3) -> float:
 	return total / maxf(n, 1)
 
 
-func test_touch_controls_move_look_and_charge() -> void:
+func test_touch_controls_move_look_and_cast() -> void:
 	await _load_world()
 	var p := world.player
 	p.input_enabled = true
@@ -107,16 +107,20 @@ func test_touch_controls_move_look_and_charge() -> void:
 	tc._on_touch(_touch(1, Vector2(1100, 400), true))
 	tc._on_drag(_drag(1, Vector2(1000, 400), Vector2(-100, 0)))
 	check(p.rotation.y > yaw, "drag left turns left")
-	# Hold the charge button, release to throw.
-	var thrown := [false]
-	p.power.thrown.connect(func(_params: BlastParams) -> void: thrown[0] = true)
+	# Hold the cast button, release to cast; slots pick the power.
+	var casts := [0]
+	p.power.cast.connect(func(_pw: int, _t: int) -> void: casts[0] += 1)
+	tc._on_touch(_touch(3, Hud.power_slot_rect(2, tc.size, true).get_center(), true))
+	check_eq(p.power.selected, PowerDefs.Power.SHIELD, "tapping a slot selects the power")
+	tc._on_touch(_touch(3, Hud.power_slot_rect(2, tc.size, true).get_center(), false))
+	p.power.select(PowerDefs.Power.GRAVITY)
 	tc._on_touch(_touch(2, tc.charge_center(), true))
 	await get_tree().create_timer(0.5).timeout
-	check(p.power.charging and p.power.charge > 0.1, "charging while held")
+	check(p.power.holding and p.power.tier == 1, "holding grows the power (tier %d)" % p.power.tier)
 	tc._on_touch(_touch(2, tc.charge_center(), false))
 	await get_tree().process_frame
 	await get_tree().process_frame
-	check(thrown[0], "released ball")
+	check_eq(casts[0], 1, "released a cast")
 	# Releasing the stick stops movement input.
 	tc._on_touch(_touch(0, Vector2(300, 560), false))
 	check_eq(p.touch_move, Vector2.ZERO, "stick released")

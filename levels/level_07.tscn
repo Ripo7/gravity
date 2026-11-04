@@ -5,29 +5,60 @@
 
 [node name="Level" type="Node3D"]
 script = ExtResource("1_level")
-title = "Viaduct"
-hint = "A long deck on tall piers. Cut the piers."
-charges = 2
-star_thresholds = Vector3(0.4, 0.65, 0.85)
+title = "Viaduc"
+hint = "Un pont immense en deux arches. Coupe les piles et regarde le tablier s'effondrer — de loin."
+target = 0.75
+star_times = Vector2(25, 45)
 
 [node name="PlayerStart" type="Marker3D" parent="."]
-transform = Transform3D(0.9659, 0, 0.2588, 0, 1, 0, -0.2588, 0, 0.9659, 6, 0.05, 14)
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 0, 0.05, 18)
 
-[node name="Viaduct" type="Node3D" parent="."]
-transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 0, 0, 0)
+[node name="ViaductA" type="Node3D" parent="."]
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, -14, 0, 0)
 script = ExtResource("2_structure")
 kind = 3
-counts = Vector3i(7, 10, 1)
-block = Vector3(0.8, 0.55, 0.9)
+counts = Vector3i(8, 14, 1)
+block = Vector3(0.9, 0.6, 1.0)
 strength = 3.0
-seed_value = 18
+seed_value = 140
+
+[node name="ViaductB" type="Node3D" parent="."]
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 14, 0, 0)
+script = ExtResource("2_structure")
+kind = 3
+counts = Vector3i(8, 14, 1)
+block = Vector3(0.9, 0.6, 1.0)
+strength = 3.0
+seed_value = 141
 
 [node name="Rails" type="Node3D" parent="."]
-transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 0, 0, -4)
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 0, 0, -6)
 script = ExtResource("2_structure")
-counts = Vector3i(10, 3, 1)
+counts = Vector3i(20, 3, 1)
 block = Vector3(2, 0.3, 0.25)
 strength = 2.0
 material = 1
 accent_material = 1
-seed_value = 19
+seed_value = 142
+
+[node name="DepotW" type="Node3D" parent="."]
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, -24, 0, 10)
+script = ExtResource("2_structure")
+kind = 1
+counts = Vector3i(4, 6, 1)
+block = Vector3(1, 0.8, 0.3)
+strength = 2.5
+material = 1
+accent_material = 1
+seed_value = 143
+
+[node name="DepotE" type="Node3D" parent="."]
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 24, 0, 10)
+script = ExtResource("2_structure")
+kind = 4
+counts = Vector3i(2, 2, 2)
+block = Vector3(2.4, 2.8, 0.4)
+strength = 2.5
+material = 2
+accent_material = 1
+seed_value = 144

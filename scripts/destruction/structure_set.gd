@@ -242,6 +242,17 @@ func cluster_count() -> int:
 	return _clusters.size()
 
 
+## {mass, velocity} of the falling piece whose body is `rid`, or empty.
+func cluster_motion(rid: RID) -> Dictionary:
+	for c in _clusters:
+		if c.body == rid:
+			var v: Vector3 = PhysicsServer3D.body_get_state(
+				c.body, PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY
+			)
+			return {"mass": c.mass, "velocity": v}
+	return {}
+
+
 ## Share of scored volume that is no longer standing (0..1).
 func destruction() -> float:
 	return scored_destroyed / scored_total if scored_total > 0.0 else 0.0

@@ -20,20 +20,20 @@ func _show_home() -> void:
 	title.add_theme_font_size_override("font_size", 84)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	box.add_child(title)
-	var sub := UiTheme.label("charge · throw · collapse", "SmallLabel")
+	var sub := UiTheme.label("invoque · écrase · survis", "SmallLabel")
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	box.add_child(sub)
 	box.add_child(_gap(18))
 	var cont := GameState.continue_level()
 	var label := (
-		"Play" if GameState.total_stars() == 0 else "Continue · level %d" % (GameState.index_of(cont) + 1)
+		"Jouer" if GameState.total_stars() == 0 else "Continuer · niveau %d" % (GameState.index_of(cont) + 1)
 	)
 	var play := UiTheme.button(label, GameState.start_level.bind(cont), 300)
 	box.add_child(play)
-	box.add_child(UiTheme.button("Levels", _show_levels, 300))
-	box.add_child(UiTheme.button("Sandbox", GameState.start_level.bind(GameState.SANDBOX), 300))
+	box.add_child(UiTheme.button("Niveaux", _show_levels, 300))
+	box.add_child(UiTheme.button("Bac à sable", GameState.start_level.bind(GameState.SANDBOX), 300))
 	if not OS.has_feature("web"):
-		box.add_child(UiTheme.button("Quit", get_tree().quit, 300))
+		box.add_child(UiTheme.button("Quitter", get_tree().quit, 300))
 	box.add_child(_gap(10))
 	var stars := UiTheme.label(
 		"★ %d / %d" % [GameState.total_stars(), GameState.LEVELS.size() * 3], "SmallLabel"
@@ -46,7 +46,11 @@ func _show_home() -> void:
 
 ## Lets the CI touch probe find the Play button.
 func _report_play_button(play: Button) -> void:
+	if not is_inside_tree():
+		return
 	await get_tree().process_frame
+	if not is_instance_valid(play) or not play.is_inside_tree():
+		return
 	var c := play.get_global_rect().get_center()
 	print("MENU_PLAY %d %d" % [c.x, c.y])
 
@@ -54,11 +58,11 @@ func _report_play_button(play: Button) -> void:
 func _show_levels() -> void:
 	add_to_group("menu_busy")
 	var box := _page_box()
-	var head := UiTheme.label("Levels", "TitleLabel")
+	var head := UiTheme.label("Niveaux", "TitleLabel")
 	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	box.add_child(head)
 	var grid := GridContainer.new()
-	grid.columns = 5
+	grid.columns = 4
 	grid.add_theme_constant_override("h_separation", 10)
 	grid.add_theme_constant_override("v_separation", 10)
 	box.add_child(grid)
@@ -76,7 +80,7 @@ func _show_levels() -> void:
 		if first == null and not b.disabled and b.stars == 0:
 			first = b
 	box.add_child(_gap(8))
-	var back := UiTheme.button("Back", _show_home, 300)
+	var back := UiTheme.button("Retour", _show_home, 300)
 	box.add_child(back)
 	(first if first else back).grab_focus()
 

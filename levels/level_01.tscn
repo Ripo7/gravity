@@ -5,26 +5,76 @@
 
 [node name="Level" type="Node3D"]
 script = ExtResource("1_level")
-title = "First Contact"
-hint = "Hit the base. Anything that loses its support comes down."
-charges = 2
-star_thresholds = Vector3(0.35, 0.6, 0.85)
+title = "Le Réveil"
+hint = "1 Singularité : vise, maintiens pour la grossir, relâche. Elle apparaît là où tu vises et explose après quelques secondes. Ne reste pas collé à elle."
+target = 0.65
+star_times = Vector2(25, 45)
 
 [node name="PlayerStart" type="Marker3D" parent="."]
-transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 0, 0.05, 14)
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 0, 0.05, 18)
 
-[node name="Tower" type="Node3D" parent="."]
-transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 0, 0, 0)
+[node name="Tower1" type="Node3D" parent="."]
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, -12, 0, -4)
 script = ExtResource("2_structure")
 kind = 1
-counts = Vector3i(3, 12, 1)
+counts = Vector3i(3, 14, 1)
 block = Vector3(1, 0.8, 0.4)
 strength = 3.5
 accent_material = 1
 seed_value = 1
 
+[node name="Tower2" type="Node3D" parent="."]
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 0, 0, -8)
+script = ExtResource("2_structure")
+kind = 1
+counts = Vector3i(3, 16, 1)
+block = Vector3(1, 0.8, 0.4)
+strength = 3.5
+accent_material = 1
+seed_value = 2
+
+[node name="Tower3" type="Node3D" parent="."]
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 12, 0, -4)
+script = ExtResource("2_structure")
+kind = 1
+counts = Vector3i(3, 14, 1)
+block = Vector3(1, 0.8, 0.4)
+strength = 3.5
+accent_material = 1
+seed_value = 3
+
+[node name="ShedL" type="Node3D" parent="."]
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, -7, 0, 4)
+script = ExtResource("2_structure")
+kind = 1
+counts = Vector3i(3, 5, 1)
+block = Vector3(1, 0.8, 0.3)
+strength = 2.5
+material = 1
+accent_material = 1
+seed_value = 4
+
+[node name="ShedR" type="Node3D" parent="."]
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 7, 0, 4)
+script = ExtResource("2_structure")
+kind = 1
+counts = Vector3i(3, 5, 1)
+block = Vector3(1, 0.8, 0.3)
+strength = 2.5
+material = 1
+accent_material = 1
+seed_value = 5
+
+[node name="WallBack" type="Node3D" parent="."]
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 0, 0, -16)
+script = ExtResource("2_structure")
+counts = Vector3i(16, 6, 1)
+block = Vector3(1, 0.5, 0.5)
+strength = 3.0
+seed_value = 6
+
 [node name="Crates" type="Node3D" parent="."]
-transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 3.6, 0, 1.0)
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 0, 0, 3)
 script = ExtResource("2_structure")
 kind = 2
 counts = Vector3i(3, 1, 3)
@@ -32,4 +82,4 @@ block = Vector3(0.8, 0.8, 0.8)
 strength = 2.0
 material = 1
 accent_material = 1
-seed_value = 2
+seed_value = 7

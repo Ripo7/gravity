@@ -1,31 +1,39 @@
 # Gravity
 
-First-person demolition game in Godot 4.7 (GDScript, Jolt physics).
-Charge a violet power ball, throw it, and the impact opens a short-lived
-black hole: it pulls the world in, then bursts outward. Buildings obey
-real support rules: cut the base and they topple, overload the columns and
-the floors pancake, and what falls breaks whatever it lands on.
+First-person destruction game in Godot 4.7 (GDScript, Jolt physics).
+You have overpowered powers. Flatten each map as fast as you can, without
+getting crushed by what you bring down.
 
-**Game:** 10 demolition levels with limited charges and 1 to 3 stars for the
-share destroyed (unused charges add score), plus an unlimited sandbox.
-Progress is saved locally.
+**Powers** (hold the cast button to grow them through three sizes; each
+power and size has its own cooldown):
+
+1. **Singularity** – an orb of gravitational wave appears where you aim,
+   swells, then pulls everything in and bursts.
+2. **Portal** – a horizontal portal opens above the aimed zone and huge
+   mysterious stones fall out of it.
+3. **Shield** – a slab of black ice bursts out of the ground in front of you
+   and stops debris, stones and falling pieces until it breaks.
+
+**Rules (time attack):** destroy the target share of the map. The clock
+decides the stars; dying fails the run. Health drops when heavy things hit
+you (debris, stones, collapsing floors), when you stand too close to your
+own singularity, and on hard landings; it comes back after a few seconds
+without being hit. Best times are saved locally. The sandbox has no clock.
 
 ## Controls
 
 | Action | Mouse + keyboard | Gamepad |
 | --- | --- | --- |
-| Move | WASD / arrows (physical keys, works on AZERTY) | Left stick |
+| Move | WASD / arrows (physical keys: ZQSD on AZERTY) | Left stick |
 | Look | Mouse | Right stick |
-| Jump | Space | A / Cross |
-| Sprint | Shift | L3 |
-| Charge, release to throw | Hold left mouse | Hold RT or RB |
-| Restart level | R | Back / Select |
-| Pause | Esc | Start |
-| Stats overlay | F3 | LB |
+| Jump / sprint | Space / Shift | A / L3 |
+| Pick power | 1 2 3, wheel, Q / E (A / E on AZERTY) | D-pad, LB / RB |
+| Cast (hold = bigger) | Left mouse | RT |
+| Restart · pause · stats | R · Esc · F3 | Back · Start |
 
-**Phones and tablets** (landscape): drag the left half to move (the stick appears
-under your thumb), drag the right half to look, hold the violet button to charge
-and release to throw, tap the arrow to jump, II to pause.
+**Phones and tablets** (landscape): left thumb moves, drag on the right to
+aim, tap a power slot to pick it, hold the violet button to grow the power
+and release to cast, arrow to jump, II to pause.
 
 ## Play builds
 
@@ -40,13 +48,16 @@ and release to throw, tap the arrow to jump, II to pause.
 | Piece | File |
 | --- | --- |
 | Levels (open in the editor; structures preview) | `levels/*.tscn`, `scripts/game/level.gd`, `scripts/destruction/structure.gd` |
-| Level flow, stars, score, callouts | `scripts/game/level_run.gd`, `scripts/game/game_state.gd` |
+| Time attack flow, stars, best times, callouts | `scripts/game/level_run.gd`, `scripts/game/game_state.gd` |
+| Powers: sizes, cooldowns, aiming, preview | `scripts/powers/power_defs.gd`, `scripts/powers/power_caster.gd` |
+| Singularity / portal + stones / black ice shield | `scripts/powers/gravity_orb.gd`, `meteor_portal.gd`, `meteor_stone.gd`, `ice_shield.gd` |
+| Health and what hurts | `scripts/player/player.gd`, `scripts/powers/hazards.gd` |
 | Menu (live attract-mode backdrop) | `scenes/menu.tscn`, `scripts/ui/main_menu.gd` |
 | Structural physics: health, loads, toppling, falling pieces | `scripts/destruction/structure_set.gd` |
 | Loose pieces: pooled server bodies + one MultiMesh | `scripts/destruction/debris_system.gd` |
 | Pre-fractured patterns | `scripts/destruction/fracture.gd` |
 | Concrete / wood / metal: look, weight, strength, breakage | `scripts/destruction/materials.gd`, `shaders/block.gdshader` |
-| Charge → blast tuning in one place | `scripts/power/blast_params.gd` |
+| Blast tuning (per singularity size) | `scripts/power/blast_params.gd` |
 | Pull then burst | `scripts/power/gravity_blast.gd` |
 | Lens, sparks, dust, chips, shake, slow motion | `scripts/fx/*`, `shaders/*`, `scripts/core/game_world.gd` |
 | Sound effects (synthesised, regenerate with `python3 tools/make_sounds.py`) | `audio/*.wav`, `scripts/core/sfx.gd` |

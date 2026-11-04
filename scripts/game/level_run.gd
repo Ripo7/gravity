@@ -1,29 +1,26 @@
 class_name LevelRun
 extends Node
-## Flow of one level: intro card -> play -> settle -> results, plus pause.
-## Also turns structural events into callouts (collapse, chain) for the HUD.
+## Flow of one level (time attack): intro card -> play (clock running) ->
+## cleared or dead -> results. Also pause, and callouts for the HUD.
 
-signal finished(stars: int, score: int)
+signal finished(cleared: bool, stars: int, seconds: float)
 
-enum State { INTRO, PLAY, SETTLE, RESULT, PAUSED }
+enum State { INTRO, PLAY, CLEARED, DEAD, RESULT, PAUSED }
 
-const CHARGE_BONUS := 150
-const SETTLE_MIN := 2.5  ## seconds after the last burst before judging
-const SETTLE_MAX := 12.0
 const CHAIN_WINDOW := 1.4
+const RESULT_DELAY := 1.6  ## seconds of watching the collapse before results
+const SANDBOX_RESPAWN := 2.0
 
 @export var world: GameWorld
 @export var hud: Hud
 
 var state := State.INTRO
-var charges_left := 0
 var level: Level
+var elapsed := 0.0
 var result_stars := 0
-var result_score := 0
+var cleared := false
 
 var _overlay: Control
-var _settle_time := 0.0
-var _quiet_time := 0.0
 var _state_before_pause := State.PLAY
 var _was_captured := false
 var _chain := 0
@@ -31,7 +28,7 @@ var _chain_timer := 0.0
 var _last_destruction := 0.0
 var _gain := 0.0
 var _gain_timer := 0.0
-var _card_stars_shown := 0
+var _end_timer := 0.0
 
 
 func _ready() -> void:
@@ -43,22 +40,21 @@ func _ready() -> void:
 		hud.visible = false
 		level = null
 		return
-	charges_left = level.charges
 	_overlay = Control.new()
 	_overlay.theme = UiTheme.get_theme()
 	_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud.get_parent().add_child(_overlay)
 	hud.set_title(level.title.to_upper())
-	hud.thresholds = level.star_thresholds
-	hud.charges_total = level.charges
-	hud.charges_left = charges_left
+	hud.target = level.target
+	hud.sandbox = level.is_sandbox()
 	if hud.touch:
 		hud.add_pause_button(pause)
-	world.player.power.thrown.connect(_on_thrown)
 	world.structures.destruction_changed.connect(_on_destruction)
 	world.structures.cluster_released.connect(_on_released)
 	world.structures.cluster_impact.connect(_on_impact)
+	world.player.died.connect(_on_died)
+	world.player.damaged.connect(func(amount: float, from: Vector3) -> void: hud.hurt(amount, from))
 	if Launch.options.get("mode", "") in ["showcase", "bench", "still", "probe", "play"]:
 		_begin_play()  # scripted runs skip the card
 	else:
@@ -73,64 +69,70 @@ func _show_intro() -> void:
 	world.player.input_enabled = false
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	var box := _panel()
-	var idx := GameState.index_of(GameState.current_level)
-	var kicker := "SANDBOX" if level.is_sandbox() else "LEVEL %d" % (idx + 1)
+	var idx := GameState.index_of(world.level_file)
+	var kicker := "BAC À SABLE" if level.is_sandbox() else "NIVEAU %d" % (idx + 1)
 	box.add_child(UiTheme.label(kicker, "SmallLabel"))
 	box.add_child(UiTheme.label(level.title, "TitleLabel"))
 	if level.hint != "":
 		var hint := UiTheme.label(level.hint)
 		hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		hint.custom_minimum_size.x = 460
+		hint.custom_minimum_size.x = 520
 		box.add_child(hint)
 	if not level.is_sandbox():
-		box.add_child(_spacer(6))
-		var t := level.star_thresholds
-		box.add_child(
-			UiTheme.label(
-				(
-					"%d charges   ·   ★ %d%%   ★★ %d%%   ★★★ %d%%"
-					% [level.charges, roundi(t.x * 100), roundi(t.y * 100), roundi(t.z * 100)]
-				),
-				"SmallLabel"
-			)
+		box.add_child(_spacer(4))
+		var t := level.star_times
+		var best := GameState.best_time(world.level_file)
+		var goal := (
+			"Détruis %d%% et survis   ·   ★★★ %s   ★★ %s"
+			% [roundi(level.target * 100), _clock(t.x), _clock(t.y)]
 		)
+		box.add_child(UiTheme.label(goal, "HeadLabel"))
+		if best > 0.0:
+			box.add_child(UiTheme.label("record %s" % _clock(best), "SmallLabel"))
+	box.add_child(_spacer(6))
+	box.add_child(UiTheme.label(_controls_text(), "SmallLabel"))
 	box.add_child(_spacer(8))
-	var controls := (
-		"left thumb: move · drag right: look · hold violet button: charge"
-		if hud.touch
-		else "WASD move · mouse look · hold click to charge, release to throw · R restart"
-	)
-	box.add_child(UiTheme.label(controls, "SmallLabel"))
-	box.add_child(_spacer(8))
-	var start := UiTheme.button("Start", _begin_play)
+	var start := UiTheme.button("Go", _begin_play)
 	box.add_child(start)
 	start.grab_focus()
+
+
+func _controls_text() -> String:
+	if hud.touch:
+		return (
+			"pouce gauche : bouger · glisser à droite : viser\n"
+			+ "maintiens le bouton violet pour grossir, relâche pour lancer · choisis le pouvoir au-dessus"
+		)
+	return (
+		"1 Singularité · 2 Portail · 3 Bouclier  (molette, A/E)\n"
+		+ "maintiens le clic pour grossir, relâche pour lancer · ZQSD bouger · R recommencer"
+	)
 
 
 func _begin_play() -> void:
 	_clear_overlay()
 	state = State.PLAY
+	elapsed = 0.0
 	world.player.input_enabled = true
-	world.player.power.enabled = level.is_sandbox() or charges_left > 0
 	if not hud.touch and not Launch.options.has("mode"):
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	_was_captured = Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
 
 
 func pause() -> void:
-	if state not in [State.PLAY, State.SETTLE]:
+	if state not in [State.PLAY, State.CLEARED]:
 		return
 	_state_before_pause = state
 	state = State.PAUSED
 	get_tree().paused = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	var box := _panel()
-	box.add_child(UiTheme.label("Paused", "TitleLabel"))
+	box.add_child(UiTheme.label("Pause", "TitleLabel"))
 	box.add_child(_spacer(6))
-	var resume := UiTheme.button("Resume", _resume)
+	var resume := UiTheme.button("Reprendre", _resume)
 	box.add_child(resume)
-	box.add_child(UiTheme.button("Restart", _restart))
-	box.add_child(UiTheme.button("Main menu", GameState.go_to_menu))
+	box.add_child(UiTheme.button("Recommencer", _restart))
+	box.add_child(UiTheme.button("Menu", GameState.go_to_menu))
 	resume.grab_focus()
 
 
@@ -147,70 +149,90 @@ func _restart() -> void:
 	world.reset()
 
 
-func _finish() -> void:
+func _on_died() -> void:
+	if level.is_sandbox():
+		hud.popup("AÏE", UiTheme.INK, 48)
+		await get_tree().create_timer(SANDBOX_RESPAWN, true, false, true).timeout
+		world.player.respawn()
+		world.player.input_enabled = state == State.PLAY
+		return
+	if state != State.PLAY:
+		return
+	state = State.DEAD
+	cleared = false
+	_end_timer = 0.0
+	Sfx.ui("death", -2.0)
+	hud.popup("K.O.", Color(0.85, 0.1, 0.2), 64)
+
+
+func _on_cleared() -> void:
+	state = State.CLEARED
+	cleared = true
+	result_stars = level.stars_for(elapsed)
+	_end_timer = 0.0
+	hud.popup("OBJECTIF !", UiTheme.VIOLET, 60, Vector2(0, -40))
+	Sfx.ui("fanfare", -6.0)
+
+
+func _show_result() -> void:
 	state = State.RESULT
 	world.player.input_enabled = false
-	world.player.power.enabled = false
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	var d := world.structures.destruction()
-	result_stars = level.stars_for(d)
-	result_score = int(round(d * 1000.0)) + (charges_left * CHARGE_BONUS if result_stars > 0 else 0)
-	var best_before := GameState.best_score(GameState.current_level)
-	var new_best := GameState.record(GameState.current_level, result_stars, result_score, d)
-	finished.emit(result_stars, result_score)
+	var path := world.level_file
+	var best_before := GameState.best_time(path)
+	var new_best := false
+	if cleared:
+		new_best = GameState.record(path, result_stars, elapsed)
+	finished.emit(cleared, result_stars if cleared else 0, elapsed)
 	var box := _panel()
-	var head := "Demolished!" if result_stars == 3 else ("Level clear" if result_stars > 0 else "Not enough")
-	box.add_child(UiTheme.label(head, "TitleLabel"))
+	var d := world.structures.destruction()
+	if cleared:
+		box.add_child(UiTheme.label("Rasé en %s" % _clock(elapsed), "TitleLabel"))
+	else:
+		box.add_child(UiTheme.label("K.O.", "TitleLabel"))
+		box.add_child(
+			UiTheme.label(
+				"Tu t'es fait écraser à %d%% / %d%%" % [roundi(d * 100), roundi(level.target * 100)]
+			)
+		)
 	var stars := StarRow.new()
 	stars.custom_minimum_size = Vector2(300, 84)
 	box.add_child(stars)
-	box.add_child(UiTheme.label("%d%% destroyed" % int(round(d * 100.0)), "HeadLabel"))
-	var detail := "score %d" % result_score
-	if charges_left > 0 and result_stars > 0:
-		detail += "   (+%d unused charges)" % (charges_left * CHARGE_BONUS)
-	box.add_child(UiTheme.label(detail))
-	var best_text := (
-		"new best!" if new_best and best_before > 0 else "best %d" % maxi(best_before, result_score)
-	)
-	box.add_child(UiTheme.label(best_text, "SmallLabel"))
+	if cleared:
+		var t := level.star_times
+		box.add_child(UiTheme.label("★★★ %s   ·   ★★ %s" % [_clock(t.x), _clock(t.y)], "SmallLabel"))
+		var best_text := (
+			"nouveau record !"
+			if new_best and best_before > 0.0
+			else "record %s" % _clock(minf(elapsed, best_before) if best_before > 0.0 else elapsed)
+		)
+		box.add_child(
+			UiTheme.label(best_text, "HeadLabel" if new_best and best_before > 0.0 else "SmallLabel")
+		)
 	box.add_child(_spacer(8))
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", 12)
 	box.add_child(row)
-	var retry := UiTheme.button("Retry", _restart, 150)
+	var retry := UiTheme.button("Rejouer", _restart, 160)
 	row.add_child(retry)
-	var next := GameState.next_level(GameState.current_level)
 	var first: Button = retry
-	if next != "" and GameState.is_unlocked(next):
-		var nb := UiTheme.button("Next", GameState.start_level.bind(next), 150)
+	var next := GameState.next_level(path)
+	if cleared and next != "" and GameState.is_unlocked(next):
+		var nb := UiTheme.button("Suivant", GameState.start_level.bind(next), 160)
 		row.add_child(nb)
 		first = nb
-	row.add_child(UiTheme.button("Levels", GameState.go_to_menu, 150))
+	row.add_child(UiTheme.button("Niveaux", GameState.go_to_menu, 160))
 	first.grab_focus()
-	# Stars pop in one by one.
+	if not cleared:
+		return
 	for k in result_stars:
 		await get_tree().create_timer(0.35 + k * 0.3, true, false, true).timeout
 		stars.lit = k + 1
 		Sfx.ui("star", -4.0, 1.0 + k * 0.25)
-	if result_stars > 0:
-		await get_tree().create_timer(0.3, true, false, true).timeout
-		Sfx.ui("fanfare", -6.0)
 
 
 # --- Events ---------------------------------------------------------------------
-
-
-func _on_thrown(_params: BlastParams) -> void:
-	if level.is_sandbox():
-		return
-	charges_left = maxi(charges_left - 1, 0)
-	hud.charges_left = charges_left
-	if charges_left == 0:
-		world.player.power.enabled = false
-		state = State.SETTLE
-		_settle_time = 0.0
-		_quiet_time = 0.0
 
 
 func _on_destruction(fraction: float) -> void:
@@ -218,18 +240,13 @@ func _on_destruction(fraction: float) -> void:
 	_gain += fraction - _last_destruction
 	_last_destruction = fraction
 	_gain_timer = 0.6
-	# Reaching a star threshold is worth a callout.
-	var stars := level.stars_for(fraction)
-	if not level.is_sandbox() and stars > _card_stars_shown:
-		_card_stars_shown = stars
-		hud.popup("★".repeat(stars), UiTheme.STAR_ON, 54, Vector2(0, -90))
-		Sfx.ui("star", -6.0, 1.0 + stars * 0.2)
-		hud.pulse_meter()
+	if state == State.PLAY and not level.is_sandbox() and fraction >= level.target - 0.0001:
+		_on_cleared()
 
 
 func _on_released(_at: Vector3, count: int, toppled: bool) -> void:
 	if count >= 12:
-		hud.popup("TOPPLED!" if toppled else "COLLAPSE!", UiTheme.INK, 44)
+		hud.popup("BASCULE !" if toppled else "EFFONDREMENT !", UiTheme.INK, 44)
 		_bump_chain()
 
 
@@ -242,7 +259,7 @@ func _bump_chain() -> void:
 	_chain = _chain + 1 if _chain_timer > 0.0 else 1
 	_chain_timer = CHAIN_WINDOW
 	if _chain >= 2:
-		hud.popup("CHAIN ×%d" % _chain, UiTheme.VIOLET, 36 + _chain * 3, Vector2(0, 60))
+		hud.popup("CHAÎNE ×%d" % _chain, UiTheme.VIOLET, 36 + _chain * 3, Vector2(0, 60))
 		Sfx.ui("chain", -8.0, 0.9 + _chain * 0.1)
 
 
@@ -252,51 +269,46 @@ func _bump_chain() -> void:
 func _process(delta: float) -> void:
 	if level == null:
 		return
+	# The clock runs on real time: slow motion is not a free pause.
 	var real := delta / maxf(Engine.time_scale, 0.001)
 	_chain_timer = maxf(_chain_timer - real, 0.0)
 	if _gain_timer > 0.0:
 		_gain_timer -= real
 		if _gain_timer <= 0.0 and _gain >= 0.02:
-			hud.popup("+%d%%" % int(round(_gain * 100.0)), UiTheme.VIOLET, 30, Vector2(260, -110))
-			_gain = 0.0
-		elif _gain_timer <= 0.0:
+			hud.popup("+%d%%" % roundi(_gain * 100.0), UiTheme.VIOLET, 30, Vector2(260, -110))
+		if _gain_timer <= 0.0:
 			_gain = 0.0
 	if Input.is_action_just_pressed("reset_arena") and state != State.PAUSED:
 		_restart()
 		return
 	match state:
-		State.PLAY, State.SETTLE:
+		State.PLAY, State.CLEARED, State.DEAD:
+			if state == State.PLAY and not level.is_sandbox():
+				elapsed += real
+			hud.clock = elapsed
+			if state != State.PLAY:
+				_end_timer += real
+				if _end_timer > RESULT_DELAY:
+					_show_result()
+					return
 			# Browsers drop pointer lock on Esc without sending the key.
 			var captured := Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
-			if (_was_captured and not captured) or Input.is_action_just_pressed("release_mouse"):
+			if (
+				state != State.DEAD
+				and ((_was_captured and not captured) or Input.is_action_just_pressed("release_mouse"))
+			):
 				pause()
 				return
 			_was_captured = captured
-			if state == State.SETTLE or _all_stars_reached():
-				_check_settled(real)
 		State.PAUSED:
 			if Input.is_action_just_pressed("release_mouse"):
 				_resume()
 
 
-func _all_stars_reached() -> bool:
-	return not level.is_sandbox() and world.structures.destruction() >= level.star_thresholds.z
-
-
-## Ends the level once the dust has settled (or after SETTLE_MAX seconds).
-func _check_settled(real: float) -> void:
-	_settle_time += real
-	var busy := world.structures.cluster_count() > 0
-	for c in world.get_children():
-		if c is GravityBlast:
-			busy = true
-	var moving := world.debris.awake_count > maxi(20, int(world.debris.active_count * 0.08))
-	if busy or moving:
-		_quiet_time = 0.0
-	else:
-		_quiet_time += real
-	if (_settle_time > SETTLE_MIN and _quiet_time > 0.8) or _settle_time > SETTLE_MAX:
-		_finish()
+static func _clock(seconds: float) -> String:
+	var m := int(seconds / 60.0)
+	var s := seconds - m * 60.0
+	return "%d:%04.1f" % [m, s]
 
 
 # --- UI helpers -------------------------------------------------------------------

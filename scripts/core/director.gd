@@ -3,9 +3,9 @@ extends Node
 ##   --mode=showcase [--shots=DIR]  scripted blasts, optional screenshots
 ##   --mode=bench [--max=N]         body-count benchmark, prints BENCH lines
 ##   --mode=shot [--wait=S]         one screenshot of whatever is on screen
-##   --mode=play --level=PATH --throws="x,y,z@charge;..." [--from=x,y,z]
-##        plays a level with scripted throws (waits for each to settle),
-##        prints the result: used to tune star thresholds.
+##   --mode=play --level=PATH --steps="g2@x,y,z;w1;p1@x,y,z;s0" [--from=x,y,z]
+##        plays a level with scripted casts and prints the result (time,
+##        stars, health): used to tune star times.
 
 var options := {}
 var world: GameWorld
@@ -85,24 +85,25 @@ func _yaw_pitch(target: Vector3) -> Vector2:
 	return Vector2(yaw, pitch)
 
 
-## Charge for `seconds`, release, and return after the burst settles a bit.
-func _throw(seconds: float, shot_prefix := "") -> void:
-	var hand := player.power
-	hand.begin_charge()
-	await _wait(seconds * 0.75)
-	if shot_prefix != "":
-		await _shot(shot_prefix + "_charging")
-	await _wait(seconds * 0.25)
-	hand.release()
-	var args: Array = await world.detonated
-	var params: BlastParams = args[1]
-	if shot_prefix != "":
-		await _wait(params.pull_time * 0.6)
-		await _shot(shot_prefix + "_pull")
-		await _wait(params.pull_time * 0.4 + 0.06)
-		await _shot(shot_prefix + "_burst")
-	else:
-		await _wait(params.pull_time + 0.1)
+## Holds the cast button long enough for `tier`, aims at `target` first
+## (not for the shield), releases. Optional screenshot while holding.
+func _cast(power: int, tier: int, target := Vector3.INF, shot_name := "") -> void:
+	var caster := player.power
+	if target != Vector3.INF:
+		await _aim(target, 0.4)
+	caster.select(power)
+	while not caster.is_ready(power):
+		await get_tree().process_frame
+	caster.begin()
+	var hold := 0.05
+	if tier == 1:
+		hold = PowerDefs.TIER_TIMES.x + 0.05
+	elif tier == 2:
+		hold = PowerDefs.TIER_TIMES.y + 0.05
+	await _wait(hold)
+	if shot_name != "":
+		await _shot(shot_name)
+	caster.release()
 
 
 func _showcase() -> void:
@@ -110,23 +111,35 @@ func _showcase() -> void:
 	_place(Vector3(-2, 0.05, 14), Vector3(-4, 2.5, 0))
 	await _wait(0.4)
 	await _shot("01_arena")
-	# 1: big blast into the left tower.
-	await _aim(Vector3(-12.5, 4.5, -8), 0.6)
-	await _throw(1.7, "02_tower")
+	# 1: big singularity on the left tower.
+	await _cast(PowerDefs.Power.GRAVITY, 2, Vector3(-12.5, 3.0, -8), "02_aim")
+	await _wait(PowerDefs.GRAVITY_FUSE[2] * 0.6)
+	await _shot("02_orb")
+	var args: Array = await world.detonated
+	var params: BlastParams = args[1]
+	await _wait(params.pull_time * 0.6)
+	await _shot("02_pull")
+	await _wait(params.pull_time * 0.4 + 0.06)
+	await _shot("02_burst")
 	await _wait(2.4)
-	await _shot("02_tower_after")
-	# 2: medium blast into the front wall.
-	await _aim(Vector3(1.5, 1.6, 2), 0.6)
-	await _throw(0.9, "03_wall")
-	await _wait(2.0)
-	await _shot("03_wall_after")
-	# 3: walk through the gap and hit the colonnade.
-	_place(Vector3(2, 0.05, -4), Vector3(0, 2.5, -16))
-	await _wait(0.3)
-	await _throw(1.7, "04_colonnade")
+	await _shot("02_after")
+	# 2: portal over the front wall.
+	await _cast(PowerDefs.Power.PORTAL, 1, Vector3(0, 1.0, 2), "03_aim")
+	await _wait(0.9)
+	await _shot("03_portal")
+	await _wait(0.8)
+	await _shot("03_stones")
 	await _wait(2.5)
-	await _shot("04_colonnade_after")
-	# 4: overview.
+	await _shot("03_after")
+	# 3: shield, then a singularity behind it.
+	_place(Vector3(10, 0.05, 6), Vector3(10, 1.5, -2))
+	await _wait(0.2)
+	await _cast(PowerDefs.Power.SHIELD, 1, Vector3(10, 1.5, -2), "04_aim")
+	await _wait(0.5)
+	await _shot("04_shield")
+	await _cast(PowerDefs.Power.GRAVITY, 1, Vector3(13, 1.5, -10))
+	await _wait(3.0)
+	await _shot("04_after")
 	_place(Vector3(10, 0.05, 16), Vector3(-6, 1.6, -10))
 	await _wait(0.5)
 	await _shot("05_overview")
@@ -154,42 +167,53 @@ func _probe() -> void:
 		)
 
 
-## Plays the current level with scripted throws and reports the outcome.
+## Plays the current level with a scripted list of casts and reports the
+## outcome. Steps (separated by ";"): g/p/s + size 0-2 [+ @x,y,z target],
+## "w<seconds>" to wait, "m<x,y,z>" to walk (teleport) there.
 func _play() -> void:
 	var run := world.get_node_or_null("Run") as LevelRun
 	if options.has("from"):
 		player.global_position = _vec(options["from"])
+	if options.has("god"):
+		player.invulnerable = true
 	await _wait(0.6)
 	await _shot("00_start")
 	var k := 0
-	for spec: String in String(options.get("throws", "")).split(";", false):
+	var codes := {"g": PowerDefs.Power.GRAVITY, "p": PowerDefs.Power.PORTAL, "s": PowerDefs.Power.SHIELD}
+	for spec: String in String(options.get("steps", "")).split(";", false):
+		if run and run.state != LevelRun.State.PLAY:
+			break
+		var kind := spec.substr(0, 1)
+		if kind == "w":
+			await _wait(float(spec.substr(1)))
+			continue
+		if kind == "m":
+			player.global_position = _vec(spec.substr(1))
+			continue
 		var parts := spec.split("@")
-		var target := _vec(parts[0])
-		var charge := float(parts[1]) if parts.size() > 1 else 1.0
+		var tier := int(parts[0].substr(1, 1))
+		var target := _vec(parts[1]) if parts.size() > 1 else Vector3.INF
 		k += 1
-		# Lead the target for the ball's slight drop.
-		var eye := player.global_position + Vector3(0, 1.6, 0)
-		var speed := BlastParams.from_charge(charge).throw_speed
-		var t := eye.distance_to(target) / speed
-		await _aim(target + Vector3.UP * 0.5 * PowerBall.GRAVITY * t * t, 0.5)
-		player.power.begin_charge()
-		await _wait(1.6 * charge)
-		player.power.release()
-		await world.detonated
-		await _wait(0.5)
-		await _shot("%02d_blast" % k)
-		await _wait(2.5)
-		await _shot("%02d_after" % k)
-		print("THROW %d destruction=%.3f" % [k, world.structures.destruction()])
+		await _cast(codes[kind], tier, target)
+		print(
+			(
+				"CAST %d %s t=%.1f destruction=%.3f hp=%d"
+				% [k, spec, run.elapsed if run else 0.0, world.structures.destruction(), player.health]
+			)
+		)
+		if k % 2 == 0:
+			await _shot("%02d_cast" % k)
 	if run and not run.level.is_sandbox():
-		if run.state != LevelRun.State.RESULT:
-			await run.finished
-		await _wait(2.0)
+		var waited := 0.0
+		while run.state not in [LevelRun.State.RESULT] and waited < 40.0:
+			await _wait(0.5)
+			waited += 0.5
+		await _wait(1.0)
 		await _shot("99_result")
 		print(
 			(
-				"RESULT stars=%d score=%d destruction=%.3f"
-				% [run.result_stars, run.result_score, world.structures.destruction()]
+				"RESULT cleared=%s stars=%d time=%.1f destruction=%.3f hp=%d"
+				% [run.cleared, run.result_stars, run.elapsed, world.structures.destruction(), player.health]
 			)
 		)
 	get_tree().quit()
@@ -200,9 +224,12 @@ func _still() -> void:
 	var p := _vec(options.get("pos", "0,0.05,15"))
 	var t := _vec(options.get("at", "0,3,0"))
 	_place(p, t)
-	if options.has("charge"):
-		player.power.begin_charge()
-		player.power.charge = float(options["charge"])
+	if options.has("hold"):
+		# --hold=POWER:TIER shows the preview, e.g. --hold=1:2
+		var ht := String(options["hold"]).split(":")
+		player.power.select(int(ht[0]))
+		player.power.begin()
+		player.power.held_time = [0.0, 0.4, 0.9][int(ht[1])]
 	if options.has("touchdemo"):
 		_touch_demo()
 	if options.has("blast"):
@@ -232,11 +259,11 @@ func _touch_demo() -> void:
 	drag.index = 0
 	drag.position = stick.position + Vector2(c.size.y * 0.04, -c.size.y * 0.1)
 	c._on_drag(drag)
-	var charge := InputEventScreenTouch.new()
-	charge.index = 1
-	charge.pressed = true
-	charge.position = c.charge_center()
-	c._on_touch(charge)
+	var cast := InputEventScreenTouch.new()
+	cast.index = 1
+	cast.pressed = true
+	cast.position = c.charge_center()
+	c._on_touch(cast)
 
 
 static func _vec(s: String) -> Vector3:
