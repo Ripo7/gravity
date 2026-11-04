@@ -4,11 +4,12 @@ extends RefCounted
 ## velocity, and a hit into damage. Shared by the player and the shield.
 
 ## Momentum (kg·m/s, counted above MIN_SPEED) that does no damage.
-const SAFE_MOMENTUM := 150.0
+const SAFE_MOMENTUM := 10.0
 ## Momentum per point of damage above the safe level.
-const MOMENTUM_PER_HP := 25.0
+const MOMENTUM_PER_HP := 4.0
 ## Closing speed (m/s) below which nothing hurts (resting, sliding, rolling).
-const MIN_SPEED := 4.5
+## You are fragile: a brick at running speed takes half your health.
+const MIN_SPEED := 2.5
 
 
 ## {mass, velocity} for a debris piece, a falling structure piece or a

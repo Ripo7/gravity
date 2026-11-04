@@ -1,112 +1,261 @@
 [gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/game/level.gd" id="1_level"]
-[ext_resource type="Script" path="res://scripts/destruction/structure.gd" id="7_structure"]
+[ext_resource type="Script" path="res://scripts/destruction/structure.gd" id="2_structure"]
 
 [node name="Sandbox" type="Node3D"]
 script = ExtResource("1_level")
 title = "Bac à sable"
-hint = "Pas de chrono, pas d'objectif. Essaie les trois pouvoirs et leurs tailles. Si tu te fais écraser, tu reviens."
-sandbox = true
+hint = "Tout se casse. Le trou noir fait tourner tout ce qui est dans son rayon et broie ce qui est juste autour. Le portail fait pleuvoir des pierres. Le bouclier sort tout seul devant toi. Monte par les rampes : les immeubles ont des étages et une passerelle. Un débris lancé suffit à te mettre K.O."
 
 [node name="PlayerStart" type="Marker3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 15)
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 0, 0.05, 36)
 
-[node name="WallFront" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 2)
-script = ExtResource("7_structure")
-counts = Vector3i(14, 8, 1)
-block = Vector3(1, 0.5, 0.5)
+[node name="BureauxA" type="Node3D" parent="."]
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, -16, 0, -4)
+script = ExtResource("2_structure")
+kind = 4
+counts = Vector3i(3, 5, 3)
+block = Vector3(3.0, 3.0, 0.45)
 strength = 3.0
-
-[node name="TowerLeft" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -13, 0, -8)
-script = ExtResource("7_structure")
-kind = 1
-counts = Vector3i(4, 16, 1)
-block = Vector3(1, 0.8, 0.4)
-strength = 3.5
-seed_value = 1
-material = 0
 accent_material = 1
+seed_value = 1
 
-[node name="TowerRight" type="Node3D" parent="."]
-transform = Transform3D(0.9397, 0, -0.342, 0, 1, 0, 0.342, 0, 0.9397, 13, 0, -10)
-script = ExtResource("7_structure")
-kind = 1
-counts = Vector3i(5, 12, 1)
-block = Vector3(1, 0.8, 0.4)
+[node name="RampeA" type="Node3D" parent="."]
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, -25.200000000000003, 0, -8.5)
+script = ExtResource("2_structure")
+kind = 5
+counts = Vector3i(1, 5, 1)
+block = Vector3(2.2, 3.0, 5.0)
 strength = 3.5
+accent_material = 1
 seed_value = 2
-material = 1
-accent_material = 2
 
-[node name="TowerBack" type="Node3D" parent="."]
-transform = Transform3D(0.866, 0, 0.5, 0, 1, 0, -0.5, 0, 0.866, 2, 0, -32)
-script = ExtResource("7_structure")
-kind = 1
-counts = Vector3i(5, 20, 1)
-block = Vector3(1.2, 0.9, 0.45)
-strength = 4.0
-seed_value = 3
-material = 0
-accent_material = 2
-
-[node name="StackLeft" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7, 0, 9)
-script = ExtResource("7_structure")
-kind = 2
-counts = Vector3i(5, 1, 4)
-block = Vector3(0.8, 0.8, 0.8)
-strength = 2.0
-seed_value = 4
-material = 1
-
-[node name="StackRight" type="Node3D" parent="."]
-transform = Transform3D(0.866, 0, 0.5, 0, 1, 0, -0.5, 0, 0.866, 8, 0, 7)
-script = ExtResource("7_structure")
-kind = 2
-counts = Vector3i(4, 1, 4)
-block = Vector3(0.8, 0.8, 0.8)
-strength = 2.0
-seed_value = 5
+[node name="ParkingB" type="Node3D" parent="."]
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 16, 0, -4)
+script = ExtResource("2_structure")
+kind = 4
+counts = Vector3i(3, 4, 3)
+block = Vector3(3.0, 3.0, 0.45)
+strength = 3.0
 material = 2
+seed_value = 3
+
+[node name="RampeB" type="Node3D" parent="."]
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 20.8, 0, -8.5)
+script = ExtResource("2_structure")
+kind = 5
+counts = Vector3i(1, 4, 1)
+block = Vector3(2.2, 3.0, 5.0)
+strength = 3.5
+accent_material = 2
+seed_value = 4
+
+[node name="Passerelle" type="Node3D" parent="."]
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 0, 0, -4)
+script = ExtResource("2_structure")
+kind = 6
+counts = Vector3i(7, 5, 1)
+block = Vector3(3.1429, 1.14, 2.6)
+strength = 2.5
+accent_material = 1
+seed_value = 5
+
+[node name="TourO" type="Node3D" parent="."]
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, -13, 0, -28)
+script = ExtResource("2_structure")
+kind = 1
+counts = Vector3i(3, 18, 1)
+block = Vector3(1, 0.8, 0.45)
+strength = 3.5
+accent_material = 1
+seed_value = 6
+
+[node name="TourC" type="Node3D" parent="."]
+transform = Transform3D(0.9397, 0, 0.342, 0, 1, 0, -0.342, 0, 0.9397, 0, 0, -32)
+script = ExtResource("2_structure")
+kind = 1
+counts = Vector3i(4, 20, 1)
+block = Vector3(1, 0.8, 0.45)
+strength = 3.5
+accent_material = 2
+seed_value = 7
+
+[node name="TourE" type="Node3D" parent="."]
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 13, 0, -28)
+script = ExtResource("2_structure")
+kind = 1
+counts = Vector3i(3, 18, 1)
+block = Vector3(1, 0.8, 0.45)
+strength = 3.5
+accent_material = 1
+seed_value = 8
 
 [node name="Colonnade" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -16)
-script = ExtResource("7_structure")
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 0, 0, 10)
+script = ExtResource("2_structure")
 kind = 3
-counts = Vector3i(5, 7, 1)
+counts = Vector3i(6, 8, 1)
 block = Vector3(0.7, 0.6, 0.7)
-strength = 4.0
-seed_value = 6
+strength = 3.0
 material = 2
 accent_material = 1
+seed_value = 9
 
-[node name="WallSide" type="Node3D" parent="."]
-transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, -20, 0, 4)
-script = ExtResource("7_structure")
-counts = Vector3i(6, 10, 1)
-block = Vector3(2, 0.3, 0.25)
-strength = 3.0
-seed_value = 7
+[node name="CaissesO" type="Node3D" parent="."]
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, -7, 0, 20)
+script = ExtResource("2_structure")
+kind = 2
+counts = Vector3i(4, 1, 3)
+block = Vector3(0.9, 0.9, 0.9)
+strength = 2.0
 material = 1
+accent_material = 1
+seed_value = 10
 
-[node name="MetalFence" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 14, 0, 3)
-script = ExtResource("7_structure")
+[node name="CaissesE" type="Node3D" parent="."]
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 7, 0, 20)
+script = ExtResource("2_structure")
+kind = 2
+counts = Vector3i(3, 1, 3)
+block = Vector3(0.9, 0.9, 0.9)
+strength = 2.0
+material = 2
+accent_material = 2
+seed_value = 11
+
+[node name="Grange" type="Node3D" parent="."]
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 20, 0, 26)
+script = ExtResource("2_structure")
+kind = 4
+counts = Vector3i(2, 2, 2)
+block = Vector3(3.0, 2.8, 0.35)
+strength = 2.5
+material = 1
+accent_material = 1
+seed_value = 12
+
+[node name="CabaneA" type="Node3D" parent="."]
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 30, 0, 12)
+script = ExtResource("2_structure")
+kind = 1
+counts = Vector3i(3, 6, 1)
+block = Vector3(1, 0.8, 0.3)
+strength = 2.5
+material = 1
+accent_material = 1
+seed_value = 13
+
+[node name="CabaneB" type="Node3D" parent="."]
+transform = Transform3D(0.9063, 0, 0.4226, 0, 1, 0, -0.4226, 0, 0.9063, 32, 0, 30)
+script = ExtResource("2_structure")
+kind = 1
+counts = Vector3i(4, 5, 1)
+block = Vector3(1, 0.8, 0.3)
+strength = 2.5
+material = 1
+accent_material = 1
+seed_value = 14
+
+[node name="Palissade" type="Node3D" parent="."]
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 26, 0, 40)
+script = ExtResource("2_structure")
+counts = Vector3i(10, 4, 1)
+block = Vector3(2, 0.3, 0.25)
+strength = 2.0
+material = 1
+accent_material = 1
+seed_value = 15
+
+[node name="FortS" type="Node3D" parent="."]
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, -26, 0, 30.0)
+script = ExtResource("2_structure")
+counts = Vector3i(12, 6, 1)
+block = Vector3(1, 0.5, 0.5)
+strength = 3.0
+seed_value = 16
+
+[node name="FortN" type="Node3D" parent="."]
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, -26, 0, 18.0)
+script = ExtResource("2_structure")
+counts = Vector3i(12, 6, 1)
+block = Vector3(1, 0.5, 0.5)
+strength = 3.0
+seed_value = 17
+
+[node name="FortO" type="Node3D" parent="."]
+transform = Transform3D(0.0, 0, 1.0, 0, 1, 0, -1.0, 0, 0.0, -32.25, 0, 24)
+script = ExtResource("2_structure")
+counts = Vector3i(11, 6, 1)
+block = Vector3(1, 0.5, 0.5)
+strength = 3.0
+seed_value = 18
+
+[node name="FortE" type="Node3D" parent="."]
+transform = Transform3D(0.0, 0, 1.0, 0, 1, 0, -1.0, 0, 0.0, -19.75, 0, 24)
+script = ExtResource("2_structure")
+counts = Vector3i(11, 6, 1)
+block = Vector3(1, 0.5, 0.5)
+strength = 3.0
+seed_value = 19
+
+[node name="FortTourA" type="Node3D" parent="."]
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, -33.5, 0, 16.5)
+script = ExtResource("2_structure")
+kind = 1
+counts = Vector3i(2, 12, 1)
+block = Vector3(1.2, 0.8, 0.45)
+strength = 3.5
+accent_material = 1
+seed_value = 20
+
+[node name="FortTourB" type="Node3D" parent="."]
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, -18.5, 0, 31.5)
+script = ExtResource("2_structure")
+kind = 1
+counts = Vector3i(2, 12, 1)
+block = Vector3(1.2, 0.8, 0.45)
+strength = 3.5
+accent_material = 1
+seed_value = 21
+
+[node name="Hangar" type="Node3D" parent="."]
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 36, 0, -10)
+script = ExtResource("2_structure")
+kind = 4
+counts = Vector3i(2, 3, 2)
+block = Vector3(3.0, 3.0, 0.4)
+strength = 3.0
+material = 2
+accent_material = 1
+seed_value = 22
+
+[node name="Grillage" type="Node3D" parent="."]
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 36, 0, -1)
+script = ExtResource("2_structure")
 counts = Vector3i(6, 3, 1)
 block = Vector3(1.5, 0.9, 0.15)
 strength = 2.0
 material = 2
-seed_value = 8
+accent_material = 2
+seed_value = 23
 
-[node name="CrateStack" type="Node3D" parent="."]
-transform = Transform3D(0.9397, 0, 0.342, 0, 1, 0, -0.342, 0, 0.9397, -3, 0, -6)
-script = ExtResource("7_structure")
+[node name="Futs" type="Node3D" parent="."]
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 30, 0, -20)
+script = ExtResource("2_structure")
 kind = 2
 counts = Vector3i(3, 1, 3)
-block = Vector3(1.1, 1.1, 1.1)
+block = Vector3(0.9, 0.9, 0.9)
 strength = 2.0
-material = 1
-seed_value = 9
+material = 2
+accent_material = 2
+seed_value = 24
+
+[node name="Viaduc" type="Node3D" parent="."]
+transform = Transform3D(0.0, 0, 1.0, 0, 1, 0, -1.0, 0, 0.0, -42, 0, -8)
+script = ExtResource("2_structure")
+kind = 3
+counts = Vector3i(8, 12, 1)
+block = Vector3(0.9, 0.6, 1.0)
+strength = 3.0
+seed_value = 25

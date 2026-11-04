@@ -3,11 +3,7 @@ extends Node3D
 ## Root of the game scene: loads the current level, wires structures,
 ## debris, player, blasts and all the juice (dust, shake, sound, slow-mo).
 
-signal detonated(at: Vector3, params: BlastParams)
-
-const SLOWMO_SCALE := 0.25  ## time scale for a full-charge blast
-const SLOWMO_HOLD := 0.45  ## real seconds at full slow-down
-const SLOWMO_RECOVER := 0.7  ## real seconds to ease back to 1x
+signal vortex_opened(vortex: Vortex)
 
 @export var structures: StructureSet
 @export var debris: DebrisSystem
@@ -23,9 +19,6 @@ var level: Level
 ## Path of the level scene that was loaded.
 var level_file := ""
 var blasts_total := 0
-var _slowmo_left := 0.0
-var _slowmo_total := 0.0
-var _slowmo_scale := SLOWMO_SCALE
 
 
 static func of(node: Node) -> GameWorld:
@@ -109,54 +102,30 @@ func _connect_juice() -> void:
 	)
 
 
-## `travel`: the ball's velocity; the burst shoves standing things along it.
-func detonate(at: Vector3, params: BlastParams, travel := Vector3.ZERO) -> GravityBlast:
-	blasts_total += 1
-	Sfx.play("implode", at, -6.0 + params.charge * 6.0, 1.15 - params.charge * 0.3)
-	var blast := GravityBlast.new()
-	blast.setup(self, params, at, travel)
-	add_child(blast)
-	var fx := BlastFx.new()
-	fx.setup(params, at, blast)
-	add_child(fx)
-	var cam := get_viewport().get_camera_3d() as CameraShake
-	if cam:
-		var d := cam.global_position.distance_to(at)
-		var near := clampf(1.0 - d / (params.radius * 4.0), 0.15, 1.0)
-		cam.add_trauma(params.shake * 0.35 * near)
-		blast.burst.connect(
-			func() -> void:
-				cam.add_trauma(params.shake * 0.8 * near)
-				cam.kick_fov(4.0 + 8.0 * params.charge * near)
-		)
-	if params.slow_motion:
-		# Full charge: deep slow-down. Medium charge: a lighter one.
-		var depth := remap(params.charge, 0.6, 1.0, 0.5, SLOWMO_SCALE)
-		blast.burst.connect(slow_motion.bind(depth))
-	detonated.emit(at, params)
-	return blast
-
-
 # --- Powers --------------------------------------------------------------------
 
 
-func cast_gravity(at: Vector3, tier: int) -> GravityOrb:
-	var orb := GravityOrb.new()
-	orb.setup(self, at, tier)
-	add_child(orb)
-	return orb
+func cast_vortex(at: Vector3) -> Vortex:
+	var v := Vortex.new()
+	v.setup(self, at)
+	add_child(v)
+	var cam := get_viewport().get_camera_3d() as CameraShake
+	if cam:
+		cam.add_trauma(0.35 * clampf(1.0 - cam.global_position.distance_to(at) / 60.0, 0.1, 1.0))
+	vortex_opened.emit(v)
+	return v
 
 
-func cast_portal(at: Vector3, tier: int) -> MeteorPortal:
+func cast_portal(at: Vector3) -> MeteorPortal:
 	var portal := MeteorPortal.new()
-	portal.setup(self, at, tier)
+	portal.setup(self, at)
 	add_child(portal)
 	return portal
 
 
-func cast_shield(base: Transform3D, tier: int) -> IceShield:
+func cast_shield(base: Transform3D) -> IceShield:
 	var shield := IceShield.new()
-	shield.setup(self, base, tier)
+	shield.setup(self, base)
 	add_child(shield)
 	return shield
 
@@ -187,28 +156,9 @@ func stone_landed(at: Vector3, size: float, speed: float) -> void:
 		cam.add_trauma(clampf(size * speed / 120.0, 0.05, 0.5) * clampf(1.0 - d / 50.0, 0.0, 1.0))
 
 
-func slow_motion(scale := SLOWMO_SCALE) -> void:
-	_slowmo_scale = scale
-	_slowmo_total = SLOWMO_HOLD + SLOWMO_RECOVER
-	_slowmo_left = _slowmo_total
-
-
-func _process(delta: float) -> void:
-	if _slowmo_left > 0.0:
-		var real := delta / maxf(Engine.time_scale, 0.001)
-		_slowmo_left = maxf(_slowmo_left - real, 0.0)
-		var elapsed := _slowmo_total - _slowmo_left
-		if elapsed < SLOWMO_HOLD:
-			Engine.time_scale = _slowmo_scale
-		else:
-			var k := (elapsed - SLOWMO_HOLD) / SLOWMO_RECOVER
-			Engine.time_scale = lerpf(_slowmo_scale, 1.0, ease(clampf(k, 0.0, 1.0), 0.5))
-		if _slowmo_left <= 0.0:
-			Engine.time_scale = 1.0
-
-
 func _start_attract() -> void:
 	player.input_enabled = false
+	player.invulnerable = true
 	player.power.auto_input = true
 	player.visible = false
 	player.process_mode = Node.PROCESS_MODE_DISABLED
@@ -225,22 +175,20 @@ func _start_attract() -> void:
 			return
 		var dt := get_process_delta_time()
 		t += dt
-		var a := t * 0.06
-		cam.global_position = Vector3(sin(a) * 30.0, 10.0, cos(a) * 30.0)
-		cam.look_at(Vector3(0, 3, -6))
+		var a := t * 0.05
+		cam.global_position = Vector3(sin(a) * 42.0, 16.0, cos(a) * 42.0)
+		cam.look_at(Vector3(0, 4, -6))
 		next_blast -= dt
 		if next_blast <= 0.0:
 			next_blast = randf_range(3.5, 5.5)
 			var target := _random_block_position()
 			if target != Vector3.INF:
-				if randf() < 0.3:
-					cast_portal(target, randi_range(0, 1))
+				if randf() < 0.4:
+					cast_portal(target)
 				else:
-					cast_gravity(target, randi_range(1, 2))
-		# Rebuild the backdrop once it is mostly rubble, unless the player is
-		# busy in a sub-menu (a reload would reset it).
-		var busy := get_tree().get_first_node_in_group("menu_busy") != null
-		if structures.destruction() > 0.6 and next_blast > 3.0 and not busy:
+					cast_vortex(target)
+		# Rebuild the backdrop once it is mostly rubble.
+		if structures.destruction() > 0.5 and next_blast > 3.0:
 			reset()
 			return
 

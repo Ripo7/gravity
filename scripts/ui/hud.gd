@@ -1,19 +1,16 @@
 class_name Hud
 extends Control
-## In-game HUD: clock, destruction meter with the goal mark, health, the
-## three power slots with cooldowns, size pips under the crosshair, damage
-## flash, callouts, F3 stats and the touch controls.
+## In-game HUD: destruction counter, health, the three power slots with
+## cooldowns, damage flash, callouts, F3 stats and the touch controls.
 
 @export var world: GameWorld
 
 var show_stats := false
 var touch := false
-var sandbox := false
 ## Fed by LevelRun.
 var destruction := 0.0
 var shown_destruction := 0.0
-var target := 0.75
-var clock := 0.0
+var deaths := 0
 
 var _stats: Label
 var _title: Label
@@ -24,6 +21,7 @@ var _hurt_dir := 0.0
 var _denied := [0.0, 0.0, 0.0]
 var _shown_health := 100.0
 var _flash: ColorRect
+var _last_hurt_sound := 0
 
 
 func _ready() -> void:
@@ -77,7 +75,11 @@ func hurt(amount: float, from: Vector3) -> void:
 		_hurt_dir = atan2(local.x, -local.z)
 		if cam is CameraShake:
 			(cam as CameraShake).add_trauma(clampf(amount / 60.0, 0.15, 0.8))
-	Sfx.ui("hurt", -4.0 + minf(amount / 10.0, 6.0), randf_range(0.9, 1.1))
+	# Damage over time arrives in small bites: one sound per bite burst.
+	var now := Time.get_ticks_msec()
+	if amount > 8.0 or now - _last_hurt_sound > 350:
+		_last_hurt_sound = now
+		Sfx.ui("hurt", -4.0 + minf(amount / 10.0, 6.0), randf_range(0.9, 1.1))
 
 
 ## Big centred callout that floats up and fades.
@@ -152,8 +154,7 @@ static func stats_text(w: GameWorld) -> String:
 
 func _draw() -> void:
 	_draw_crosshair()
-	if not sandbox:
-		_draw_meter()
+	_draw_counter()
 	if world and world.player:
 		_draw_health()
 		_draw_powers()
@@ -165,48 +166,19 @@ func _draw_crosshair() -> void:
 	for d: Vector2 in [Vector2.RIGHT, Vector2.LEFT, Vector2.UP, Vector2.DOWN]:
 		draw_line(c + d * 6.0, c + d * 11.0, ink, 2.0, true)
 	draw_circle(c, 1.6, ink)
-	if world == null or world.player == null:
-		return
-	var p := world.player.power
-	if not p.holding:
-		return
-	# Size pips: three dots under the crosshair, and a ring that fills
-	# toward the next size.
-	for k in 3:
-		var pos := c + Vector2((k - 1) * 16.0, 28.0)
-		if k <= p.tier:
-			draw_circle(pos, 5.0, UiTheme.VIOLET)
-		else:
-			draw_arc(pos, 5.0, 0, TAU, 16, Color(UiTheme.INK, 0.4), 1.5, true)
-	var t := PowerDefs.TIER_TIMES
-	var fill := 1.0
-	if p.tier == 0:
-		fill = p.held_time / t.x
-	elif p.tier == 1:
-		fill = (p.held_time - t.x) / (t.y - t.x)
-	var r := 18.0 + p.tier * 6.0
-	draw_arc(c, r, -PI * 0.5, -PI * 0.5 + TAU * clampf(fill, 0.0, 1.0), 48, UiTheme.VIOLET, 3.0, true)
 
 
-func _draw_meter() -> void:
-	var w := minf(size.x * 0.42, 520.0)
-	var h := 12.0 + _meter_pulse * 4.0
-	var top := 62.0
-	var rect := Rect2(Vector2((size.x - w) * 0.5, top), Vector2(w, h))
-	draw_rect(rect.grow(3), Color(1, 1, 1, 0.85))
-	draw_rect(rect, Color(UiTheme.INK, 0.12))
-	var fill := rect
-	fill.size.x = w * clampf(shown_destruction / maxf(target, 0.01), 0.0, 1.0)
-	draw_rect(fill, UiTheme.VIOLET)
+## Top centre: how much of the place is down, and how often you died.
+func _draw_counter() -> void:
 	var font := UiTheme.bold()
-	# Clock above the bar, big.
-	var txt := LevelRun._clock(clock)
-	var ts := font.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 36)
-	draw_string(
-		font, Vector2((size.x - ts.x) * 0.5, top - 12), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 36, UiTheme.INK
-	)
-	var pct := "%d%% / %d%%" % [roundi(shown_destruction * 100.0), roundi(target * 100.0)]
-	_text(Vector2(rect.end.x + 14, top + h), pct, 20, UiTheme.INK)
+	var txt := "%d%% détruit" % roundi(shown_destruction * 100.0)
+	var fs := 30 + int(_meter_pulse * 8.0)
+	var ts := font.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs)
+	_text(Vector2((size.x - ts.x) * 0.5, 46), txt, fs, UiTheme.INK)
+	if deaths > 0:
+		var d := "K.O. ×%d" % deaths
+		var ds := font.get_string_size(d, HORIZONTAL_ALIGNMENT_LEFT, -1, 16)
+		_text(Vector2((size.x - ds.x) * 0.5, 70), d, 16, Color(0.75, 0.1, 0.2))
 
 
 func _draw_health() -> void:
@@ -256,7 +228,7 @@ func _draw_powers() -> void:
 		_draw_icon(k, r.get_center(), slot * 0.3, UiTheme.VIOLET if selected else UiTheme.INK)
 		var left: float = p.cooldown_left[k]
 		if left > 0.0:
-			var frac := left / maxf(p.cooldown_total[k], 0.01)
+			var frac := p.cooldown_fraction(k)
 			var cover := Rect2(r.position + Vector2(0, slot * (1.0 - frac)), Vector2(slot, slot * frac))
 			draw_rect(cover, Color(UiTheme.INK, 0.45))
 			var s := "%d" % ceili(left)
@@ -281,8 +253,6 @@ func _draw_powers() -> void:
 				Color(UiTheme.INK, 0.5)
 			)
 	var name: String = PowerDefs.NAMES[p.selected]
-	if p.holding:
-		name += " · " + PowerDefs.TIER_NAMES[p.tier]
 	var ns := font.get_string_size(name, HORIZONTAL_ALIGNMENT_LEFT, -1, 18)
 	draw_string(
 		font, Vector2(x0 + (total - ns.x) * 0.5, y - 10), name, HORIZONTAL_ALIGNMENT_LEFT, -1, 18, UiTheme.INK
@@ -316,8 +286,8 @@ func _text(pos: Vector2, text: String, font_size: int, color: Color) -> void:
 ## Tiny vector icons so no texture assets are needed.
 func _draw_icon(power: int, c: Vector2, r: float, col: Color) -> void:
 	match power:
-		PowerDefs.Power.GRAVITY:
-			draw_circle(c, r * 0.45, col)
+		PowerDefs.Power.VORTEX:
+			draw_circle(c, r * 0.4, col)
 			draw_arc(c, r, 0, TAU, 32, col, 2.5, true)
 		PowerDefs.Power.PORTAL:
 			draw_set_transform(c + Vector2(0, -r * 0.55), 0.0, Vector2(1.0, 0.35))

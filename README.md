@@ -4,21 +4,23 @@ First-person destruction game in Godot 4.7 (GDScript, Jolt physics).
 You have overpowered powers. Flatten each map as fast as you can, without
 getting crushed by what you bring down.
 
-**Powers** (hold the cast button to grow them through three sizes; each
-power and size has its own cooldown):
+One sandbox map, rich and multi-storey: office and car-park buildings with
+switchback ramps, a walkway between them, towers, a fort, a village, a viaduct.
 
-1. **Singularity** – an orb of gravitational wave appears where you aim,
-   swells, then pulls everything in and bursts.
+**Powers** (one size each, each with its own cooldown):
+
+1. **Black hole** – opens where you aim. Everything inside its radius is
+   torn loose and orbits it; there is no explosion. The band just outside
+   the radius (red ring) is not pulled but takes damage – including you.
 2. **Portal** – a horizontal portal opens above the aimed zone and huge
    mysterious stones fall out of it.
 3. **Shield** – a slab of black ice bursts out of the ground in front of you
-   and stops debris, stones and falling pieces until it breaks.
+   by itself and stops debris, stones and falling pieces until it breaks.
 
-**Rules (time attack):** destroy the target share of the map. The clock
-decides the stars; dying fails the run. Health drops when heavy things hit
-you (debris, stones, collapsing floors), when you stand too close to your
-own singularity, and on hard landings; it comes back after a few seconds
-without being hit. Best times are saved locally. The sandbox has no clock.
+**Rules:** you are fragile. Anything heavy that hits you (debris, stones,
+collapsing floors), the black hole's band and hard landings hurt; health
+comes back after a few seconds without being hit. When you go down you
+respawn at the start; the HUD counts destruction and K.O.s.
 
 ## Controls
 
@@ -28,12 +30,11 @@ without being hit. Best times are saved locally. The sandbox has no clock.
 | Look | Mouse | Right stick |
 | Jump / sprint | Space / Shift | A / L3 |
 | Pick power | 1 2 3, wheel, Q / E (A / E on AZERTY) | D-pad, LB / RB |
-| Cast (hold = bigger) | Left mouse | RT |
+| Cast | Left mouse | RT |
 | Restart · pause · stats | R · Esc · F3 | Back · Start |
 
 **Phones and tablets** (landscape): left thumb moves, drag on the right to
-aim, tap a power slot to pick it, hold the violet button to grow the power
-and release to cast, arrow to jump, II to pause.
+aim, tap a power slot to pick it, tap the violet button to cast, arrow to jump, II to pause.
 
 ## Play builds
 
@@ -47,19 +48,17 @@ and release to cast, arrow to jump, II to pause.
 
 | Piece | File |
 | --- | --- |
-| Levels (open in the editor; structures preview) | `levels/*.tscn`, `scripts/game/level.gd`, `scripts/destruction/structure.gd` |
-| Time attack flow, stars, best times, callouts | `scripts/game/level_run.gd`, `scripts/game/game_state.gd` |
-| Powers: sizes, cooldowns, aiming, preview | `scripts/powers/power_defs.gd`, `scripts/powers/power_caster.gd` |
-| Singularity / portal + stones / black ice shield | `scripts/powers/gravity_orb.gd`, `meteor_portal.gd`, `meteor_stone.gd`, `ice_shield.gd` |
+| Sandbox map (open in the editor; structures preview) | `levels/sandbox.tscn`, `scripts/game/level.gd`, `scripts/destruction/structure.gd` |
+| Sandbox flow, K.O. and respawn, callouts | `scripts/game/level_run.gd`, `scripts/game/game_state.gd` |
+| Powers: tuning, cooldowns, aiming | `scripts/powers/power_defs.gd`, `scripts/powers/power_caster.gd` |
+| Black hole / portal + stones / black ice shield | `scripts/powers/vortex.gd`, `meteor_portal.gd`, `meteor_stone.gd`, `ice_shield.gd` |
 | Health and what hurts | `scripts/player/player.gd`, `scripts/powers/hazards.gd` |
 | Menu (live attract-mode backdrop) | `scenes/menu.tscn`, `scripts/ui/main_menu.gd` |
 | Structural physics: health, loads, toppling, falling pieces | `scripts/destruction/structure_set.gd` |
 | Loose pieces: pooled server bodies + one MultiMesh | `scripts/destruction/debris_system.gd` |
 | Pre-fractured patterns | `scripts/destruction/fracture.gd` |
 | Concrete / wood / metal: look, weight, strength, breakage | `scripts/destruction/materials.gd`, `shaders/block.gdshader` |
-| Blast tuning (per singularity size) | `scripts/power/blast_params.gd` |
-| Pull then burst | `scripts/power/gravity_blast.gd` |
-| Lens, sparks, dust, chips, shake, slow motion | `scripts/fx/*`, `shaders/*`, `scripts/core/game_world.gd` |
+| Sparks, dust, chips, shake | `scripts/fx/*`, `shaders/*`, `scripts/core/game_world.gd` |
 | Sound effects (synthesised, regenerate with `python3 tools/make_sounds.py`) | `audio/*.wav`, `scripts/core/sfx.gd` |
 
 ### Why pre-fractured box pieces (not runtime Voronoi)

@@ -7,7 +7,6 @@ const SHADER := preload("res://shaders/portal.gdshader")
 const OPEN_TIME := 0.45
 const CLOSE_TIME := 0.4
 
-var tier := 0
 var radius := 3.0
 var stones_left := 0
 var _world: GameWorld
@@ -25,14 +24,13 @@ var _zone: MeshInstance3D
 var _rng := RandomNumberGenerator.new()
 
 
-func setup(world: GameWorld, target: Vector3, size_tier: int) -> void:
+func setup(world: GameWorld, target: Vector3) -> void:
 	_world = world
-	tier = size_tier
 	_target = target
-	radius = PowerDefs.PORTAL_RADIUS[tier]
-	stones_left = PowerDefs.PORTAL_STONES[tier]
-	_height = PowerDefs.PORTAL_HEIGHT[tier]
-	_gap = PowerDefs.PORTAL_SPREAD[tier] / maxf(stones_left - 1, 1)
+	radius = PowerDefs.PORTAL_RADIUS
+	stones_left = PowerDefs.PORTAL_STONES
+	_height = PowerDefs.PORTAL_HEIGHT
+	_gap = PowerDefs.PORTAL_SPREAD / maxf(stones_left - 1, 1)
 	_next_stone = OPEN_TIME
 	# Never open inside the ground, and keep a clear drop above tall targets.
 	position = Vector3(target.x, maxf(target.y, 0.0) + _height, target.z)
@@ -61,7 +59,7 @@ func _ready() -> void:
 	_light.position = Vector3(0, -1.0, 0)
 	add_child(_light)
 	_build_markers()
-	Sfx.play("portal", global_position, -2.0 + tier * 3.0, 1.1 - tier * 0.15)
+	Sfx.play("portal", global_position, 4.0, 0.8)
 
 
 ## A thin light beam down to the target and a ring on the ground, so the
@@ -128,7 +126,7 @@ func _drop_stone() -> void:
 	var a := _rng.randf() * TAU
 	var r := sqrt(_rng.randf()) * radius * 0.8
 	var at := global_position + Vector3(cos(a) * r, -1.5, sin(a) * r)
-	var size: float = PowerDefs.PORTAL_STONE_SIZE[tier] * _rng.randf_range(0.8, 1.2)
+	var size: float = PowerDefs.PORTAL_STONE_SIZE * _rng.randf_range(0.8, 1.2)
 	var stone := MeteorStone.make(_world, at, size, _rng)
 	_world.add_child(stone)
 	stone.rotation = Vector3(_rng.randf() * TAU, _rng.randf() * TAU, _rng.randf() * TAU)

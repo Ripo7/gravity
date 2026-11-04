@@ -136,7 +136,8 @@ func add_structure(origin: Transform3D, segments: Array[Dictionary], scored := t
 		var volume := size.x * size.y * size.z
 		_state.append(State.STATIC)
 		_xform.append(global)
-		_local.append(AABB(local.origin - size * 0.5, size))
+		# Bounds in structure space (segments may be tilted, e.g. ramps).
+		_local.append(local * AABB(-size * 0.5, size))
 		_size.append(size)
 		_kind.append(kind)
 		_seed.append(seg.get("seed", randf()))
@@ -149,7 +150,7 @@ func add_structure(origin: Transform3D, segments: Array[Dictionary], scored := t
 		_load.append(0.0)
 		_score.append(volume if scored else 0.0)
 		_group.append(group_id)
-		_grounded.append(1 if local.origin.y - size.y * 0.5 <= GROUND_EPS else 0)
+		_grounded.append(1 if _local[i].position.y <= GROUND_EPS else 0)
 		_neighbors.append(PackedInt32Array())
 		_supporters.append(PackedInt32Array())
 		_support_area.append(PackedFloat32Array())
@@ -262,48 +263,29 @@ func destruction() -> float:
 
 
 ## Damages every block within the blast. Returns how many broke or came loose.
-func apply_blast(center: Vector3, params: BlastParams, scale := 1.0) -> int:
+## Damage over `dt` seconds from a field: `dps_inside` within `inner` of
+## `center`, `dps_band` from there out to `outer`. Returns blocks broken.
+func apply_field(
+	center: Vector3, inner: float, outer: float, dps_inside: float, dps_band: float, dt: float
+) -> int:
 	var hits := 0
-	for i in _query(center, params.break_radius + 0.5):
-		var dmg := params.damage * params.break_falloff(_surface_distance(i, center)) * scale
-		if dmg <= 0.0:
+	for i in _query(center, outer):
+		var d := _surface_distance(i, center)
+		var dps := dps_inside if d < inner else (dps_band if d < outer else 0.0)
+		if dps <= 0.0:
 			continue
 		var before := _state[i]
-		_damage(i, dmg, center)
+		_damage(i, dps * dt, center)
 		if _state[i] != before:
 			hits += 1
 	return hits
 
 
-## Changes the velocity of falling pieces within `radius` of `center`:
-## `dv` m/s at the centre fading to 0 at the radius, away from the centre
-## and along `toward` (the ball's flight), and tips them over that way.
-## Heavier pieces respond less (sqrt of mass).
-func push_clusters(center: Vector3, radius: float, dv: float, toward := Vector3.ZERO) -> void:
-	for c in _clusters:
-		var xf: Transform3D = PhysicsServer3D.body_get_state(c.body, PhysicsServer3D.BODY_STATE_TRANSFORM)
-		var to := xf.origin - center
-		var d := to.length()
-		if d > radius or d < 0.01:
-			continue
-		var f := 1.0 - d / radius
-		if c.toppled:
-			# A toppling piece keeps falling toward the side that was cut, like
-			# a real demolition; the blast only nudges it.
-			f *= 0.25
-		var heavy := clampf(sqrt(c.mass / 400.0), 1.0, 4.0)
-		var dir := (to / d * 0.5 + toward).normalized()
-		var v: Vector3 = PhysicsServer3D.body_get_state(c.body, PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY)
-		v += dir * dv * f / heavy
-		PhysicsServer3D.body_set_state(c.body, PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY, v)
-		# Pushed above its base, it tips: that is what topples walls.
-		var flat := Vector3(dir.x, 0, dir.z)
-		if flat.length() > 0.05 and not c.toppled:
-			var w: Vector3 = PhysicsServer3D.body_get_state(
-				c.body, PhysicsServer3D.BODY_STATE_ANGULAR_VELOCITY
-			)
-			w += Vector3.UP.cross(flat.normalized()) * dv * f / heavy * 0.3
-			PhysicsServer3D.body_set_state(c.body, PhysicsServer3D.BODY_STATE_ANGULAR_VELOCITY, w)
+## Tears falling pieces within `radius` apart so their blocks can be caught.
+func tear_clusters(center: Vector3, radius: float) -> void:
+	for c: Cluster in _clusters.duplicate():
+		if _cluster_distance(c, center) < radius:
+			_dissolve(c, center, 0.0)
 
 
 func _cluster_distance(c: Cluster, p: Vector3) -> float:

@@ -10,8 +10,8 @@ signal died
 const MAX_HEALTH := 100.0
 const REGEN_DELAY := 3.0
 const REGEN_RATE := 14.0  ## health per second
-const SAFE_FALL_SPEED := 13.0  ## m/s landing speed before falls hurt
-const FALL_DAMAGE := 7.0  ## per m/s above the safe speed
+const SAFE_FALL_SPEED := 11.0  ## m/s landing speed before falls hurt
+const FALL_DAMAGE := 10.0  ## per m/s above the safe speed
 const KILL_Y := -25.0
 
 @export var walk_speed := 7.0

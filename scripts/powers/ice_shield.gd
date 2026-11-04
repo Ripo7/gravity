@@ -10,7 +10,6 @@ const THICKNESS := 0.7
 ## Hits slower than this (m/s, relative) do not wear the shield down.
 const HIT_MIN_SPEED := 3.0
 
-var tier := 0
 var width := 4.0
 var height := 3.0
 var hp := 300.0
@@ -25,12 +24,11 @@ var _broken := false
 var _flash := 0.0
 
 
-func setup(world: GameWorld, base: Transform3D, size_tier: int) -> void:
+func setup(world: GameWorld, base: Transform3D) -> void:
 	_world = world
-	tier = size_tier
-	width = PowerDefs.SHIELD_WIDTH[tier]
-	height = PowerDefs.SHIELD_HEIGHT[tier]
-	max_hp = PowerDefs.SHIELD_HP[tier]
+	width = PowerDefs.SHIELD_WIDTH
+	height = PowerDefs.SHIELD_HEIGHT
+	max_hp = PowerDefs.SHIELD_HP
 	hp = max_hp
 	# `base` sits on the ground, facing the player (-Z toward the threat).
 	_rest = base.translated_local(Vector3(0, height * 0.5, 0))
@@ -71,7 +69,7 @@ func _ready() -> void:
 	_area.add_child(sensor)
 	add_child(_area)
 	_area.body_shape_entered.connect(_on_body_entered)
-	Sfx.play("ice_rise", _rest.origin, -4.0 + tier * 3.0, 1.1 - tier * 0.12)
+	Sfx.play("ice_rise", _rest.origin, 2.0, 0.85)
 	if _world and _world.dust:
 		_world.dust.puff(_rest.origin - Vector3(0, height * 0.5, 0), width * 0.4, Materials.Kind.CONCRETE, 14)
 
@@ -128,12 +126,12 @@ func shatter() -> void:
 	if _broken:
 		return
 	_broken = true
-	Sfx.play("ice_break", global_position, -2.0 + tier * 3.0)
+	Sfx.play("ice_break", global_position, 4.0)
 	if _world:
 		var size := Vector3(width, height, THICKNESS)
 		# Many hand-sized shards rather than a few slabs in your face.
 		var count := clampi(int(width * height * 3.0), 10, 40)
-		for piece: AABB in Fracture.pattern(size, count, tier):
+		for piece: AABB in Fracture.pattern(size, count, 2):
 			var xf := global_transform * Transform3D(Basis(), piece.get_center())
 			var kick := (global_transform.basis.z * randf_range(-0.5, 0.5) + Vector3.UP * 0.6) * 1.2
 			var spin := Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * 4.0
