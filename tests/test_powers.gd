@@ -180,3 +180,28 @@ func test_long_fall_hurts() -> void:
 	await get_tree().create_timer(2.0).timeout
 	check(p.health < Player.MAX_HEALTH, "landing from 22 m hurts (%.0f)" % p.health)
 	await _unload()
+
+
+func test_running_over_rubble_never_hurts() -> void:
+	await _load()
+	var p := world.player
+	# A carpet of loose bricks and slabs, settled on the ground.
+	for x in 6:
+		for z in 10:
+			var at := FAR + Vector3(-2.5 + x, 0.3, -2.0 - z * 1.1)
+			world.debris.spawn(Transform3D(Basis(), at), Vector3(0.9, 0.45, 0.5))
+	await get_tree().create_timer(1.5).timeout
+	p.global_position = FAR + Vector3(0, 0.1, 1.0)
+	p.rotation.y = 0.0
+	p.input_enabled = true
+	p.walk_speed = p.sprint_speed  # sprinting into and over the pile
+	p.touch_move = Vector2(0, -1)
+	for k in 150:
+		if k % 40 == 20:
+			p.touch_jump = true
+		await get_tree().physics_frame
+		p.touch_jump = false
+	p.touch_move = Vector2.ZERO
+	check(p.global_position.z < FAR.z - 8.0, "crossed the rubble (z %.1f)" % p.global_position.z)
+	check_eq(p.health, Player.MAX_HEALTH, "no damage from walking on debris")
+	await _unload()

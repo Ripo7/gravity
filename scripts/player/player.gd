@@ -12,6 +12,7 @@ const REGEN_DELAY := 3.0
 const REGEN_RATE := 14.0  ## health per second
 const SAFE_FALL_SPEED := 11.0  ## m/s landing speed before falls hurt
 const FALL_DAMAGE := 10.0  ## per m/s above the safe speed
+const PUSH_MAX_SPEED := 2.0  ## m/s, debris you walk into
 const KILL_Y := -25.0
 
 @export var walk_speed := 7.0
@@ -173,14 +174,14 @@ func _check_hazards() -> void:
 		if motion.is_empty():
 			continue
 		var v: Vector3 = motion["velocity"]
-		var rel := v - velocity
-		var closing := rel.length()
+		# Only the piece's own motion toward you counts: walking, running
+		# or landing on debris never hurts (hard landings are fall damage).
+		var closing := v.length()
 		var src := _body_position(world, rid, h["collider"])
 		if src != Vector3.INF:
 			var to_me := global_position + Vector3(0, 0.9, 0) - src
 			if to_me.length() > 0.01:
-				# Only what moves toward you hurts, not what you walk into.
-				closing = maxf(rel.dot(to_me.normalized()), 0.0)
+				closing = maxf(v.dot(to_me.normalized()), 0.0)
 		var dmg := Hazards.damage_for(float(motion["mass"]), closing)
 		if dmg > 0.0:
 			_hit_from[rid] = _clock
@@ -197,7 +198,11 @@ func _push_debris() -> void:
 		if idx >= 0:
 			var push := -c.get_normal() * push_strength
 			push.y = maxf(push.y, 0.0)
-			world.debris.set_velocity(idx, world.debris.velocity_of(idx) + push * 0.2)
+			var v := world.debris.velocity_of(idx) + push * 0.2
+			# Nudged aside, never launched: pushing every frame must not build
+			# up speed (a launched piece could bounce back and hurt).
+			var flat := Vector2(v.x, v.z).limit_length(PUSH_MAX_SPEED)
+			world.debris.set_velocity(idx, Vector3(flat.x, v.y, flat.y))
 
 
 func _body_position(world: GameWorld, rid: RID, collider: Object) -> Vector3:
