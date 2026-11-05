@@ -8,6 +8,7 @@ signal vortex_opened(vortex: Vortex)
 ## Collapses this big (pieces) can trigger a beat of slow motion.
 const SLOWMO_MIN_PIECES := 40
 const SLOWMO_COOLDOWN := 6.0  ## real seconds
+const SIREN_COOLDOWN := 45.0  ## seconds between two distant sirens
 
 @export var structures: StructureSet
 @export var debris: DebrisSystem
@@ -25,7 +26,9 @@ var level_file := ""
 var blasts_total := 0
 ## Slow motion and other camera drama; off for the menu backdrop.
 var cinematic := true
+var birds: BirdSystem
 var _last_slowmo := -100.0
+var _last_siren := -100.0
 
 
 static func of(node: Node) -> GameWorld:
@@ -72,6 +75,10 @@ func build_structures() -> void:
 		structures.add_structure(st.global_transform, st.build_segments(), st.scored)
 		st.visible = false
 	structures.link_anchors()
+	var decor := StreetDecor.new()
+	decor.name = "StreetDecor"
+	add_child(decor)
+	decor.setup(structures, level.player_start().origin)
 
 
 ## Dust, chips, camera shake and sound for breaks and collapses.
@@ -86,6 +93,12 @@ func _connect_juice() -> void:
 	var aq := AdaptiveQuality.new()
 	aq.world = self
 	add_child(aq)
+	birds = BirdSystem.new()
+	birds.name = "Birds"
+	add_child(birds)
+	birds.setup(structures)
+	vortex_opened.connect(func(v: Vortex) -> void: birds.scare(v.center, 30.0))
+	structures.about_to_fail.connect(func(at: Vector3, _c: int) -> void: birds.scare(at, 14.0))
 	structures.shattered.connect(
 		func(at: Vector3, size: Vector3, kind: int) -> void:
 			var r := size.length() * 0.5
@@ -99,6 +112,7 @@ func _connect_juice() -> void:
 				var vol := size.x * size.y * size.z
 				dust.chips_box(at, size, kind, clampi(int(8 + vol * 30.0), 8, 40), 3.0 + r * 2.0)
 			Sfx.play_break(kind, at, r)
+			birds.scare(at, 8.0 + r * 4.0)
 	)
 	debris.piece_broke.connect(
 		func(at: Vector3, size: Vector3, kind: int, speed: float) -> void:
@@ -137,6 +151,8 @@ func _connect_juice() -> void:
 					dust.haze(at, r * 1.5)
 				dust.chips(at, r, Materials.Kind.CONCRETE, 3.0 + speed * 0.5, int(10 + count * 0.3))
 			Sfx.play("collapse", at, -10.0 + minf(mass / 400.0, 12.0))
+			birds.scare(at, 20.0 + r * 4.0)
+			_city_reacts(at, mass, count)
 			var cam := get_viewport().get_camera_3d() as CameraShake
 			if cam:
 				var d := cam.global_position.distance_to(at)
@@ -146,6 +162,20 @@ func _connect_juice() -> void:
 				if count >= SLOWMO_MIN_PIECES and near > 0.2:
 					slow_motion()
 	)
+
+
+## The city answers a big collapse: the music ducks under the rumble and,
+## now and then, a siren starts up somewhere far off.
+func _city_reacts(_at: Vector3, mass: float, count: int) -> void:
+	if count < 15 or attract:
+		return
+	Sfx.duck(-9.0, 3.5)
+	var now := Time.get_ticks_msec() / 1000.0
+	if now - _last_siren > SIREN_COOLDOWN and mass > 6000.0:
+		_last_siren = now
+		get_tree().create_timer(randf_range(2.5, 5.0)).timeout.connect(
+			func() -> void: Sfx.ui("siren", -17.0, randf_range(0.95, 1.05))
+		)
 
 
 ## A short beat of slow motion (big collapses). Not in headless runs

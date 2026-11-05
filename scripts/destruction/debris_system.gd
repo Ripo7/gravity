@@ -43,7 +43,7 @@ static var capacity_override := 0
 
 @export var capacity_desktop := 1500
 @export var capacity_web := 900
-@export var capacity_mobile := 700
+@export var capacity_mobile := 500
 ## Pieces younger than this are never retired by the soft budget.
 @export var retire_min_age := 6.0
 ## Shards at least this big (m^3) collide as their hull, smaller ones as a
@@ -100,6 +100,8 @@ var _buffer_dirty := false
 var _multimesh: MultiMesh
 var _space: RID
 var _clock := 0.0
+var _quiet_speed := QUIET_SPEED
+var _quiet_spin := QUIET_SPIN
 
 
 func _ready() -> void:
@@ -110,6 +112,10 @@ func _ready() -> void:
 		capacity = int(Quality.pick(capacity_mobile, capacity_web, capacity_desktop))
 	# Fewer, chunkier fragments per break on phones so the budget lasts.
 	Fracture.quality = 0.6 if low else 1.0
+	# Phones call rubble still a little sooner.
+	_quiet_speed = QUIET_SPEED * (1.7 if low else 1.0)
+	_quiet_spin = QUIET_SPIN * (1.7 if low else 1.0)
+	Fracture.max_pieces = int(Quality.pick(3, 6, 10))
 	lifetime = lifetime_desktop if Quality.tier() == Quality.Tier.HIGH else lifetime_web
 	if hull_min_volume < 0.0:
 		hull_min_volume = tier_hull_min_volume()
@@ -697,8 +703,8 @@ func _settle_still_pieces() -> void:
 		var lin: Vector3 = PhysicsServer3D.body_get_state(body, PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY)
 		var ang: Vector3 = PhysicsServer3D.body_get_state(body, PhysicsServer3D.BODY_STATE_ANGULAR_VELOCITY)
 		var quiet := (
-			lin.length_squared() < QUIET_SPEED * QUIET_SPEED
-			and ang.length_squared() < QUIET_SPIN * QUIET_SPIN
+			lin.length_squared() < _quiet_speed * _quiet_speed
+			and ang.length_squared() < _quiet_spin * _quiet_spin
 		)
 		if quiet and _quiet[i]:
 			still.append(i)
@@ -806,8 +812,8 @@ func _write_instance(i: int, xform: Transform3D) -> void:
 	_buffer[o + 11] = xform.origin.z
 	_buffer[o + 12] = _shade[i]
 	_buffer[o + 13] = Materials.encode(_kind[i])
-	_buffer[o + 14] = _seed[i]
+	_buffer[o + 14] = fposmod(_seed[i], 1.0)
 	_buffer[o + 15] = _tint[i]
-	_buffer[o + 16] = Materials.custom(_kind[i], 0.0)
+	_buffer[o + 16] = Materials.custom(_kind[i], 0.0, _seed[i])
 	_buffer[o + 17] = float(_shard[i] + 1)  # 0 = plain chunk
 	_buffer_dirty = true

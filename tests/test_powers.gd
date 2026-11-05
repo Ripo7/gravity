@@ -94,7 +94,12 @@ func test_vortex_ends_by_flinging_pieces_outward() -> void:
 			outward += 1
 	check(moving > 10 and outward * 4 > moving * 3, "%d of %d fly outward" % [outward, moving])
 	# Flung pieces never hurt the one who cast it.
-	check(Hazards.motion_of(world, world.debris.rid_of(ids[0]), null).is_empty(), "harmless to you")
+	var flung: PackedInt32Array = v.get("_flung")
+	check(not flung.is_empty(), "the burst flung pieces")
+	var harmless := true
+	for i in flung:
+		harmless = harmless and Hazards.motion_of(world, world.debris.rid_of(i), null).is_empty()
+	check(harmless, "harmless to you")
 	await _unload()
 
 
@@ -115,7 +120,7 @@ func test_vortex_shreds_the_band_and_hurts() -> void:
 func test_vortex_breaks_blocks_inside() -> void:
 	await _load()
 	var standing := world.structures.alive_count
-	world.cast_vortex(Vector3(6, 3, 14))  # a building corner on the avenue
+	world.cast_vortex(Vector3(23, 3, 8.5))  # the corner of a block on the forum
 	await get_tree().create_timer(PowerDefs.VORTEX_SPINUP + 2.0).timeout
 	check(
 		world.structures.alive_count < standing - 20,

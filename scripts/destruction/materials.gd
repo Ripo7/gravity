@@ -5,6 +5,33 @@ extends RefCounted
 ## call) renders every material.
 
 enum Kind { CONCRETE, WOOD, METAL, ICE, GLASS }
+## Surface finishes: how a block looks, independent of how it breaks (a
+## travertine block is CONCRETE to the physics). Keep in step with the
+## finish branch of shaders/block.gdshader.
+enum Finish {
+	RAW,  ## bare concrete (or plain wood, steel)
+	STONE,  ## medieval ashlar, rough courses
+	BRICK,  ## running-bond brick
+	TRAVERTINE,  ## printed travertine: fine regular strata, the future's stone
+	MARBLE,  ## printed white marble with soft veins
+	PLASTER_OCHRE,  ## Renaissance render over brick, worn in patches
+	PLASTER_ROSE,
+	PLASTER_SIENNA,
+	PLASTER_CREAM,
+	TERRACOTTA,  ## roof and dome tiles
+	COMPOSITE,  ## dark printed structure (what the stone hides)
+	SHUTTER,  ## painted wooden shutters (WOOD)
+	VERDIGRIS,  ## weathered copper (METAL)
+	BRONZE,  ## polished bronze bands and trims (the sacred metal)
+	BLACKSTEEL,  ## dark blued steel, rivets
+}
+
+## Material slots in the custom-data integer (Kind fits under it).
+const KIND_SLOTS := 5
+const FINISH_COUNT := 15
+## Finishes that were printed: their fracture faces show the honeycomb
+## infill inside.
+const PRINTED := [Finish.TRAVERTINE, Finish.MARBLE, Finish.COMPOSITE]
 
 ## Per material: strength multiplier, density (kg/m^3), fracture piece
 ## multiplier, fraction of strength that knocks a block loose, how strongly
@@ -75,8 +102,20 @@ static func encode(kind: int) -> float:
 	return float(kind) / 4.0
 
 
-## First custom-data float of an instance: the material in the integer
-## part, the damage (0..1, drawn as cracks) in the fraction. Custom data is
-## never colour-converted, so the shader reads the kind back exactly.
-static func custom(kind: int, damage: float) -> float:
-	return float(kind) + clampf(damage, 0.0, 1.0) * 0.9
+## First custom-data float of an instance: the material and finish in the
+## integer part (finish * KIND_SLOTS + kind), the damage (0..1, drawn as
+## cracks) in the fraction. Custom data is never colour-converted, so the
+## shader reads them back exactly.
+static func custom(kind: int, damage: float, seed_value := 0.0) -> float:
+	return float(finish_of(seed_value) * KIND_SLOTS + kind) + clampf(damage, 0.0, 1.0) * 0.9
+
+
+## A block's seed carries its finish in its integer part, so the look
+## follows every piece broken off it without another field: the fraction
+## is the per-block random seed.
+static func finish_seed(finish: int, random: float) -> float:
+	return float(finish) + clampf(random, 0.0, 0.999)
+
+
+static func finish_of(seed_value: float) -> int:
+	return clampi(int(floor(seed_value)), 0, FINISH_COUNT - 1)
