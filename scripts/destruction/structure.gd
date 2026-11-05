@@ -5,7 +5,7 @@ extends Node3D
 ## StructureSet owns the physics bodies and rendering at runtime.
 ## Move, rotate and tweak these nodes in the editor to lay out an arena.
 
-enum Kind { WALL, TOWER, STACK, PILLARS, BUILDING, RAMP, BRIDGE, APARTMENT, ARCADE, KEEP, DOME }
+enum Kind { WALL, TOWER, STACK, PILLARS, BUILDING, RAMP, BRIDGE, APARTMENT, ARCADE, KEEP, DOME, TEMPLE }
 ## Which past the printers copied: decides every block's finish.
 enum Style { MODERN, ROMAN, MEDIEVAL, RENAISSANCE }
 
@@ -37,6 +37,10 @@ const SLAB := 0.3
 ## DOME: (sides, drum courses, dome rings); block = (radius, course height,
 ## wall thickness). A round church: a windowed drum, a stepped tiled dome
 ## and a lantern on top.
+## TEMPLE: (columns across the front, columns down the side, -); block =
+## (column spacing, column height, column diameter). An imperial temple: a
+## stepped podium, a peristyle of round fluted columns, a cella with a
+## door, an entablature and a gilded roof under two pediments.
 @export var counts := Vector3i(8, 6, 1):
 	set(v):
 		counts = v
@@ -110,6 +114,8 @@ func build_segments() -> Array[Dictionary]:
 			_build_keep(out)
 		Kind.DOME:
 			_build_dome(out)
+		Kind.TEMPLE:
+			_build_temple(out)
 	for seg in out:
 		seg["strength"] = seg.get("strength", strength)
 		seg["material"] = seg.get("material", material)
@@ -119,9 +125,9 @@ func build_segments() -> Array[Dictionary]:
 		if style != Style.MODERN and role != "panel" and seg["material"] != Materials.Kind.GLASS:
 			seg["material"] = Materials.Kind.CONCRETE
 		seg["shade"] = rng.randf_range(0.93, 1.04)
-		# Masonry spreads its load over few piers: give it more reserve so a
-		# lost pier does not bring the whole building down at once.
-		if kind == Kind.APARTMENT and style != Style.MODERN:
+		# Masonry and colonnades spread their load over few piers: give them
+		# more reserve so a lost pier does not bring everything down at once.
+		if style != Style.MODERN:
 			seg["robust"] = 3.0
 		var finish: int = seg.get("finish", _finish_for(seg))
 		seg["seed"] = Materials.finish_seed(finish, rng.randf())
@@ -164,6 +170,8 @@ func _imperial_finish(role: String) -> int:
 
 
 func _accent_finish(kind_of_block: int) -> int:
+	if kind_of_block in [Materials.Kind.GLASS, Materials.Kind.ICE]:
+		return Materials.Finish.RAW
 	if style == Style.ROMAN:
 		return (
 			Materials.Finish.BLACKSTEEL if kind_of_block == Materials.Kind.METAL else Materials.Finish.BRONZE
@@ -294,6 +302,8 @@ func _build_pillars(out: Array[Dictionary]) -> void:
 		var x := (p - (counts.x - 1) * 0.5) * gap
 		for d in counts.y:
 			_seg(out, Vector3(x, (d + 0.5) * block.y, 0), Vector3(block.x, block.y, block.z))
+			out[-1]["round"] = style != Style.MODERN
+			_role(out, "column")
 	for p in counts.x - 1:
 		var x := (p + 0.5 - (counts.x - 1) * 0.5) * gap
 		_seg(out, Vector3(x, top + 0.25, 0), Vector3(gap + block.x, 0.5, block.z * 1.1), 1.5, true)
@@ -453,6 +463,8 @@ func _build_bridge(out: Array[Dictionary]) -> void:
 		for zs: float in [-1.0, 1.0]:
 			for k in counts.y:
 				_seg(out, Vector3(x, (k + 0.5) * drum, zs * (w * 0.5 - 0.35)), Vector3(0.7, drum, 0.7), 1.3)
+				out[-1]["round"] = style != Style.MODERN
+				_role(out, "column")
 	for j in spans:
 		var a := x0 + j * span
 		var b := a + span
@@ -573,7 +585,9 @@ func _build_masonry(out: Array[Dictionary], rng: RandomNumberGenerator) -> void:
 			out, Vector3(0, base + storey - slab_t * 0.5, 0), Vector3(w - 2.0 * wt, slab_t, d - 2.0 * wt), 2.0
 		)
 		_role(out, "slab")
-		out[-1]["finish"] = Materials.Finish.COMPOSITE
+		# The top floor is the roof terrace: paved in marble.
+		var roof := s == counts.y - 1
+		out[-1]["finish"] = Materials.Finish.MARBLE if roof else Materials.Finish.COMPOSITE
 	_masonry_roof(out, w, d, counts.y * storey)
 
 
@@ -840,6 +854,113 @@ func _build_dome(out: Array[Dictionary]) -> void:
 	_role(out, "column")
 	_seg(out, Vector3(0, top + 1.15, 0), Vector3(1.3, 0.3, 1.3), 0.6)
 	_role(out, "parapet")
+
+
+func _build_temple(out: Array[Dictionary]) -> void:
+	var nf := maxi(counts.x, 4)
+	var ns := maxi(counts.y, 5)
+	var gap := block.x
+	var col_h := block.y
+	var dia := block.z
+	var w := (nf - 1) * gap
+	var l := (ns - 1) * gap
+	# Podium: three steps all round, then the platform.
+	var y := 0.0
+	for k in 3:
+		var grow := (3 - k) * 0.7 + 1.2
+		# Each step is laid in slabs of about 4 m (one giant block would
+		# break into giant plates).
+		var sx := w + grow * 2.0
+		var sz := l + grow * 2.0
+		var nx := ceili(sx / 4.0)
+		var nz := ceili(sz / 4.0)
+		for ix in nx:
+			for iz in nz:
+				var c := Vector3(-sx * 0.5 + (ix + 0.5) * sx / nx, y + 0.25, -sz * 0.5 + (iz + 0.5) * sz / nz)
+				_seg(out, c, Vector3(sx / nx, 0.5, sz / nz), 2.5)
+				_role(out, "slab")
+				out[-1]["finish"] = Materials.Finish.MARBLE
+		y += 0.5
+	# Columns: two fluted drums each, a bronze capital.
+	var top := y + col_h
+	for i in nf:
+		for j in ns:
+			if i != 0 and i != nf - 1 and j != 0 and j != ns - 1:
+				continue
+			var at := Vector3(-w * 0.5 + i * gap, 0, -l * 0.5 + j * gap)
+			for d in 2:
+				_seg(
+					out,
+					at + Vector3(0, y + (d + 0.5) * col_h * 0.47, 0),
+					Vector3(dia, col_h * 0.47, dia),
+					2.0
+				)
+				_role(out, "column")
+				out[-1]["round"] = true
+			_seg(
+				out, at + Vector3(0, y + col_h * 0.97, 0), Vector3(dia * 1.35, col_h * 0.06, dia * 1.35), 1.5
+			)
+			_role(out, "parapet")
+			out[-1]["finish"] = Materials.Finish.BRONZE
+	# Cella: walls inside the colonnade, a door in the front.
+	var cw := w - gap * 1.4
+	var cl := l - gap * 2.2
+	var wt := 0.6
+	for side in 4:
+		var along_x := side < 2
+		var length := cw if along_x else cl - 2.0 * wt
+		var pieces := 3 if along_x else 4
+		for k in pieces:
+			if side == 1 and k == 1:
+				continue  # the door
+			var u := -length * 0.5 + (k + 0.5) * length / pieces
+			var at := Vector3(u, y + col_h * 0.5, (cl * 0.5 - wt * 0.5) * (-1.0 if side == 0 else 1.0))
+			var size := Vector3(length / pieces, col_h, wt)
+			if not along_x:
+				at = Vector3((cw * 0.5 - wt * 0.5) * (-1.0 if side == 2 else 1.0), y + col_h * 0.5, u)
+				size = Vector3(wt, col_h, length / pieces)
+			_seg(out, at, size, 1.5)
+			_role(out, "wall")
+	# Entablature: architrave beams round the top, a bronze frieze, cornice.
+	for side in 4:
+		var along_x := side < 2
+		var length := w + dia if along_x else l - dia
+		var at := Vector3(0, top + 0.4, (l * 0.5) * (-1.0 if side == 0 else 1.0))
+		var size := Vector3(length, 0.8, dia * 1.2)
+		if not along_x:
+			at = Vector3((w * 0.5) * (-1.0 if side == 2 else 1.0), top + 0.4, 0)
+			size = Vector3(dia * 1.2, 0.8, length)
+		_seg(out, at, size, 1.5)
+		_role(out, "column")
+	_seg(out, Vector3(0, top + 1.1, 0), Vector3(w + dia * 1.4, 0.6, l + dia * 1.4), 1.5)
+	_role(out, "parapet")
+	out[-1]["finish"] = Materials.Finish.BRONZE
+	_seg(out, Vector3(0, top + 1.6, 0), Vector3(w + dia * 2.2, 0.4, l + dia * 2.2), 1.2)
+	_role(out, "column")
+	# Roof: gilded slopes, a pediment at each end (stepped tympanum, raking
+	# cornices).
+	var base := top + 1.8
+	var rise := (w + dia * 2.0) * 0.18
+	var half := (w + dia * 2.0) * 0.5
+	var slope := atan2(rise, half)
+	var slant := sqrt(half * half + rise * rise)
+	var rl := l + dia * 2.2
+	var strips := ceili(rl / 4.0)
+	for sx: float in [-1.0, 1.0]:
+		for k in strips:
+			var z := -rl * 0.5 + (k + 0.5) * rl / strips
+			var at := Vector3(sx * half * 0.5, base + rise * 0.5, z)
+			_seg(out, at, Vector3(slant, 0.35, rl / strips), 0.8, false, Basis(Vector3.BACK, -sx * slope))
+			out[-1]["finish"] = Materials.Finish.BRONZE
+	for sz: float in [-1.0, 1.0]:
+		var z := sz * (l * 0.5 + dia * 0.4)
+		var steps := 4
+		for k in steps:
+			var f := float(k) / steps
+			var wk := (w + dia) * (1.0 - f) * 0.92
+			_seg(out, Vector3(0, base + (k + 0.5) * rise / steps, z), Vector3(wk, rise / steps, 0.5), 1.0)
+			_role(out, "wall")
+			out[-1]["finish"] = Materials.Finish.MARBLE
 
 
 ## Editor-only preview so the layout is visible while editing scenes.

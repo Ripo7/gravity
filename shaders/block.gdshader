@@ -22,8 +22,8 @@ uniform vec3 wood : source_color = vec3(0.84, 0.75, 0.62);
 uniform vec3 wood_dark : source_color = vec3(0.68, 0.56, 0.43);
 uniform vec3 metal : source_color = vec3(0.62, 0.66, 0.72);
 uniform vec3 ice : source_color = vec3(0.035, 0.03, 0.06);
-uniform vec3 glass : source_color = vec3(0.16, 0.2, 0.26);
-uniform vec3 glass_sky : source_color = vec3(0.98, 0.8, 0.64);
+uniform vec3 glass : source_color = vec3(0.08, 0.1, 0.14);
+uniform vec3 glass_sky : source_color = vec3(0.6, 0.64, 0.74);
 // Warm light behind some windows (the city is lived in).
 uniform vec3 window_light : source_color = vec3(1.0, 0.68, 0.38);
 uniform float window_lit_share = 0.1;
@@ -33,6 +33,7 @@ uniform float window_glow = 0.8;
 varying vec3 local_pos;   // metres, centred on the block
 varying vec3 half_size;   // metres
 varying vec3 local_normal;
+varying float is_round;  // 1 for columns drawn by the cylinder MultiMesh
 varying float shade;
 varying float material_id;
 varying float finish;
@@ -237,6 +238,7 @@ void vertex() {
 	local_pos = VERTEX * scale;
 	half_size = scale * 0.5;
 	local_normal = NORMAL;
+	is_round = COLOR.g > 0.5 ? 1.0 : 0.0;
 	shade = COLOR.r;
 	tint = COLOR.a;
 	damage = clamp(fract(INSTANCE_CUSTOM.r + 0.001) / 0.9, 0.0, 1.0);
@@ -363,8 +365,18 @@ void fragment() {
 	int fin = int(finish + 0.5);
 	vec3 q = chunky ? local_pos + seed * 7.0 : world_p;
 	vec2 fuv = face.y > 0.5 ? q.xz : vec2(face.x > 0.5 ? q.z : q.x, q.y);
+	float around = atan(local_pos.z, local_pos.x);
+	if (is_round > 0.5 && face.y < 0.5) {
+		// Round columns: unwrap the pattern around the shaft (no seams).
+		fuv = vec2(around * half_size.x, q.y);
+	}
 	if (fin > 0) {
 		apply_finish(fin, fuv, p, albedo, rough, metallic);
+	}
+	if (is_round > 0.5 && face.y < 0.5 && !chunky) {
+		// Fluted shaft: 20 grooves catch the low sun.
+		float flute = 0.5 + 0.5 * cos(around * 20.0);
+		albedo *= 0.8 + 0.2 * flute;
 	}
 
 	// Fresh fracture faces: the inside of the material, never weathered.
@@ -431,6 +443,9 @@ void fragment() {
 	if (face.x < 0.5) { edge_dist = min(edge_dist, d.x); }
 	if (face.y < 0.5) { edge_dist = min(edge_dist, d.y); }
 	if (face.z < 0.5) { edge_dist = min(edge_dist, d.z); }
+	if (is_round > 0.5) {
+		edge_dist = d.y;  // only the top and bottom rims
+	}
 	float edge = chunky ? 0.0 : 1.0 - smoothstep(0.0, 0.05, edge_dist);
 	albedo *= 1.0 - edge * 0.22;
 

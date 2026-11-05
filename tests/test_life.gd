@@ -43,7 +43,7 @@ func test_the_printed_city_stands_and_keeps_its_finishes_when_broken() -> void:
 		finishes[f] = true
 		if f == Materials.Finish.TRAVERTINE and printed < 0 and s.kind_of(i) == Materials.Kind.CONCRETE:
 			printed = i
-	check(finishes.size() >= 9, "stone, brick, plaster, marble, tiles... (%d finishes)" % finishes.size())
+	check(finishes.size() >= 5, "marble, travertine, bronze, steel, tiles... (%d finishes)" % finishes.size())
 	s.break_segment(printed)
 	await frames(2)
 	var same := 0

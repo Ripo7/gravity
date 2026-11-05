@@ -49,8 +49,8 @@ func test_ramps_and_walkway_stand_and_lead_up() -> void:
 	await _load_world()
 	await frames(60)
 	check_eq(world.structures.cluster_count(), 0, "nothing falls on its own")
-	# The walkway over the avenue is walkable at the 2nd floor (6.4 m).
-	var q := PhysicsRayQueryParameters3D.create(Vector3(0, 12, -14), Vector3(0, 0, -14))
+	# The bridge over the south avenue is walkable at the 2nd floor (6.4 m).
+	var q := PhysicsRayQueryParameters3D.create(Vector3(0, 12, 31), Vector3(0, 0, 31))
 	var hit := world.get_world_3d().direct_space_state.intersect_ray(q)
 	check(not hit.is_empty(), "something under the walkway centre")
 	if not hit.is_empty():
@@ -59,7 +59,7 @@ func test_ramps_and_walkway_stand_and_lead_up() -> void:
 	# toward +z to the first floor, 3.2 m).
 	var p := world.player
 	p.input_enabled = true
-	p.global_position = Vector3(19.4, 0.1, 8.8)
+	p.global_position = Vector3(19.4, 0.1, 25.8)
 	p.rotation.y = PI
 	p.touch_move = Vector2(0, -1)
 	var top := 0.0

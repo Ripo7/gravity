@@ -80,6 +80,10 @@ var scored_destroyed := 0.0
 var _state := PackedByteArray()
 var _xform: Array[Transform3D] = []  # global rest transform
 var _local: Array[AABB] = []  # in the structure's own space
+var _round := PackedInt32Array()  ## slot in the round (cylinder) MultiMesh, -1 = box
+var _round_count := 0
+var _rbuffer := PackedFloat32Array()
+var _round_mm: MultiMesh
 var _size := PackedVector3Array()
 var _kind := PackedByteArray()
 var _seed := PackedFloat32Array()
@@ -169,6 +173,11 @@ func add_structure(origin: Transform3D, segments: Array[Dictionary], scored := t
 		_size.append(size)
 		_kind.append(kind)
 		_seed.append(seg.get("seed", randf()))
+		if seg.get("round", false):
+			_round.append(_round_count)
+			_round_count += 1
+		else:
+			_round.append(-1)
 		_shade.append(seg.get("shade", 1.0))
 		_hit.append(Vector3.ZERO)
 		var hp: float = seg.get("strength", 3.0) * Materials.prop(kind, "strength")
@@ -506,9 +515,7 @@ func _remove(i: int) -> void:
 			debris.thaw_box(AABB(_xform[i].origin - r, r * 2.0), 0.3)
 		_unanchor(i)
 	_state[i] = State.GONE
-	var o := i * FLOATS_PER_INSTANCE
-	for k in FLOATS_PER_INSTANCE:
-		_buffer[o + k] = 0.0
+	_clear_instance(i)
 	_buffer_dirty = true
 	segment_broken.emit(i)
 
@@ -1107,6 +1114,7 @@ func _physics_process(delta: float) -> void:
 			_settle_group(g, true)
 	if _buffer_dirty:
 		_multimesh.buffer = _buffer
+		_round_mm.buffer = _rbuffer
 		_buffer_dirty = false
 	if _score_dirty:
 		_score_dirty = false
@@ -1163,56 +1171,99 @@ func _box_shape(size: Vector3) -> RID:
 
 
 func _write_instance(i: int, xf: Transform3D) -> void:
-	var o := i * FLOATS_PER_INSTANCE
+	# Round blocks (columns) are drawn by the cylinder MultiMesh; their
+	# slot in the box one stays empty.
 	var b := xf.basis
 	var s := _size[i]
-	_buffer[o + 0] = b.x.x * s.x
-	_buffer[o + 1] = b.y.x * s.y
-	_buffer[o + 2] = b.z.x * s.z
-	_buffer[o + 3] = xf.origin.x
-	_buffer[o + 4] = b.x.y * s.x
-	_buffer[o + 5] = b.y.y * s.y
-	_buffer[o + 6] = b.z.y * s.z
-	_buffer[o + 7] = xf.origin.y
-	_buffer[o + 8] = b.x.z * s.x
-	_buffer[o + 9] = b.y.z * s.y
-	_buffer[o + 10] = b.z.z * s.z
-	_buffer[o + 11] = xf.origin.z
-	_buffer[o + 12] = _shade[i]
-	_buffer[o + 13] = Materials.encode(_kind[i])
-	_buffer[o + 14] = fposmod(_seed[i], 1.0)
-	_buffer[o + 15] = 0.0
-	_buffer[o + 16] = Materials.custom(
-		_kind[i], 1.0 - clampf(_health[i] / _max_health[i], 0.0, 1.0), _seed[i]
+	var dmg := 1.0 - clampf(_health[i] / _max_health[i], 0.0, 1.0)
+	var row := PackedFloat32Array(
+		[
+			b.x.x * s.x,
+			b.y.x * s.y,
+			b.z.x * s.z,
+			xf.origin.x,
+			b.x.y * s.x,
+			b.y.y * s.y,
+			b.z.y * s.z,
+			xf.origin.y,
+			b.x.z * s.x,
+			b.y.z * s.y,
+			b.z.z * s.z,
+			xf.origin.z,
+			_shade[i],
+			1.0 if _round[i] >= 0 else 0.0,
+			fposmod(_seed[i], 1.0),
+			0.0,
+			Materials.custom(_kind[i], dmg, _seed[i]),
+			_hit[i].x,
+			_hit[i].y,
+			_hit[i].z,
+		]
 	)
-	_buffer[o + 17] = _hit[i].x
-	_buffer[o + 18] = _hit[i].y
-	_buffer[o + 19] = _hit[i].z
+	if _round[i] >= 0:
+		var o := _round[i] * FLOATS_PER_INSTANCE
+		for k in FLOATS_PER_INSTANCE:
+			_rbuffer[o + k] = row[k]
+	else:
+		var o := i * FLOATS_PER_INSTANCE
+		for k in FLOATS_PER_INSTANCE:
+			_buffer[o + k] = row[k]
 	_buffer_dirty = true
+
+
+func _clear_instance(i: int) -> void:
+	if _round[i] >= 0:
+		var r := _round[i] * FLOATS_PER_INSTANCE
+		for k in FLOATS_PER_INSTANCE:
+			_rbuffer[r + k] = 0.0
+		return
+	var o := i * FLOATS_PER_INSTANCE
+	for k in FLOATS_PER_INSTANCE:
+		_buffer[o + k] = 0.0
 
 
 func _rebuild_multimesh() -> void:
 	if _multimesh == null:
 		var box := BoxMesh.new()
 		box.size = Vector3.ONE
-		_multimesh = MultiMesh.new()
-		_multimesh.transform_format = MultiMesh.TRANSFORM_3D
-		_multimesh.use_colors = true
-		_multimesh.use_custom_data = true
-		_multimesh.mesh = box
-		var mmi := MultiMeshInstance3D.new()
-		mmi.name = "StructureMesh"
-		mmi.multimesh = _multimesh
-		mmi.material_override = material
-		add_child(mmi)
+		_multimesh = _make_multimesh(box, "StructureMesh")
+		# Columns: a unit cylinder, enough sides to read round up close.
+		var cyl := CylinderMesh.new()
+		cyl.top_radius = 0.5
+		cyl.bottom_radius = 0.5
+		cyl.height = 1.0
+		cyl.radial_segments = int(Quality.pick(12, 16, 20))
+		cyl.rings = 1
+		_round_mm = _make_multimesh(cyl, "ColumnMesh")
 	var n := _xform.size()
 	_buffer.resize(n * FLOATS_PER_INSTANCE)
+	_rbuffer.resize(maxi(_round_count, 1) * FLOATS_PER_INSTANCE)
+	_rbuffer.fill(0.0)
 	for i in n:
-		if _state[i] == State.GONE:
+		if _round[i] >= 0:
+			var o := i * FLOATS_PER_INSTANCE
 			for k in FLOATS_PER_INSTANCE:
-				_buffer[i * FLOATS_PER_INSTANCE + k] = 0.0
+				_buffer[o + k] = 0.0
+		if _state[i] == State.GONE:
+			_clear_instance(i)
 		else:
 			_write_instance(i, _xform[i])
 	_multimesh.instance_count = n
 	_multimesh.buffer = _buffer
+	_round_mm.instance_count = maxi(_round_count, 1)
+	_round_mm.buffer = _rbuffer
 	_buffer_dirty = false
+
+
+func _make_multimesh(mesh: Mesh, label: String) -> MultiMesh:
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true
+	mm.use_custom_data = true
+	mm.mesh = mesh
+	var mmi := MultiMeshInstance3D.new()
+	mmi.name = label
+	mmi.multimesh = mm
+	mmi.material_override = material
+	add_child(mmi)
+	return mm

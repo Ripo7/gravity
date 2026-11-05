@@ -120,7 +120,7 @@ func test_vortex_shreds_the_band_and_hurts() -> void:
 func test_vortex_breaks_blocks_inside() -> void:
 	await _load()
 	var standing := world.structures.alive_count
-	world.cast_vortex(Vector3(6, 3, 14))  # a building corner on the avenue
+	world.cast_vortex(Vector3(23, 3, 8.5))  # the corner of a block on the forum
 	await get_tree().create_timer(PowerDefs.VORTEX_SPINUP + 2.0).timeout
 	check(
 		world.structures.alive_count < standing - 20,
