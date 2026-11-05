@@ -66,12 +66,13 @@ func test_breaks_spray_chips_that_land() -> void:
 	await _unload()
 
 
-func test_tall_building_creaks_then_pancakes_floor_by_floor() -> void:
+func test_tall_building_creaks_then_pancakes() -> void:
+	seed(4242)  # which crushed blocks shatter is random: same draw every run
 	await _load_world()
 	var st := Structure.new()
-	st.kind = Structure.Kind.APARTMENT
-	st.counts = Vector3i(2, 7, 2)
-	st.block = Vector3(4.0, 3.2, 0.45)
+	st.kind = Structure.Kind.BUILDING
+	st.counts = Vector3i(3, 7, 3)
+	st.block = Vector3(3.5, 3.2, 0.45)
 	var s := world.structures
 	var first := s.segment_count()
 	s.add_structure(Transform3D(Basis(), SPOT + Vector3(0, 0, -12)), st.build_segments())
@@ -92,32 +93,50 @@ func test_tall_building_creaks_then_pancakes_floor_by_floor() -> void:
 		if s.is_alive(i):
 			standing += 1
 	check(standing > 50, "still up during the creak (%d)" % standing)
-	await get_tree().create_timer(4.0).timeout
-	check(events["crush"] >= 2, "floors crush one after another (%d)" % events["crush"])
+	await get_tree().create_timer(5.5).timeout
+	# The lowest storey of the falling block is crushed where it lands (a
+	# second storey goes too when it hits hard enough again).
+	check(events["crush"] >= 1, "it lands crushing a storey (%d)" % events["crush"])
 	await _unload()
 
 
-func test_roof_water_tower_falls_with_its_building() -> void:
+## A structure standing on another (a water tower on a roof) is tied to the
+## blocks it stands on: it falls when they go, even one at a time.
+func test_a_structure_on_a_roof_falls_with_its_support() -> void:
 	await _load_world()
 	var s := world.structures
-	var roof := Vector3(12, 0, -31)  # block with a belvedere on its roof
-	var tower_before := 0
-	for i in s.segment_count():
+	var house := Structure.new()
+	house.kind = Structure.Kind.BUILDING
+	house.counts = Vector3i(1, 2, 1)
+	house.block = Vector3(4.0, 3.0, 0.4)
+	var base := SPOT + Vector3(-6, 0, -6)
+	var first := s.segment_count()
+	s.add_structure(Transform3D(Basis(), base), house.build_segments())
+	house.free()
+	var roof_top := 0.0
+	for i in range(first, s.segment_count()):
+		roof_top = maxf(roof_top, s.transform_of(i).origin.y + s.size_of(i).y * 0.5)
+	var tank := Structure.new()
+	tank.kind = Structure.Kind.WALL
+	tank.counts = Vector3i(2, 3, 1)
+	tank.block = Vector3(0.8, 0.5, 0.8)
+	var top_first := s.segment_count()
+	s.add_structure(Transform3D(Basis(), base + Vector3(0, roof_top, 0)), tank.build_segments())
+	tank.free()
+	s.link_anchors()
+	await frames(5)
+	check_eq(s.cluster_count(), 0, "both stand")
+	# Break the roof slab under it, one block at a time (no blast).
+	for i in range(first, top_first):
 		var p := s.transform_of(i).origin
-		if s.is_alive(i) and p.y > 16.5 and absf(p.x - roof.x) < 2.0 and absf(p.z - roof.z) < 2.0:
-			tower_before += 1
-	check(tower_before > 10, "belvedere on the roof (%d)" % tower_before)
-	for i in s.segment_count():
-		var p := s.transform_of(i).origin
-		if s.is_alive(i) and p.y < 6.3 and absf(p.x - roof.x) < 6.5 and absf(p.z - roof.z) < 6.5:
+		if s.is_alive(i) and p.y > roof_top - 0.5:
 			s.break_segment(i)
-	await get_tree().create_timer(3.0).timeout
+	await get_tree().create_timer(2.0).timeout
 	var left := 0
-	for i in s.segment_count():
-		var p := s.transform_of(i).origin
-		if s.is_alive(i) and p.y > 16.5 and absf(p.x - roof.x) < 2.0 and absf(p.z - roof.z) < 2.0:
+	for i in range(top_first, s.segment_count()):
+		if s.is_alive(i):
 			left += 1
-	check_eq(left, 0, "it comes down with the building")
+	check_eq(left, 0, "it comes down with the roof")
 	await _unload()
 
 
@@ -126,9 +145,9 @@ func test_a_resting_block_breaking_up_does_not_fling_pieces() -> void:
 	var s := world.structures
 	var d := world.debris
 	var st := Structure.new()
-	st.kind = Structure.Kind.BRIDGE
-	st.counts = Vector3i(5, 8, 1)
-	st.block = Vector3(2.9, 1.56, 2.6)
+	st.kind = Structure.Kind.BUILDING
+	st.counts = Vector3i(2, 2, 1)
+	st.block = Vector3(3.0, 2.6, 0.4)
 	var first := s.segment_count()
 	s.add_structure(Transform3D(Basis(), SPOT + Vector3(-4, 0, -14)), st.build_segments())
 	st.free()
@@ -172,7 +191,7 @@ func test_glass_bursts_into_shards_without_bodies() -> void:
 func test_broken_concrete_leaves_rebar_and_cracks_start_at_the_hit() -> void:
 	await _load_world()
 	var s := world.structures
-	# A first-floor pier of a building: its neighbours are concrete too.
+	# A ground-floor pier of the palace: its neighbours are stone too.
 	var col := -1
 	for i in s.segment_count():
 		var p := s.transform_of(i).origin
@@ -181,15 +200,15 @@ func test_broken_concrete_leaves_rebar_and_cracks_start_at_the_hit() -> void:
 		if (
 			s.is_alive(i)
 			and concrete
-			and p.y > 3.5
-			and p.y < 6.0
+			and p.y > 1.5
+			and p.y < 4.0
 			and sz.y > 2.0
-			and minf(sz.x, sz.z) < 0.5
-			and maxf(sz.x, sz.z) < 1.6
+			and minf(sz.x, sz.z) < 0.7
+			and maxf(sz.x, sz.z) < 2.5
 		):
 			col = i
 			break
-	check(col >= 0, "found a first-floor pier")
+	check(col >= 0, "found a ground-floor pier")
 	var at := s.transform_of(col).origin + Vector3(0, 1.0, 0)
 	s._damage(col, 0.1, at)
 	check(s._hit[col] != Vector3.ZERO, "the hit point is kept for the cracks")

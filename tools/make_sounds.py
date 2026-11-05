@@ -69,26 +69,6 @@ def sweep(f0, f1, sec, kind="sin"):
     return np.sin(ph) if kind == "sin" else signal.sawtooth(ph, 0.5)
 
 
-def charge_loop():
-    # 2 s seamless hum: detuned saws through a low-pass, slow shimmer.
-    sec = 2.0
-    tt = t(sec)
-    x = np.zeros_like(tt)
-    for f, a in [(110, 1.0), (110.5, 0.8), (220.3, 0.5), (329.6, 0.25)]:
-        x += a * signal.sawtooth(2 * np.pi * f * tt)
-    x = lp(x, 900)
-    x *= 0.8 + 0.2 * np.sin(2 * np.pi * 3 * tt)  # 3 Hz = 6 cycles, loops
-    x += 0.15 * lp(noise(sec), 3000) * (0.6 + 0.4 * np.sin(2 * np.pi * 1.5 * tt))
-    return x
-
-
-def throw():
-    sec = 0.45
-    x = bp(noise(sec), 400, 4000) * env(int(SR * sec), 0.02, 0.12)
-    x += 0.4 * sweep(900, 300, sec) * env(int(SR * sec), 0.005, 0.08)
-    return x
-
-
 def implode():
     # Reverse-swell suction: rising filtered noise + rising tone.
     sec = 0.9
@@ -179,35 +159,6 @@ def click():
     return np.sin(2 * np.pi * 1800 * t(sec)) * env(n, 0.0005, 0.012)
 
 
-def star(pitch=1.0):
-    sec = 0.6
-    n = int(SR * sec)
-    tt = t(sec)
-    base = 880 * pitch
-    x = sum(a * np.sin(2 * np.pi * base * m * tt) for m, a in [(1, 1), (2, 0.35), (3, 0.15), (4.2, 0.1)])
-    return x * env(n, 0.002, 0.18)
-
-
-def fanfare():
-    notes = [523.25, 659.25, 783.99, 1046.5]
-    out = np.zeros(int(SR * 1.4))
-    for k, f in enumerate(notes):
-        sec = 0.9 - k * 0.1
-        n = int(SR * sec)
-        tt = t(sec)
-        tone = sum(a * np.sin(2 * np.pi * f * m * tt) for m, a in [(1, 1), (2, 0.3), (3, 0.12)])
-        tone *= env(n, 0.004, 0.25)
-        s = int(SR * 0.11 * k)
-        out[s : s + n] += tone
-    return out
-
-
-def chain():
-    sec = 0.35
-    n = int(SR * sec)
-    return (sweep(600, 1400, sec) + 0.4 * sweep(900, 2100, sec)) * env(n, 0.002, 0.09)
-
-
 def orb():
     # Gravity orb appearing: a deep swell with a shimmering top.
     sec = 1.4
@@ -276,12 +227,6 @@ def select():
     return np.sin(2 * np.pi * 1200 * t(sec)) * env(n, 0.001, 0.02) + 0.5 * np.sin(2 * np.pi * 2400 * t(sec)) * env(n, 0.001, 0.01)
 
 
-def tier():
-    sec = 0.15
-    n = int(SR * sec)
-    return sweep(700, 1100, sec) * env(n, 0.002, 0.05)
-
-
 def ready():
     sec = 0.25
     n = int(SR * sec)
@@ -291,7 +236,6 @@ def ready():
 
 if __name__ == "__main__":
     os.makedirs(OUT, exist_ok=True)
-    save("charge_loop", charge_loop(), 0.6)
     save("implode", implode())
     save("burst", burst(), 0.95)
     save("break_concrete", break_concrete())
@@ -300,9 +244,6 @@ if __name__ == "__main__":
     save("collapse", collapse(), 0.95)
     save("creak", creak(), 0.7)
     save("click", click(), 0.5)
-    save("star", star())
-    save("fanfare", fanfare(), 0.8)
-    save("chain", chain(), 0.6)
     save("orb", orb(), 0.8)
     save("ice_rise", ice_rise(), 0.8)
     save("ice_hit", ice_hit(), 0.6)
@@ -311,6 +252,5 @@ if __name__ == "__main__":
     save("death", death(), 0.85)
     save("denied", denied(), 0.4)
     save("select", select(), 0.4)
-    save("tier", tier(), 0.4)
     save("ready", ready(), 0.4)
     print("ok", sorted(os.listdir(OUT)))

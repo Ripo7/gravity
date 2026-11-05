@@ -175,7 +175,7 @@ func _spin_debris(delta: float) -> void:
 	var debris := _world.debris
 	var r := PowerDefs.VORTEX_RADIUS
 	caught = 0
-	for i in debris.capacity:
+	for i in debris.slot_end():
 		if not debris.is_active(i):
 			continue
 		var p := debris.position_of(i)
@@ -205,7 +205,7 @@ func _release() -> void:
 	var debris := _world.debris
 	var r := PowerDefs.VORTEX_RADIUS
 	var flung := 0
-	for i in debris.capacity:
+	for i in debris.slot_end():
 		if not (debris.is_active(i) and debris.in_storm(i)):
 			continue
 		_flung.append(i)
@@ -245,7 +245,7 @@ func _shred_band(dt: float) -> void:
 	var debris := _world.debris
 	var r := PowerDefs.VORTEX_RADIUS
 	var outer := r + PowerDefs.VORTEX_BAND
-	for i in debris.capacity:
+	for i in debris.slot_end():
 		if not debris.is_active(i):
 			continue
 		var d := debris.position_of(i).distance_to(center)

@@ -28,9 +28,7 @@ var _last := {}
 
 
 static func should_show() -> bool:
-	if DisplayServer.is_touchscreen_available():
-		return true
-	return OS.has_feature("web_android") or OS.has_feature("web_ios")
+	return DisplayServer.is_touchscreen_available() or Quality.is_handheld()
 
 
 func _ready() -> void:
@@ -101,6 +99,7 @@ func _on_touch(e: InputEventScreenTouch) -> void:
 		if e.position.distance_to(charge_center()) < charge_radius() * 1.3 and _charge_finger < 0:
 			_charge_finger = e.index
 			player.power.touch_held = true
+			player.power.touch_tapped = true
 		elif e.position.distance_to(jump_center()) < jump_radius() * 1.4 and _jump_finger < 0:
 			_jump_finger = e.index
 			player.touch_jump = true
@@ -172,5 +171,7 @@ func _draw() -> void:
 
 
 func _process(_delta: float) -> void:
+	# A mouse in use (touchscreen laptops): the thumb controls step aside.
+	visible = Input.mouse_mode != Input.MOUSE_MODE_CAPTURED
 	if _charge_finger >= 0:
 		queue_redraw()

@@ -14,12 +14,13 @@ jobs:
   lint:
     name: GDScript lint
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install "gdtoolkit==4.*"
+      - run: pip install "gdtoolkit==4.5.0"
       - name: gdlint
         run: gdlint scripts tests
       - name: gdformat (check)
@@ -28,6 +29,7 @@ jobs:
   test:
     name: Headless tests
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/cache@v4
@@ -38,18 +40,46 @@ jobs:
         run: echo "GODOT=$(tools/install_godot.sh | tail -n1)" >> "$GITHUB_ENV"
       - name: Import project
         run: $GODOT --headless --path . --import
-      - name: Run tests
+      - name: Run tests (desktop settings)
         shell: bash
         run: |
           set -o pipefail
           $GODOT --headless --path . res://tests/test_runner.tscn 2>&1 | tee tests.log
           # Script errors mean something broke even if the checks passed.
           if grep -q "SCRIPT ERROR" tests.log; then echo "::error::script errors during tests"; exit 1; fi
+      - name: Run tests (phone settings)
+        shell: bash
+        run: |
+          set -o pipefail
+          $GODOT --headless --path . res://tests/test_runner.tscn -- --quality=low 2>&1 | tee tests_low.log
+          if grep -q "SCRIPT ERROR" tests_low.log; then echo "::error::script errors during tests"; exit 1; fi
+
+  perf:
+    name: Physics perf gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: ~/.godot-ci
+          key: godot-${{ hashFiles('tools/godot_version.env') }}
+      - name: Install Godot
+        run: echo "GODOT=$(tools/install_godot.sh | tail -n1)" >> "$GITHUB_ENV"
+      - name: Import project
+        run: $GODOT --headless --path . --import
+      - name: Showcase at browser settings
+        shell: bash
+        run: |
+          set -o pipefail
+          $GODOT --headless --path . -- --mode=showcase --seed=1 --prof --quality=medium 2>&1 \
+            | python3 tools/perf_gate.py --max-busy-ms 12
 
   export:
     name: Export builds
     needs: [test]
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/cache@v4
@@ -87,10 +117,11 @@ jobs:
           name: gravity-web
           path: build/web
 
-  web-benchmark:
-    name: Web benchmark (headless Chromium)
+  web-probe:
+    name: Web input probe (headless Chromium)
     needs: [export]
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -100,16 +131,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - run: npm install --no-save playwright@1 && npx playwright install --with-deps chromium
+      - run: npm install --no-save playwright@1.64.1 && npx playwright install --with-deps chromium
       - name: Keyboard and touch input probe
         shell: bash
         run: set -o pipefail; node tools/web_input_probe.mjs build/web | tee probe.txt
-      - name: Run benchmark
-        run: node tools/web_bench.mjs build/web | tee bench.txt
-      - name: Summary
-        if: always()
-        run: |
-          echo '### Web benchmark (CI runner, software WebGL)' >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-          grep -E 'BENCH' bench.txt >> "$GITHUB_STEP_SUMMARY" || true
-          echo '```' >> "$GITHUB_STEP_SUMMARY"

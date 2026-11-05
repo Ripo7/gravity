@@ -1,7 +1,7 @@
 class_name Hud
 extends Control
-## In-game HUD: destruction counter, health, the three power slots with
-## cooldowns, damage flash, callouts, F3 stats and the touch controls.
+## In-game HUD: health, the two power slots with cooldowns, damage flash,
+## the K.O. word, F3 stats and the touch controls. No score.
 
 ## Touch: where each slot sits around the cast button (degrees, y down).
 const SLOT_ANGLES := [168.0, 212.0]
@@ -10,16 +10,9 @@ const SLOT_ANGLES := [168.0, 212.0]
 
 var show_stats := false
 var touch := false
-## Fed by LevelRun.
-var destruction := 0.0
-var shown_destruction := 0.0
-var deaths := 0
 
 var _stats: Label
-var _title: Label
 var _pause_button: Button
-var _slots := {}  # popup slot -> its label
-var _meter_pulse := 0.0
 var _hurt_flash := 0.0
 var _hurt_dir := 0.0
 var _denied := [0.0, 0.0]
@@ -37,14 +30,11 @@ func _ready() -> void:
 	_flash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_flash.material = _flash_material()
+	_flash.visible = false
 	add_child(_flash)
-	_title = Label.new()
-	_title.theme_type_variation = "SmallLabel"
-	_title.position = Vector2(24, 18)
-	add_child(_title)
 	_stats = Label.new()
 	_stats.theme_type_variation = "SmallLabel"
-	_stats.position = Vector2(24, 48)
+	_stats.position = Vector2(24, 18)
 	_stats.visible = false
 	add_child(_stats)
 	touch = TouchControls.should_show() or OS.get_cmdline_user_args().has("--touch")
@@ -54,10 +44,6 @@ func _ready() -> void:
 		add_child(controls)
 	if world and world.player:
 		world.player.power.denied.connect(func(p: int) -> void: _denied[p] = 1.0)
-
-
-func set_title(text: String) -> void:
-	_title.text = text
 
 
 ## Adds the on-screen pause button (touch screens have no Esc key).
@@ -86,17 +72,9 @@ func hurt(amount: float, from: Vector3) -> void:
 		Sfx.ui("hurt", -4.0 + minf(amount / 10.0, 6.0), randf_range(0.9, 1.1))
 
 
-## Big centred callout that floats up and fades.
-## A word that pops up and floats away. Popups sharing a `slot` replace
-## each other instead of piling up on top of one another.
-func popup(text: String, color := UiTheme.INK, font_size := 40, offset := Vector2.ZERO, slot := "") -> void:
-	if slot != "":
-		var old: Variant = _slots.get(slot)
-		if old != null and is_instance_valid(old):
-			(old as Node).queue_free()
+## A word that pops up in the middle and floats away (K.O.).
+func popup(text: String, color := UiTheme.INK, font_size := 40) -> void:
 	var l := Label.new()
-	if slot != "":
-		_slots[slot] = l
 	l.text = text
 	l.add_theme_font_override("font", UiTheme.bold())
 	l.add_theme_font_size_override("font_size", font_size)
@@ -107,7 +85,7 @@ func popup(text: String, color := UiTheme.INK, font_size := 40, offset := Vector
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(l)
 	l.reset_size()
-	var start := Vector2(size.x * 0.5 - l.size.x * 0.5, size.y * 0.3) + offset
+	var start := Vector2(size.x * 0.5 - l.size.x * 0.5, size.y * 0.3)
 	l.position = start + Vector2(0, 20)
 	l.scale = Vector2.ONE * 0.6
 	l.pivot_offset = l.size * 0.5
@@ -119,10 +97,6 @@ func popup(text: String, color := UiTheme.INK, font_size := 40, offset := Vector
 	tw.chain().tween_callback(l.queue_free)
 
 
-func pulse_meter() -> void:
-	_meter_pulse = 1.0
-
-
 func _process(delta: float) -> void:
 	var real := delta / maxf(Engine.time_scale, 0.001)
 	if Input.is_action_just_pressed("toggle_debug"):
@@ -130,14 +104,14 @@ func _process(delta: float) -> void:
 	_stats.visible = show_stats
 	if show_stats and world:
 		_stats.text = stats_text(world)
-	var gap := absf(destruction - shown_destruction)
-	shown_destruction = move_toward(shown_destruction, destruction, maxf(0.4 * real, gap * 6.0 * real))
-	_meter_pulse = move_toward(_meter_pulse, 0.0, real * 3.0)
 	_hurt_flash = move_toward(_hurt_flash, 0.0, real * 1.6)
 	for k in 2:
 		_denied[k] = move_toward(_denied[k], 0.0, real * 3.0)
-	(_flash.material as ShaderMaterial).set_shader_parameter("amount", _hurt_flash)
-	(_flash.material as ShaderMaterial).set_shader_parameter("dir", _hurt_dir)
+	# A full-screen pass costs fill rate on phones: only while it shows.
+	_flash.visible = _hurt_flash > 0.0
+	if _flash.visible:
+		(_flash.material as ShaderMaterial).set_shader_parameter("amount", _hurt_flash)
+		(_flash.material as ShaderMaterial).set_shader_parameter("dir", _hurt_dir)
 	if world and world.player:
 		_shown_health = move_toward(_shown_health, world.player.health, real * 120.0)
 	if _pause_button:
@@ -148,12 +122,13 @@ func _process(delta: float) -> void:
 static func stats_text(w: GameWorld) -> String:
 	return (
 		(
-			"%d fps  ·  physique %.1f ms\nmorceaux %d / %d  (actifs %d)\n"
+			"%d fps  ·  physique %.1f ms (pire %.1f)\nmorceaux %d / %d  (actifs %d)\n"
 			+ "blocs debout %d  ·  pans en chute %d\nappels de rendu %d"
 		)
 		% [
 			Engine.get_frames_per_second(),
-			Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0,
+			w.physics_clock.avg_ms if w.physics_clock else 0.0,
+			w.physics_clock.worst_ms if w.physics_clock else 0.0,
 			w.debris.active_count,
 			w.debris.capacity,
 			w.debris.awake_count,
@@ -166,7 +141,6 @@ static func stats_text(w: GameWorld) -> String:
 
 func _draw() -> void:
 	_draw_crosshair()
-	_draw_counter()
 	if world and world.player:
 		_draw_health()
 		_draw_powers()
@@ -178,19 +152,6 @@ func _draw_crosshair() -> void:
 	for d: Vector2 in [Vector2.RIGHT, Vector2.LEFT, Vector2.UP, Vector2.DOWN]:
 		draw_line(c + d * 6.0, c + d * 11.0, ink, 2.0, true)
 	draw_circle(c, 1.6, ink)
-
-
-## Top centre: how much of the place is down, and how often you died.
-func _draw_counter() -> void:
-	var font := UiTheme.bold()
-	var txt := "%d%% détruit" % roundi(shown_destruction * 100.0)
-	var fs := 30 + int(_meter_pulse * 8.0)
-	var ts := font.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs)
-	_text(Vector2((size.x - ts.x) * 0.5, 46), txt, fs, UiTheme.INK)
-	if deaths > 0:
-		var d := "K.O. ×%d" % deaths
-		var ds := font.get_string_size(d, HORIZONTAL_ALIGNMENT_LEFT, -1, 16)
-		_text(Vector2((size.x - ds.x) * 0.5, 70), d, 16, Color(0.75, 0.1, 0.2))
 
 
 func _draw_health() -> void:
@@ -224,7 +185,7 @@ func _draw_powers() -> void:
 	var p := world.player.power
 	var font := UiTheme.bold()
 	for k in 2:
-		var r := power_slot_rect(k, size, touch)
+		var r := power_slot_rect(k, size, _touch_layout())
 		var slot := r.size.x
 		var shake := Vector2(sin(Time.get_ticks_msec() / 25.0) * 4.0 * _denied[k], 0)
 		r.position += shake
@@ -250,7 +211,7 @@ func _draw_powers() -> void:
 				24,
 				Color.WHITE
 			)
-		if touch:
+		if _touch_layout():
 			continue
 		# Name above, key below.
 		var name: String = PowerDefs.NAMES[k]
@@ -267,6 +228,12 @@ func _draw_powers() -> void:
 			13,
 			Color(UiTheme.INK, 0.6)
 		)
+
+
+## Touch layout while the thumbs are in charge; desktop layout while a
+## mouse holds the pointer (laptops with a touchscreen).
+func _touch_layout() -> bool:
+	return touch and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED
 
 
 ## Screen rect of power slot `k`; on touch screens they are tap targets

@@ -126,14 +126,15 @@ func test_damage_accumulates_and_weakens() -> void:
 	await _unload()
 
 
-func test_destruction_fraction_tracks_score_volume() -> void:
+func test_standing_fraction_counts_what_is_left() -> void:
 	await _load_world()
 	var s := world.structures
-	check_near(s.destruction(), 0.0, 1e-6, "starts at zero")
+	check_near(s.standing_fraction(), 1.0, 1e-6, "starts whole")
 	var broke := 0
 	for i in s.segment_count():
 		if broke < 40 and s.transform_of(i).origin.y > 2.0:
 			s.break_segment(i)
 			broke += 1
-	check(s.destruction() > 0.0 and s.destruction() < 1.0, "partial (%.3f)" % s.destruction())
+	var f := s.standing_fraction()
+	check(f > 0.0 and f < 1.0, "partial (%.3f)" % f)
 	await _unload()

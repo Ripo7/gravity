@@ -1,11 +1,10 @@
 class_name LevelRun
 extends Node
 ## Flow of the sandbox: intro card -> play -> (crushed -> respawn) ... plus
-## pause, and collapse / chain callouts for the HUD.
+## pause. No score, no callouts: the building is the show.
 
 enum State { INTRO, PLAY, DOWN, PAUSED }
 
-const CHAIN_WINDOW := 1.4
 const RESPAWN_DELAY := 2.2
 
 @export var world: GameWorld
@@ -13,16 +12,12 @@ const RESPAWN_DELAY := 2.2
 
 var state := State.INTRO
 var level: Level
+## K.O.s this run (for scripted checks; never shown).
 var deaths := 0
 
 var _overlay: Control
 var _state_before_pause := State.PLAY
 var _was_captured := false
-var _chain := 0
-var _chain_timer := 0.0
-var _last_destruction := 0.0
-var _gain := 0.0
-var _gain_timer := 0.0
 
 
 func _ready() -> void:
@@ -39,12 +34,8 @@ func _ready() -> void:
 	_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud.get_parent().add_child(_overlay)
-	hud.set_title(level.title.to_upper())
 	if hud.touch:
 		hud.add_pause_button(pause)
-	world.structures.destruction_changed.connect(_on_destruction)
-	world.structures.cluster_released.connect(_on_released)
-	world.structures.cluster_impact.connect(_on_impact)
 	world.player.died.connect(_on_died)
 	world.player.damaged.connect(func(amount: float, from: Vector3) -> void: hud.hurt(amount, from))
 	if Launch.options.get("mode", "") in ["showcase", "bench", "still", "probe", "play"]:
@@ -132,7 +123,6 @@ func _on_died() -> void:
 		return
 	state = State.DOWN
 	deaths += 1
-	hud.deaths = deaths
 	Sfx.ui("death", -2.0)
 	hud.popup("K.O.", Color(0.85, 0.1, 0.2), 72)
 	await get_tree().create_timer(RESPAWN_DELAY, true, false, true).timeout
@@ -146,52 +136,12 @@ func _on_died() -> void:
 		_state_before_pause = State.PLAY
 
 
-# --- Events ---------------------------------------------------------------------
-
-
-func _on_destruction(fraction: float) -> void:
-	hud.destruction = fraction
-	_gain += fraction - _last_destruction
-	_last_destruction = fraction
-	_gain_timer = 0.6
-	hud.pulse_meter()
-
-
-func _on_released(_at: Vector3, count: int, toppled: bool) -> void:
-	if count >= 12:
-		hud.popup("BASCULE !" if toppled else "EFFONDREMENT !", UiTheme.INK, 44, Vector2.ZERO, "callout")
-		_bump_chain()
-
-
-func _on_impact(_at: Vector3, _mass: float, _speed: float, count: int) -> void:
-	if count >= 8:
-		_bump_chain()
-
-
-func _bump_chain() -> void:
-	_chain = _chain + 1 if _chain_timer > 0.0 else 1
-	_chain_timer = CHAIN_WINDOW
-	if _chain >= 2:
-		hud.popup("CHAÎNE ×%d" % _chain, UiTheme.VIOLET, 36 + _chain * 3, Vector2(0, 60), "chain")
-		Sfx.ui("chain", -8.0, 0.9 + _chain * 0.1)
-
-
 # --- Frame -----------------------------------------------------------------------
 
 
-func _process(delta: float) -> void:
+func _process(_delta: float) -> void:
 	if level == null:
 		return
-	var real := delta / maxf(Engine.time_scale, 0.001)
-	_chain_timer = maxf(_chain_timer - real, 0.0)
-	if _gain_timer > 0.0:
-		_gain_timer -= real
-		if _gain_timer <= 0.0 and _gain >= 0.01:
-			hud.popup(
-				"+%d%%" % maxi(roundi(_gain * 100.0), 1), UiTheme.VIOLET, 30, Vector2(220, -150), "gain"
-			)
-		if _gain_timer <= 0.0:
-			_gain = 0.0
 	if Input.is_action_just_pressed("reset_arena") and state != State.PAUSED:
 		_restart()
 		return

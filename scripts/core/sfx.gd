@@ -1,7 +1,7 @@
 extends Node
 ## Autoload: every sound effect. Pooled players, per-sound rate limits so a
 ## collapse of 200 blocks sounds like a rumble and not a machine gun.
-## Sounds are synthesised by tools/make_sounds.py, the music and the city
+## Sounds are synthesised by tools/make_sounds.py, the music and the
 ## ambience (two seamless loops that always play) by tools/make_music.py.
 
 const POOL_3D := 14
@@ -20,9 +20,6 @@ const SOUNDS := {
 	"collapse": preload("res://audio/collapse.wav"),
 	"creak": preload("res://audio/creak.wav"),
 	"click": preload("res://audio/click.wav"),
-	"star": preload("res://audio/star.wav"),
-	"fanfare": preload("res://audio/fanfare.wav"),
-	"chain": preload("res://audio/chain.wav"),
 	"orb": preload("res://audio/orb.wav"),
 	"ice_rise": preload("res://audio/ice_rise.wav"),
 	"ice_hit": preload("res://audio/ice_hit.wav"),
@@ -31,10 +28,7 @@ const SOUNDS := {
 	"death": preload("res://audio/death.wav"),
 	"denied": preload("res://audio/denied.wav"),
 	"select": preload("res://audio/select.wav"),
-	"tier": preload("res://audio/tier.wav"),
 	"ready": preload("res://audio/ready.wav"),
-	"siren": preload("res://audio/siren.ogg"),
-	"birds_flap": preload("res://audio/birds_flap.wav"),
 }
 const BREAKS := {
 	Materials.Kind.CONCRETE: "break_concrete",
@@ -46,13 +40,12 @@ const BREAKS := {
 
 var _players: Array[AudioStreamPlayer3D] = []
 var _ui: Array[AudioStreamPlayer] = []
-var _charge: AudioStreamPlayer
 var _music: AudioStreamPlayer
 var _ambience: AudioStreamPlayer
 var _next := 0
 var _next_ui := 0
 var _last := {}  # name -> time of last start
-var _alive := {}  # name -> [player, ...]
+var _started := PackedFloat64Array()  # per 3D player: when it last started
 
 
 func _ready() -> void:
@@ -65,18 +58,11 @@ func _ready() -> void:
 		p.panning_strength = 0.8
 		add_child(p)
 		_players.append(p)
+		_started.append(-1.0)
 	for i in POOL_UI:
 		var u := AudioStreamPlayer.new()
 		add_child(u)
 		_ui.append(u)
-	_charge = AudioStreamPlayer.new()
-	var loop := (load("res://audio/charge_loop.wav") as AudioStreamWAV).duplicate() as AudioStreamWAV
-	loop.loop_mode = AudioStreamWAV.LOOP_FORWARD
-	loop.loop_begin = 0
-	loop.loop_end = int(loop.get_length() * loop.mix_rate)
-	_charge.stream = loop
-	_charge.volume_db = -14.0
-	add_child(_charge)
 	_music = _loop_player("res://audio/music.ogg", MUSIC_DB)
 	_ambience = _loop_player("res://audio/ambience.ogg", AMBIENCE_DB)
 
@@ -110,23 +96,42 @@ func play(sound: String, at := Vector3.INF, volume_db := 0.0, pitch := 1.0) -> v
 	var now := Time.get_ticks_msec() / 1000.0
 	if now - float(_last.get(sound, -1.0)) < MIN_GAP:
 		return
-	var alive: Array = _alive.get(sound, [])
-	alive = alive.filter(func(p: Node) -> bool: return is_instance_valid(p) and p.playing)
-	if alive.size() >= MAX_ALIVE:
+	# Only players still playing this very sound count toward its cap (a
+	# pooled player may have moved on to another sound since).
+	var stream: AudioStream = SOUNDS[sound]
+	var alive := 0
+	for p in _players:
+		if p.playing and p.stream == stream:
+			alive += 1
+	if alive >= MAX_ALIVE:
 		return
 	_last[sound] = now
 	if at == Vector3.INF:
 		ui(sound, volume_db, pitch)
 		return
-	var p := _players[_next]
-	_next = (_next + 1) % POOL_3D
-	p.stream = SOUNDS[sound]
+	var k := _free_player()
+	var p := _players[k]
+	_started[k] = now
+	p.stream = stream
 	p.global_position = at
 	p.volume_db = volume_db
 	p.pitch_scale = pitch * randf_range(0.94, 1.06)
 	p.play()
-	alive.append(p)
-	_alive[sound] = alive
+
+
+## A silent player if there is one, else the one that started longest ago
+## (a short crack is cut, not a collapse that just began).
+func _free_player() -> int:
+	for n in POOL_3D:
+		var k := (_next + n) % POOL_3D
+		if not _players[k].playing:
+			_next = (k + 1) % POOL_3D
+			return k
+	var oldest := 0
+	for k in POOL_3D:
+		if _started[k] < _started[oldest]:
+			oldest = k
+	return oldest
 
 
 func ui(sound: String, volume_db := -6.0, pitch := 1.0) -> void:
@@ -144,17 +149,3 @@ func ui(sound: String, volume_db := -6.0, pitch := 1.0) -> void:
 func play_break(kind: int, at: Vector3, radius: float) -> void:
 	var pitch := clampf(1.35 - radius * 0.5, 0.6, 1.4)
 	play(BREAKS.get(kind, "break_concrete"), at, -10.0 + radius * 6.0, pitch)
-
-
-func start_charge() -> void:
-	_charge.pitch_scale = 0.8
-	_charge.play()
-
-
-func update_charge(c: float) -> void:
-	_charge.pitch_scale = 0.8 + c * 0.9
-	_charge.volume_db = -16.0 + c * 8.0
-
-
-func stop_charge() -> void:
-	_charge.stop()

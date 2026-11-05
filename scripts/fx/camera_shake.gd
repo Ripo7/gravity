@@ -11,7 +11,6 @@ extends Camera3D
 var trauma := 0.0
 var _noise := FastNoiseLite.new()
 var _time := 0.0
-var _fov_kick := 0.0
 
 
 func _ready() -> void:
@@ -24,10 +23,6 @@ func add_trauma(amount: float) -> void:
 	trauma = clampf(trauma + amount, 0.0, 1.0)
 
 
-func kick_fov(degrees: float) -> void:
-	_fov_kick = maxf(_fov_kick, degrees)
-
-
 func _process(_delta: float) -> void:
 	var dt := _real_delta()
 	_time += dt * 40.0
@@ -36,8 +31,7 @@ func _process(_delta: float) -> void:
 	h_offset = max_offset * s * _noise.get_noise_2d(_time, 0.0)
 	v_offset = max_offset * s * _noise.get_noise_2d(0.0, _time)
 	rotation.z = max_roll * s * _noise.get_noise_2d(_time, _time)
-	_fov_kick = move_toward(_fov_kick, 0.0, dt * 40.0)
-	fov = base_fov + _fov_kick
+	fov = base_fov
 
 
 func _real_delta() -> float:
