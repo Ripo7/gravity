@@ -3,6 +3,7 @@ extends TestCase
 
 const GAME := preload("res://scenes/game.tscn")
 const FAR := Vector3(55, 0.05, 55)  # empty corner of the sandbox
+const INSIDE := Vector3(42, 0.05, 42)  # empty, well inside the walls
 
 var world: GameWorld
 
@@ -39,7 +40,7 @@ func test_press_casts_and_cooldown_blocks_recast() -> void:
 
 func test_vortex_spins_pieces_without_exploding() -> void:
 	await _load()
-	var at := FAR + Vector3(0, 3, -15)
+	var at := INSIDE + Vector3(0, 3.5, 0)
 	var ids: Array[int] = []
 	for k in 30:
 		var p := at + Vector3(randf_range(-2.5, 2.5), randf_range(-0.5, 0.5), randf_range(-2.5, 2.5))
@@ -66,6 +67,34 @@ func test_vortex_spins_pieces_without_exploding() -> void:
 		mean_d += world.debris.position_of(i).distance_to(at)
 	mean_d /= ids.size()
 	check(mean_d < PowerDefs.VORTEX_RADIUS, "kept inside the radius (%.1f m)" % mean_d)
+	await _unload()
+
+
+func test_vortex_ends_by_flinging_pieces_outward() -> void:
+	await _load()
+	var at := INSIDE + Vector3(0, 3.5, 0)
+	var ids: Array[int] = []
+	for k in 20:
+		var p := at + Vector3(randf_range(-2.5, 2.5), randf_range(-0.5, 0.5), randf_range(-2.5, 2.5))
+		ids.append(world.debris.spawn(Transform3D(Basis(), p), Vector3.ONE * 0.4))
+	var v := world.cast_vortex(at)
+	await get_tree().create_timer(PowerDefs.VORTEX_SPINUP + PowerDefs.VORTEX_DURATION - 0.3).timeout
+	while v.caught > 0:  # until it bursts
+		await get_tree().physics_frame
+	await get_tree().physics_frame
+	var outward := 0
+	var moving := 0
+	for i in ids:
+		if not world.debris.is_active(i):
+			continue
+		var off := world.debris.position_of(i) - at
+		var vel := world.debris.velocity_of(i)
+		moving += 1
+		if Vector3(vel.x, 0, vel.z).dot(Vector3(off.x, 0, off.z).normalized()) > 6.0:
+			outward += 1
+	check(moving > 10 and outward * 4 > moving * 3, "%d of %d fly outward" % [outward, moving])
+	# Flung pieces never hurt the one who cast it.
+	check(Hazards.motion_of(world, world.debris.rid_of(ids[0]), null).is_empty(), "harmless to you")
 	await _unload()
 
 

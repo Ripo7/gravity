@@ -14,7 +14,10 @@ const HALO := 2.4  ## halo radius / core radius
 const DISC := 3.6  ## accretion disc radius / core radius
 const FADE := 0.6
 const TICK := 0.1  ## seconds between damage passes
-const RELEASE_SPEED := 0.3  ## share of orbit speed kept when it closes
+const RELEASE_SPIN := 0.25  ## share of orbit speed kept when it bursts
+## Flung pieces pass through each other this long (s): the disc packs them
+## closer than they fit, and colliding at once would stop them dead.
+const SPREAD_TIME := 0.35
 
 var center := Vector3.ZERO
 var caught := 0  ## pieces currently orbiting
@@ -30,6 +33,8 @@ var _ring_outer: MeshInstance3D
 var _light: OmniLight3D
 var _inflow: CPUParticles3D
 var _pull_started := false
+var _flung := PackedInt32Array()
+var _spread_until := 0.0
 
 
 func setup(world: GameWorld, at: Vector3) -> void:
@@ -115,7 +120,10 @@ func _physics_process(delta: float) -> void:
 	_update_visuals()
 	if _t >= PowerDefs.VORTEX_SPINUP + PowerDefs.VORTEX_DURATION and _pull_started and caught > 0:
 		_release()
+	if not _flung.is_empty() and _t >= _spread_until:
+		_end_spread()
 	if _t >= PowerDefs.VORTEX_SPINUP + PowerDefs.VORTEX_DURATION + FADE:
+		_end_spread()
 		closed.emit()
 		queue_free()
 		return
@@ -188,17 +196,48 @@ func _spin_debris(delta: float) -> void:
 		debris.set_tint(i, 0.8)
 
 
-## The storm ends: pieces collide with each other again and fly off.
+## The storm ends in a burst: everything it held is flung outward (faster
+## from near the core), with a little lift and some of its swirl.
 func _release() -> void:
 	caught = 0
 	if _world == null:
 		return
-	for i in _world.debris.capacity:
-		if _world.debris.is_active(i) and _world.debris.in_storm(i):
-			_world.debris.set_storm(i, false)
-			# They spill out of the dying storm instead of being shot across
-			# the street at full orbit speed.
-			_world.debris.set_velocity(i, _world.debris.velocity_of(i) * RELEASE_SPEED)
+	var debris := _world.debris
+	var r := PowerDefs.VORTEX_RADIUS
+	var flung := 0
+	for i in debris.capacity:
+		if not (debris.is_active(i) and debris.in_storm(i)):
+			continue
+		_flung.append(i)
+		var off := debris.position_of(i) - center
+		var flat := Vector3(off.x, 0, off.z)
+		var dir := (
+			flat.normalized() if flat.length() > 0.05 else Vector3.RIGHT.rotated(Vector3.UP, randf() * TAU)
+		)
+		var k := clampf(flat.length() / r, 0.0, 1.0)
+		var speed := lerpf(PowerDefs.VORTEX_BURST_SPEED.x, PowerDefs.VORTEX_BURST_SPEED.y, k)
+		speed *= randf_range(0.8, 1.15)
+		var v := dir * speed + Vector3.UP * (PowerDefs.VORTEX_BURST_LIFT + off.y * 1.5)
+		debris.set_velocity(i, v + debris.velocity_of(i) * RELEASE_SPIN)
+		debris.add_spin(i, Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * 8.0)
+		debris.set_tint(i, 1.0)
+		flung += 1
+	_spread_until = _t + SPREAD_TIME
+	if flung > 0:
+		Sfx.play("burst", center, 2.0 + minf(flung, 80) * 0.05, 0.8)
+		if _world.dust:
+			_world.dust.puff(center, r * 0.6, Materials.Kind.CONCRETE, 12)
+		for s in get_tree().get_nodes_in_group("camera_shake"):
+			(s as CameraShake).add_trauma(0.25 + minf(flung, 100) * 0.003)
+
+
+## The flung pieces collide with each other (and land) again.
+func _end_spread() -> void:
+	if _world != null:
+		for i in _flung:
+			if _world.debris.is_active(i):
+				_world.debris.set_storm(i, false)
+	_flung.clear()
 
 
 ## Pieces in the band are not pulled, they are ground down.

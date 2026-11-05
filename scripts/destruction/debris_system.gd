@@ -445,6 +445,10 @@ func is_active(i: int) -> bool:
 	return i >= 0 and i < capacity and _active[i] == 1
 
 
+func rid_of(i: int) -> RID:
+	return _bodies[i]
+
+
 func index_of(rid: RID) -> int:
 	return _rid_to_index.get(rid, -1)
 
@@ -531,6 +535,10 @@ func add_spin(i: int, w: Vector3) -> void:
 
 func apply_impulse(i: int, impulse: Vector3) -> void:
 	set_velocity(i, velocity_of(i) + impulse / _mass[i])
+
+
+func tint_of(i: int) -> float:
+	return _tint[i]
 
 
 func set_tint(i: int, t: float) -> void:
