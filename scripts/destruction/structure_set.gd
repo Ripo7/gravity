@@ -63,6 +63,13 @@ const PANCAKE_KEEP := 0.3  ## share of speed kept after crushing a layer
 ## A falling piece knocks a standing one over when its momentum exceeds the
 ## standing piece's mass times this (m/s).
 const KNOCK_SPEED := 0.9
+## Blocks bigger than this (m^3) crack into shards when they come loose: a
+## wall panel never tumbles away whole (the Lego look). Smaller ones (a
+## stone, a bracket, a column drum) may stay whole. Phones let bigger
+## blocks stay whole (fewer bodies).
+const WHOLE_MAX_VOLUME := Vector3(1.0, 0.4, 0.4)
+## Cracking open, the shards of a loosened block part this fast (m/s).
+const LOOSE_CRACK_PUSH := 0.7
 const LEAN_TIME := 0.2  ## seconds of leaning before the weight tells
 const LEAN_SPEED := 2.0  ## leaning counts like an impact at this speed
 
@@ -115,6 +122,7 @@ var _pending: Array[Dictionary] = []  # {comp, toppled, time, group}
 ## block -> blocks of other structures it rests on, and the reverse.
 var _anchors := {}
 var _power_tint := 0.0  ## violet glow for pieces broken right now
+var _whole_max := float(Quality.pick(WHOLE_MAX_VOLUME.x, WHOLE_MAX_VOLUME.y, WHOLE_MAX_VOLUME.z))
 var _hit := PackedVector3Array()  ## where each block was hit (unit space + 1)
 var _anchored_by := {}
 var _multimesh: MultiMesh
@@ -473,8 +481,15 @@ func _dislodge(i: int, velocity: Vector3, spin := Vector3.ZERO, tint := 0.5) -> 
 		return
 	var xf := _current_transform(i)
 	_remove(i)
-	if debris:
-		debris.spawn(xf, _size[i] * 0.995, velocity, spin, tint, _shade[i], _kind[i], _seed[i])
+	if debris == null:
+		return
+	var size := _size[i]
+	if size.x * size.y * size.z > _whole_max and ShardLibrary.has(_kind[i]):
+		debris.shatter_box(
+			xf, size, _kind[i], xf.origin, LOOSE_CRACK_PUSH, velocity, tint, _shade[i], _seed[i], i
+		)
+		return
+	debris.spawn(xf, size * 0.995, velocity, spin, tint, _shade[i], _kind[i], _seed[i])
 
 
 ## Takes a block out of the structure (it became debris).
