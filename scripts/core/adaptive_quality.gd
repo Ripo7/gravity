@@ -4,7 +4,8 @@ extends Node
 ## At start it applies the platform tier (shadow range, render scale, glow).
 ## Then it watches the frame time: when frames run long it first lowers the
 ## 3D render scale a notch (the interface stays sharp), then keeps fewer
-## loose pieces around; when there is headroom again it steps back up.
+## loose pieces around and lets every shard collide as a cheap box; when
+## there is headroom again it steps back up.
 
 const SLOW_MS := 24.0  ## average frame time that counts as struggling
 const FAST_MS := 13.0  ## comfortably fast: room to raise quality again
@@ -61,7 +62,9 @@ func _process(delta: float) -> void:
 
 func _set_level(l: int) -> void:
 	level = l
-	# Render scale first (cheapest to notice), then fewer pieces kept.
+	# Render scale first (cheapest to notice), then fewer pieces kept and
+	# box collisions only.
 	get_viewport().scaling_3d_scale = maxf(_base_scale - SCALE_STEP * mini(l, 2), 0.6)
 	if world and world.debris:
 		world.debris.soft_budget = 0.8 - 0.15 * maxi(l - 2, 0)
+		world.debris.hull_min_volume = INF if l >= 3 else DebrisSystem.tier_hull_min_volume()

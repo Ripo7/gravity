@@ -3,6 +3,8 @@ extends Node
 ## game scene and attaches a Director to it.
 ## Desktop: `godot -- --mode=bench [--level=res://levels/level_04.tscn]`.
 ## Web: `index.html?mode=bench`. `--level` alone jumps straight into a level.
+## `--quality=low|medium|high` forces a quality tier (e.g. phone settings
+## on a desktop, for measurements).
 
 var options := {}
 
@@ -13,6 +15,8 @@ func _ready() -> void:
 		var query: Variant = JavaScriptBridge.eval("window.location.search", true)
 		if query is String:
 			options.merge(parse_query(query), true)
+	if options.has("quality"):
+		Quality.force(["low", "medium", "high"].find(options["quality"]))
 	if options.get("mode", "") == "bench":
 		DebrisSystem.capacity_override = int(options.get("max", "3000"))
 	if options.has("level"):

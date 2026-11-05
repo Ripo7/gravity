@@ -79,6 +79,7 @@ func _connect_juice() -> void:
 	if dust:
 		dust.structures = structures
 		structures.dust = dust
+		debris.chips = dust.chip_system
 	var rebar := RebarSystem.new()
 	add_child(rebar)
 	structures.rebar = rebar
