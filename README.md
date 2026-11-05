@@ -93,7 +93,8 @@ cost as little of it as possible:
 | Sound effects (synthesised, regenerate with `python3 tools/make_sounds.py`) | `audio/*.wav`, `scripts/core/sfx.gd` |
 | Music, city ambience, distant sirens, wing claps (synthesised, `python3 tools/make_music.py`) | `audio/*.ogg`, `scripts/core/sfx.gd` |
 | Birds: pigeons on the roofs that flee from destruction, gulls circling (one draw call, no physics) | `scripts/fx/bird_system.gd`, `shaders/bird.gdshader` |
-| Painted facades (one colour per building, carried by every piece), lit windows, the painted skyline | `shaders/block.gdshader`, `scripts/destruction/materials.gd`, `shaders/skyline.gdshader` |
+| The printed city: building styles (Roman, medieval, Renaissance), finishes (ashlar, brick, printed travertine and marble, plaster, tiles, composite) carried by every piece, the honeycomb inside printed stone, lit windows, the skyline | `scripts/destruction/structure.gd`, `scripts/destruction/materials.gd`, `shaders/block.gdshader`, `shaders/skyline.gdshader` |
+| One of every building, to look at: `godot --path . -- --level=res://levels/showroom.tscn` | `levels/showroom.tscn` |
 
 ### Shards: cut once in Blender, reused forever
 

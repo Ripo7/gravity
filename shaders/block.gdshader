@@ -2,7 +2,7 @@ shader_type spatial;
 // Every block and piece of debris, all materials, in one draw call.
 // Per-instance COLOR: r = shade, g = unused,
 // b = random seed, a = violet glow from the power.
-// INSTANCE_CUSTOM.r = paint * 5 + material kind + damage * 0.9 (cracks); .gba = where it was
+// INSTANCE_CUSTOM.r = finish * 5 + material kind + damage * 0.9 (cracks); .gba = where it was
 // hit, in the block's unit space + 1 (0 = never hit): cracks spread from there.
 // Patterns are procedural in the block's own space (scaled to metres), so
 // they stay put on moving debris and need no textures.
@@ -26,22 +26,17 @@ uniform vec3 glass : source_color = vec3(0.16, 0.2, 0.26);
 uniform vec3 glass_sky : source_color = vec3(0.98, 0.8, 0.64);
 // Warm light behind some windows (the city is lived in).
 uniform vec3 window_light : source_color = vec3(1.0, 0.68, 0.38);
-uniform float window_lit_share = 0.3;
-uniform float window_glow = 1.1;
+uniform float window_lit_share = 0.16;
+uniform float window_glow = 0.8;
 
-// Facade paint per building (Materials.PAINTS): ochre, terracotta, rose,
-// sage, cream, teal, mustard. Index 0 = raw concrete.
-const vec3 PAINTS[8] = {
-	vec3(1.0), vec3(0.95, 0.68, 0.3), vec3(0.85, 0.42, 0.3), vec3(0.95, 0.62, 0.6),
-	vec3(0.55, 0.7, 0.5), vec3(0.98, 0.9, 0.7), vec3(0.4, 0.62, 0.72), vec3(0.92, 0.78, 0.38)
-};
 
 varying vec3 local_pos;   // metres, centred on the block
 varying vec3 half_size;   // metres
 varying vec3 local_normal;
 varying float shade;
 varying float material_id;
-varying float paint;
+varying float finish;
+varying vec3 world_p;
 varying float seed;
 varying float tint;
 varying float damage;
@@ -91,13 +86,120 @@ vec3 chunk(vec3 v, float s) {
 	return clamp(o, vec3(-0.5), vec3(0.5));
 }
 
+// Distance-faded line: 1 on a line of width w at the integer crossings of
+// x, fading out when the lines get finer than a pixel (no shimmer).
+float grid_line(float x, float w) {
+	float fw = fwidth(x);
+	float d = abs(fract(x + 0.5) - 0.5);
+	float l = 1.0 - smoothstep(w - fw, w + fw, d);
+	return l * clamp(1.0 - fw * 3.0, 0.0, 1.0);
+}
+
+// Hexagonal infill pattern: 1 on the cell walls, 0 inside the cells.
+float hex_wall(vec2 p) {
+	vec2 r = vec2(1.0, 1.7320508);
+	vec2 h = r * 0.5;
+	vec2 a = mod(p, r) - h;
+	vec2 b = mod(p - h, r) - h;
+	vec2 g = dot(a, a) < dot(b, b) ? a : b;
+	vec2 gg = abs(g);
+	float d = max(dot(gg, normalize(vec2(1.0, 1.7320508))), gg.x);
+	return smoothstep(0.38, 0.45, d);
+}
+
+// Courses of blocks: x = along the wall, y = up. Returns the joint mask
+// (1 in the mortar) and writes a per-block id.
+float courses(vec2 uv, vec2 size, float stagger, float joint, out vec2 id) {
+	float row = floor(uv.y / size.y);
+	float shift = stagger > 0.0 ? fract(row * 0.5) * 2.0 * stagger : hash(vec3(row, 3.1, 7.7)) * size.x;
+	float col = floor((uv.x + shift) / size.x);
+	id = vec2(col, row);
+	float jx = grid_line((uv.x + shift) / size.x, joint / size.x);
+	float jy = grid_line(uv.y / size.y, joint / size.y);
+	return max(jx, jy);
+}
+
+void apply_finish(int f, vec2 uv, vec3 p, inout vec3 albedo, inout float rough, inout float metallic) {
+	vec2 id;
+	if (f == 1) {
+		// Medieval ashlar: rough courses of uneven stones, dark mortar.
+		float j = courses(uv, vec2(0.78, 0.42), 0.0, 0.022, id);
+		float tone = 0.82 + 0.3 * hash(vec3(id, 1.3));
+		vec3 stone = mix(vec3(0.66, 0.6, 0.5), vec3(0.58, 0.55, 0.5), hash(vec3(id, 9.1)));
+		albedo = mix(stone * tone * (0.85 + 0.25 * fbm(p * 2.5)), vec3(0.36, 0.33, 0.3), j);
+		rough = 0.95;
+	} else if (f == 2) {
+		// Brick in running bond, light mortar.
+		float j = courses(uv, vec2(0.23, 0.075), 0.5, 0.011, id);
+		vec3 brick = vec3(0.6, 0.3, 0.21) * (0.8 + 0.35 * hash(vec3(id, 2.7)));
+		float far = clamp(fwidth(uv.y) * 25.0, 0.0, 1.0);
+		albedo = mix(mix(brick, vec3(0.76, 0.71, 0.64), j), vec3(0.62, 0.38, 0.29), far);
+		rough = 0.9;
+	} else if (f == 3) {
+		// Printed travertine: perfectly regular strata, a few long pores.
+		float strata = grid_line(uv.y / 0.06, 0.08);
+		float band = fbm(vec3(p.x * 0.3, p.y * 2.0, p.z * 0.3));
+		float pores = step(0.8, noise(vec3(p.x * 4.0, p.y * 28.0, p.z * 4.0))) * 0.18;
+		albedo = vec3(0.88, 0.8, 0.66) * (0.9 + 0.14 * band) * (1.0 - strata * 0.1 - pores);
+		rough = 0.8;
+	} else if (f == 4) {
+		// Printed marble: white with soft grey veins, satin.
+		float w = fbm(p * 0.9) * 5.0;
+		float vein = 1.0 - smoothstep(0.0, 0.06, abs(sin(p.x * 1.3 + p.y * 0.7 + w)));
+		float strata = grid_line(uv.y / 0.06, 0.06);
+		albedo = vec3(0.93, 0.91, 0.87) * (1.0 - vein * 0.22 - strata * 0.05);
+		rough = 0.35;
+	} else if (f >= 5 && f <= 8) {
+		// Render over brick: a plaster colour, mottled, worn through in
+		// patches near the ground and corners.
+		vec3 col = f == 5 ? vec3(0.88, 0.66, 0.38) : (f == 6 ? vec3(0.86, 0.6, 0.52) : (f == 7 ? vec3(0.74, 0.43, 0.29) : vec3(0.93, 0.86, 0.7)));
+		float mottle = fbm(p * 0.7);
+		vec3 plaster = col * (0.86 + 0.2 * mottle);
+		float worn = smoothstep(0.66, 0.72, fbm(p * 0.9 + 11.0));
+		float j = courses(uv, vec2(0.23, 0.075), 0.5, 0.011, id);
+		vec3 brick = mix(vec3(0.58, 0.3, 0.21) * (0.8 + 0.3 * hash(vec3(id, 5.0))), vec3(0.7, 0.66, 0.6), j);
+		albedo = mix(plaster, brick, worn);
+		rough = 0.88;
+	} else if (f == 9) {
+		// Terracotta tiles: rounded rows, each tile its own shade.
+		float row = floor(uv.y / 0.2);
+		float u = uv.x / 0.22 + fract(row * 0.5);
+		float curve = 0.75 + 0.25 * sin(fract(u) * 3.14159);
+		float lip = grid_line(uv.y / 0.2, 0.06);
+		vec3 tile = vec3(0.74, 0.38, 0.23) * (0.8 + 0.35 * hash(vec3(floor(u), row, 4.0)));
+		albedo = tile * curve * (1.0 - lip * 0.35);
+		rough = 0.85;
+	} else if (f == 10) {
+		// Printed composite: charcoal with a fine woven sheen.
+		float weave = 0.5 + 0.5 * sin((uv.x + uv.y) * 90.0) * sin((uv.x - uv.y) * 90.0);
+		albedo = vec3(0.12, 0.12, 0.13) * (0.9 + 0.2 * weave);
+		rough = 0.45;
+		metallic = 0.25;
+	} else if (f == 11) {
+		// Painted shutters: green louvres, paint flaking to the wood.
+		float louvre = grid_line(uv.y / 0.07, 0.12);
+		vec3 paintc = vec3(0.24, 0.4, 0.31) * (0.9 + 0.15 * fbm(p * 0.6));
+		float flake = smoothstep(0.68, 0.74, fbm(p * 1.6 + 2.0));
+		albedo = mix(paintc, albedo, flake) * (1.0 - louvre * 0.3);
+		rough = 0.75;
+		metallic = 0.0;
+	} else if (f == 12) {
+		// Copper gone green, darker where rain runs down, bronze showing.
+		float streak = noise(vec3(p.x * 6.0, p.y * 0.4, p.z * 6.0));
+		vec3 green = vec3(0.36, 0.6, 0.52) * (0.85 + 0.2 * fbm(p * 1.2));
+		albedo = mix(green, vec3(0.42, 0.3, 0.18), smoothstep(0.7, 0.85, streak) * 0.6);
+		rough = 0.7;
+		metallic = 0.2;
+	}
+}
+
 void vertex() {
 	vec3 scale = vec3(length(MODEL_MATRIX[0].xyz), length(MODEL_MATRIX[1].xyz), length(MODEL_MATRIX[2].xyz));
 	// Material in the integer part of the first custom float, damage in
 	// its fraction (see Materials.custom).
 	float packed = floor(INSTANCE_CUSTOM.r + 0.001);
 	material_id = mod(packed, 5.0);
-	paint = floor(packed / 5.0 + 0.001);
+	finish = floor(packed / 5.0 + 0.001);
 	seed = COLOR.b;
 	outer = 1.0;
 	if (chunky) {
@@ -129,6 +231,7 @@ void vertex() {
 	vec3 h = INSTANCE_CUSTOM.gba;
 	hit_at = (!chunky && (h.x + h.y + h.z) > 0.0) ? (h - 1.0) * scale : vec3(99.0);
 	world_y = (MODEL_MATRIX * vec4(VERTEX, 1.0)).y;
+	world_p = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 }
 
 vec2 hash22(vec2 p) {
@@ -242,31 +345,38 @@ void fragment() {
 		metallic = 0.65;
 	}
 
-	// Painted buildings: wood and metal panels carry the building's colour
-	// (grain and brushing still show through), the concrete frame only a
-	// faded wash. Old paint fades in patches and peels to the bare material.
-	if (paint > 0.5 && material_id < 2.5) {
-		vec3 coat = PAINTS[int(paint + 0.5)] * (0.9 + 0.14 * fbm(p * 0.45));
-		if (material_id > 0.5 && material_id < 1.5) {
-			// Painted timber: horizontal boards with shadowed joints.
-			float board = fract(local_pos.y / 0.22 + seed);
-			coat *= 1.0 - (1.0 - smoothstep(0.0, 0.08, board)) * 0.3 - smoothstep(0.85, 1.0, board) * 0.08;
-		}
-		float peel = smoothstep(0.64, 0.72, fbm(p * 1.3 + 4.0));
-		float amount = material_id < 0.5 ? 0.3 : 0.92;
-		albedo = mix(albedo, coat, amount * (1.0 - peel * 0.85));
-		rough = max(rough, 0.6);
-		metallic *= 0.3;
+	// Finishes (Materials.Finish): what the printers copied. Static blocks
+	// use world space so courses and joints run on across blocks; debris
+	// uses its own space so the pattern stays on the piece.
+	int fin = int(finish + 0.5);
+	vec3 q = chunky ? local_pos + seed * 7.0 : world_p;
+	vec2 fuv = face.y > 0.5 ? q.xz : vec2(face.x > 0.5 ? q.z : q.x, q.y);
+	if (fin > 0) {
+		apply_finish(fin, fuv, p, albedo, rough, metallic);
 	}
 
 	// Fresh fracture faces: the inside of the material, never weathered.
 	if (chunky && outer < 0.99) {
 		float inner = 1.0 - smoothstep(0.2, 0.8, outer);
 		vec3 fresh = albedo;
-		if (material_id < 0.5) {
-			// Concrete: lighter cement with dark aggregate and pores.
+		int fin_in = int(finish + 0.5);
+		if (fin_in == 3 || fin_in == 4 || fin_in == 10) {
+			// Printed stone is not solid: a honeycomb infill of stone walls
+			// around dark composite cells, the future hiding inside.
+			vec2 uv = (face.x > 0.5 ? local_pos.yz : (face.y > 0.5 ? local_pos.xz : local_pos.xy)) * 9.0;
+			float wall = hex_wall(uv);
+			vec3 stone = fin_in == 4 ? vec3(0.9, 0.88, 0.84) : vec3(0.84, 0.76, 0.62);
+			fresh = mix(vec3(0.07, 0.07, 0.08), stone, wall);
+			rough = mix(0.5, 0.95, wall);
+		} else if (fin_in == 2 || (fin_in >= 5 && fin_in <= 8)) {
+			// Brick (also under the plaster): raw red clay.
+			fresh = vec3(0.62, 0.3, 0.2) * (0.85 + 0.25 * noise(p * 12.0));
+			rough = 0.95;
+		} else if (material_id < 0.5) {
+			// Concrete and stone: lighter, with dark grit and pores.
 			float grit = step(0.72, noise(p * 22.0)) * 0.25 + step(0.88, noise(p * 47.0)) * 0.2;
-			fresh = concrete * 1.08 * (1.0 - grit);
+			vec3 inner_col = fin_in == 1 ? vec3(0.74, 0.68, 0.58) : concrete * 1.08;
+			fresh = inner_col * (1.0 - grit);
 			rough = 0.98;
 		} else if (material_id < 1.5) {
 			// Wood: pale raw fibres.

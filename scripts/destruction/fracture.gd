@@ -14,6 +14,8 @@ const MIN_EDGE := 0.14
 
 ## Multiplies piece counts (lower on phones). Part of the cache key.
 static var quality := 1.0
+## Most pieces one block breaks into (phones keep big walls chunkier).
+static var max_pieces := 10
 
 static var _cache := {}
 
@@ -52,7 +54,7 @@ static func pattern(size: Vector3, pieces: int, seed_value: int = 0, grain := -1
 ## `mult` comes from the material (metal breaks into few big pieces).
 static func piece_count_for(size: Vector3, mult := 1.0) -> int:
 	var volume := size.x * size.y * size.z
-	return clampi(int(round(volume * 10.0 * quality * mult)), 2, 10)
+	return clampi(int(round(volume * 10.0 * quality * mult)), 2, max_pieces)
 
 
 ## Wood grain follows the longest edge.
