@@ -35,6 +35,7 @@ const FACADES: Array[Color] = [
 
 var _mesh: MultiMeshInstance3D
 var _walls: StaticBody3D
+var _city: Megacity
 
 
 func _ready() -> void:
@@ -88,6 +89,13 @@ func _rebuild() -> void:
 	add_child(_mesh)
 	if Engine.is_editor_hint():
 		return
+	# In the game the megacity's lower city stands here instead.
+	_mesh.visible = false
+	if _city == null:
+		_city = Megacity.new()
+		_city.name = "Megacity"
+		_city.inner = inner
+		add_child(_city)
 	_walls = StaticBody3D.new()
 	for side in 4:
 		var shape := CollisionShape3D.new()

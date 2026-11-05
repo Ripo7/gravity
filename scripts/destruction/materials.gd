@@ -22,11 +22,13 @@ enum Finish {
 	COMPOSITE,  ## dark printed structure (what the stone hides)
 	SHUTTER,  ## painted wooden shutters (WOOD)
 	VERDIGRIS,  ## weathered copper (METAL)
+	BRONZE,  ## polished bronze bands and trims (the sacred metal)
+	BLACKSTEEL,  ## dark blued steel, rivets
 }
 
 ## Material slots in the custom-data integer (Kind fits under it).
 const KIND_SLOTS := 5
-const FINISH_COUNT := 13
+const FINISH_COUNT := 15
 ## Finishes that were printed: their fracture faces show the honeycomb
 ## infill inside.
 const PRINTED := [Finish.TRAVERTINE, Finish.MARBLE, Finish.COMPOSITE]

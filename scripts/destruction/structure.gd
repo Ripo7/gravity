@@ -140,7 +140,7 @@ func _finish_for(seg: Dictionary) -> int:
 	var ground := y < (block.y if kind == Kind.APARTMENT else 3.0)
 	match style:
 		Style.ROMAN:
-			return Materials.Finish.MARBLE if role in ["column", "parapet"] else Materials.Finish.TRAVERTINE
+			return _imperial_finish(role)
 		Style.MEDIEVAL:
 			return _medieval_finish(role, ground)
 		Style.RENAISSANCE:
@@ -148,7 +148,26 @@ func _finish_for(seg: Dictionary) -> int:
 	return Materials.Finish.RAW
 
 
+## Imperial: marble piers and cornices, travertine walls, bronze bands,
+## blackened steel on the ground floor (the temple is also a factory).
+func _imperial_finish(role: String) -> int:
+	match role:
+		"column":
+			return Materials.Finish.MARBLE
+		"parapet":
+			return Materials.Finish.BRONZE if seed_value % 3 != 0 else Materials.Finish.MARBLE
+		"slab":
+			return Materials.Finish.COMPOSITE
+		"panel":
+			return Materials.Finish.BLACKSTEEL
+	return Materials.Finish.TRAVERTINE
+
+
 func _accent_finish(kind_of_block: int) -> int:
+	if style == Style.ROMAN:
+		return (
+			Materials.Finish.BLACKSTEEL if kind_of_block == Materials.Kind.METAL else Materials.Finish.BRONZE
+		)
 	if style != Style.MODERN and kind_of_block == Materials.Kind.METAL:
 		return Materials.Finish.VERDIGRIS
 	if style == Style.RENAISSANCE and kind_of_block == Materials.Kind.WOOD:
