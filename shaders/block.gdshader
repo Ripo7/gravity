@@ -27,6 +27,15 @@ uniform bool use_textures = false;
 uniform sampler2DArray finish_albedo : filter_linear_mipmap_anisotropic, repeat_enable;  // linear
 uniform sampler2DArray finish_detail : filter_linear_mipmap, repeat_enable;
 uniform float relief = 0.8;  // strength of the baked normals
+// Carved depth: parallax occlusion over the baked height (joints, bosses,
+// pores look cut in and shift with the view). 0 steps = one-read offset
+// (phones); set from the quality tier.
+uniform int parallax_steps = 8;
+// Chamfer on block edges, drawn by the bevelled box mesh (StructureMesh):
+// the vertices flagged in UV2.x are pulled in by the block's own chamfer
+// (COLOR.a on standing blocks, metres; 0 on wall panels, whose edges meet
+// their neighbours in one plane), at most this much.
+uniform float bevel = 0.03;
 
 uniform vec3 concrete : source_color = vec3(0.78, 0.76, 0.72);
 uniform vec3 wood : source_color = vec3(0.84, 0.75, 0.62);
@@ -151,6 +160,51 @@ vec2 finish_tile(int layer) {
 	if (layer == 3) { return vec2(2.0); }
 	if (layer == 4) { return vec2(3.0); }
 	return vec2(2.2, 2.0);
+}
+
+// How deep (metres) a finish's lowest point lies below its face.
+float finish_depth(int layer) {
+	if (layer == 0) { return 0.035; }  // rusticated stone: deep joints
+	if (layer == 1) { return 0.012; }  // brick: raked mortar
+	if (layer == 5) { return 0.03; }  // roof tiles
+	if (layer == 3) { return 0.008; }  // travertine pores
+	return 0.004;
+}
+
+// Parallax occlusion: walks the view ray down into the height field (1 =
+// face, 0 = bottom of a joint) and returns where it hits, in metres.
+vec2 carve(vec2 uv, int layer, vec3 view_t, int steps) {
+	vec2 tile = finish_tile(layer);
+	float depth = finish_depth(layer);
+	vec2 shift = view_t.xy / max(view_t.z, 0.25) * depth;
+	vec3 base = vec3(uv / tile, float(layer));
+	vec2 gx = dFdx(base.xy);
+	vec2 gy = dFdy(base.xy);
+	if (steps <= 0) {
+		float h = textureGrad(finish_detail, base, gx, gy).a;
+		return uv - shift * (1.0 - h) * 0.6;
+	}
+	float step_size = 1.0 / float(steps);
+	float ray = 0.0;
+	vec2 at = uv;
+	float floor_h = 1.0 - textureGrad(finish_detail, base, gx, gy).a;
+	float prev_ray = 0.0;
+	float prev_floor = floor_h;
+	for (int i = 0; i < 16; i++) {
+		if (i >= steps || ray >= floor_h) {
+			break;
+		}
+		prev_ray = ray;
+		prev_floor = floor_h;
+		ray += step_size;
+		at -= shift * step_size;
+		floor_h = 1.0 - textureGrad(finish_detail, vec3(at / tile, float(layer)), gx, gy).a;
+	}
+	// Between the last two steps, where the ray crossed the floor.
+	float a = floor_h - ray;
+	float b = prev_floor - prev_ray;
+	float t = clamp(b / max(b - a, 1e-4), 0.0, 1.0);
+	return mix(at + shift * step_size, at, t);
 }
 
 vec3 plaster_tint(int f) {
@@ -285,13 +339,24 @@ void vertex() {
 			VERTEX = chunk(VERTEX, seed);
 		}
 	}
+	// The bevelled box: vertices flagged in UV2.x sit `bevel` metres in from
+	// the edge on the flagged axes (bits 1, 2, 4 = x, y, z), whatever the
+	// block's size.
+	int inset = int(UV2.x + 0.5);
+	float chamfer = chunky ? 0.0 : min(COLOR.a, bevel);
+	if (inset > 0 && chamfer > 0.0) {
+		vec3 half_m = scale * 0.5;
+		float c = min(chamfer, 0.3 * min(half_m.x, min(half_m.y, half_m.z)));
+		vec3 m = vec3(float(inset & 1), float((inset >> 1) & 1), float((inset >> 2) & 1));
+		VERTEX -= sign(VERTEX) * m * c / max(scale, vec3(1e-4));
+	}
 	local_pos = (VERTEX + shard_offset) * scale;
 	half_size = scale * 0.5;
 	local_normal = NORMAL;
 	is_round = COLOR.g > 0.5 ? 1.0 : 0.0;
 	fluted = COLOR.g > 0.9 ? 1.0 : 0.0;
 	shade = COLOR.r;
-	tint = COLOR.a;
+	tint = chunky ? COLOR.a : 0.0;  // standing blocks: COLOR.a is their chamfer
 	damage = clamp(fract(INSTANCE_CUSTOM.r + 0.001) / 0.9, 0.0, 1.0);
 	vec3 h = INSTANCE_CUSTOM.gba;
 	hit_at = (!chunky && (h.x + h.y + h.z) > 0.0) ? (h - 1.0) * scale : vec3(99.0);
@@ -438,6 +503,15 @@ void fragment() {
 	}
 	int layer = use_textures && fin > 0 ? finish_layer(fin) : -1;
 	vec4 detail = vec4(0.5, 0.5, rough, 1.0);
+	bool flat_face = solid && !(is_round > 0.5 && face.y < 0.5) && outer > 0.99;
+	if (layer >= 0 && flat_face) {
+		// Carve: the joints sink in, the bosses stand out, seen from the side.
+		vec3 v = normalize((INV_VIEW_MATRIX * vec4(VIEW, 0.0)).xyz);
+		vec3 wn0 = static_cell > 0.5 ? up_normal : normalize((INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz);
+		vec3 tu = face.x > 0.5 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
+		vec3 tv = face.y > 0.5 ? vec3(0.0, 0.0, 1.0) : vec3(0.0, 1.0, 0.0);
+		fuv = carve(fuv, layer, vec3(dot(v, tu), dot(v, tv), abs(dot(v, wn0))), parallax_steps);
+	}
 	if (layer >= 0) {
 		// Baked in Blender: colour, relief, roughness, joints.
 		vec3 tuv = vec3(fuv / finish_tile(layer), float(layer));
@@ -462,14 +536,14 @@ void fragment() {
 
 	// Baked relief on standing walls: the normal tilts by the texture's,
 	// along the face's own axes (the same ones the texture is laid on).
-	if (layer >= 0 && solid && !(is_round > 0.5 && face.y < 0.5) && outer > 0.99) {
+	if (layer >= 0 && flat_face) {
 		vec3 wn = static_cell > 0.5 ? up_normal : normalize((INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz);
 		vec3 tan_u = face.x > 0.5 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
 		vec3 tan_v = face.y > 0.5 ? vec3(0.0, 0.0, 1.0) : vec3(0.0, 1.0, 0.0);
 		vec2 tilt = (detail.rg * 2.0 - 1.0) * relief;
 		vec3 bent = normalize(wn + tan_u * tilt.x + tan_v * tilt.y);
 		NORMAL = normalize((VIEW_MATRIX * vec4(bent, 0.0)).xyz);
-		albedo *= mix(0.72, 1.0, detail.a);  // joints and pits hold shadow
+		albedo *= mix(0.8, 1.0, detail.a);  // joints and pits hold shadow
 	}
 
 	// Fresh fracture faces: the inside of the material, never weathered.
@@ -546,7 +620,7 @@ void fragment() {
 		edge_dist = d.y;  // only the top and bottom rims
 	}
 	float edge = solid && static_cell < 0.5 ? 1.0 - smoothstep(0.0, 0.05, edge_dist) : 0.0;
-	albedo *= 1.0 - edge * 0.22;
+	albedo *= 1.0 - edge * 0.1;  // the bevelled mesh does most of it now
 
 	// Cracks: they start where the block was hit and spread out across it
 	// as damage grows; the surface around the hit is chipped and darker.

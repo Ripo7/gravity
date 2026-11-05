@@ -1,5 +1,7 @@
 """Models the palace's carved pieces in Blender: column capitals and bases,
-the cornice brackets, the bands of the campanile's dome and the bell.
+the cornice brackets, the bands of the campanile's dome and the bell, and
+the mouldings run along the facades (string courses, window sills and
+caps, the great cornice's corona and crown).
 
 Run with Blender's Python module (pip install bpy), from the project root:
 
@@ -171,7 +173,85 @@ def bell():
     return bm
 
 
-SHAPES = {"capital": capital, "base": base, "console": console, "bell": bell}
+def extrude(outline, curved):
+    """A moulding: `outline` [(depth z, height y), ...] in the unit square
+    (z = -0.5 against the wall, +0.5 at the front) pushed along x; segments
+    whose index is in `curved` are shaded smooth."""
+    bm = bmesh.new()
+    left = [bm.verts.new((-0.5, y, z)) for z, y in outline]
+    right = [bm.verts.new((0.5, y, z)) for z, y in outline]
+    n = len(outline)
+    for k in range(n):
+        f = bm.faces.new([left[k], left[(k + 1) % n], right[(k + 1) % n], right[k]])
+        f.smooth = k in curved
+    for side in (left, right):
+        bm.faces.new(side).smooth = False
+    return bm
+
+
+def curve(z0, y0, z1, y1, bulge, steps=6, ogee=False):
+    """Points from (z0, y0) to (z1, y1) (end excluded), bowed out by
+    `bulge` toward the front; an ogee turns from hollow to round."""
+    out = []
+    for k in range(steps):
+        t = k / steps
+        b = bulge * (math.sin(2 * math.pi * t) * -0.5 if ogee else math.sin(math.pi * t))
+        out.append((z0 + (z1 - z0) * t + b, y0 + (y1 - y0) * t))
+    return out
+
+
+def moulding(outline_parts):
+    """Builds a moulding from parts: (points, curved?) in order."""
+    pts, curved = [], set()
+    for points, is_curved in outline_parts:
+        for p in points:
+            if is_curved:
+                curved.add(len(pts))
+            pts.append(p)
+    return extrude(pts, curved)
+
+
+def string_course():
+    """Band between storeys: a fillet, a fat torus, a fillet."""
+    return moulding([([(-0.5, -0.5), (0.05, -0.5), (0.05, -0.38)], False),
+                     (curve(0.05, -0.38, 0.05, 0.22, 0.42), True),
+                     ([(0.05, 0.22), (0.3, 0.22), (0.3, 0.5), (-0.5, 0.5)], False)])
+
+
+def sill():
+    """Window sill: a top that sheds water, a drip under the nose, a small
+    moulding under it."""
+    return moulding([([(-0.5, -0.5), (0.05, -0.5)], False),
+                     (curve(0.05, -0.5, 0.35, -0.2, 0.08), True),
+                     ([(0.35, -0.2), (0.32, -0.28), (0.5, -0.28), (0.5, 0.2), (-0.5, 0.5)], False)])
+
+
+def window_cap():
+    """Small cornice over a window: bed moulding, corona, crown."""
+    return moulding([([(-0.5, -0.5), (-0.15, -0.5)], False),
+                     (curve(-0.15, -0.5, 0.25, -0.1, 0.12), True),
+                     ([(0.25, -0.1), (0.38, -0.1), (0.38, 0.12)], False),
+                     (curve(0.38, 0.12, 0.5, 0.5, 0.1, 6, True), True),
+                     ([(0.5, 0.5), (-0.5, 0.5)], False)])
+
+
+def corona():
+    """Body of the great cornice: a deep soffit with a drip groove, a
+    plain face with a fillet on top (the inner third sits in the wall)."""
+    return moulding([([(-0.5, -0.5), (0.3, -0.5), (0.3, -0.42), (0.36, -0.42), (0.36, -0.5),
+                       (0.5, -0.5), (0.5, 0.3), (0.46, 0.3), (0.46, 0.5), (-0.5, 0.5)], False)])
+
+
+def crown():
+    """Crown of the great cornice: a cyma recta (hollow below, round
+    above) leaning out over the corona."""
+    return moulding([([(-0.5, -0.5), (0.24, -0.5)], False),
+                     (curve(0.24, -0.5, 0.5, 0.3, 0.12, 8, True), True),
+                     ([(0.5, 0.3), (0.5, 0.5), (-0.5, 0.5)], False)])
+
+
+SHAPES = {"capital": capital, "base": base, "console": console, "bell": bell, "string": string_course,
+          "sill": sill, "cap": window_cap, "corona": corona, "crown": crown}
 for _k in range(len(DOME)):
     SHAPES["dome_%d" % _k] = (lambda k: lambda: dome_band(k))(_k)
 
