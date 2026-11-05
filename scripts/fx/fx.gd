@@ -3,8 +3,6 @@ extends RefCounted
 ## Shared builders for particles and materials. CPU particles are used on
 ## purpose: identical on desktop and WebGL2 and cheap at these counts.
 
-const LENS_SHADER := preload("res://shaders/lens.gdshader")
-
 static var _spark_mesh: Mesh
 static var _spark_material: StandardMaterial3D
 
@@ -22,24 +20,6 @@ static func spark_mesh() -> Mesh:
 		quad.material = _spark_material
 		_spark_mesh = quad
 	return _spark_mesh
-
-
-static func make_trail(radius: float) -> CPUParticles3D:
-	var p := CPUParticles3D.new()
-	p.mesh = spark_mesh()
-	p.amount = 24
-	p.lifetime = 0.35
-	p.local_coords = false
-	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	p.emission_sphere_radius = radius
-	p.gravity = Vector3.ZERO
-	p.initial_velocity_min = 0.2
-	p.initial_velocity_max = 0.8
-	p.scale_amount_min = radius * 6.0
-	p.scale_amount_max = radius * 12.0
-	p.color = Palette.VIOLET
-	p.color_ramp = _fade_ramp()
-	return p
 
 
 ## Sparks spiralling into the core during the pull.
@@ -64,42 +44,6 @@ static func make_inflow(radius: float, amount: int) -> CPUParticles3D:
 	p.color = Palette.VIOLET_HOT
 	p.color_ramp = _fade_ramp()
 	return p
-
-
-## One-shot burst of sparks flying outward.
-static func make_outflow(speed: float, amount: int) -> CPUParticles3D:
-	var p := CPUParticles3D.new()
-	p.mesh = spark_mesh()
-	p.amount = amount
-	p.lifetime = 0.9
-	p.one_shot = true
-	p.explosiveness = 1.0
-	p.local_coords = false
-	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	p.emission_sphere_radius = 0.3
-	p.direction = Vector3.UP
-	p.spread = 180.0
-	p.gravity = Vector3(0, -6, 0)
-	p.initial_velocity_min = speed * 0.4
-	p.initial_velocity_max = speed * 1.1
-	p.damping_min = speed * 0.6
-	p.damping_max = speed * 1.0
-	p.scale_amount_min = 1.0
-	p.scale_amount_max = 3.0
-	p.color = Palette.VIOLET_HOT
-	p.color_ramp = _fade_ramp()
-	return p
-
-
-static func lens_material(strength: float, core: float, rim: float) -> ShaderMaterial:
-	var m := ShaderMaterial.new()
-	m.shader = LENS_SHADER
-	m.set_shader_parameter("strength", strength)
-	m.set_shader_parameter("core", core)
-	m.set_shader_parameter("rim", rim)
-	m.set_shader_parameter("violet", Palette.VIOLET)
-	m.set_shader_parameter("deep", Palette.VIOLET_DEEP)
-	return m
 
 
 static func sphere(radius: float, material: Material, segments := 32) -> MeshInstance3D:

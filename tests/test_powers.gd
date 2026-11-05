@@ -71,6 +71,7 @@ func test_vortex_spins_pieces_without_exploding() -> void:
 
 
 func test_vortex_ends_by_flinging_pieces_outward() -> void:
+	seed(12345)  # same layout every run
 	await _load()
 	var at := INSIDE + Vector3(0, 3.5, 0)
 	var ids: Array[int] = []
@@ -120,7 +121,7 @@ func test_vortex_shreds_the_band_and_hurts() -> void:
 func test_vortex_breaks_blocks_inside() -> void:
 	await _load()
 	var standing := world.structures.alive_count
-	world.cast_vortex(Vector3(23, 3, 8.5))  # the corner of a block on the forum
+	world.cast_vortex(Vector3(15, 3, 2.5))  # the palace's right front corner
 	await get_tree().create_timer(PowerDefs.VORTEX_SPINUP + 2.0).timeout
 	check(
 		world.structures.alive_count < standing - 20,
@@ -207,6 +208,81 @@ func test_a_flying_brick_nearly_kills_you() -> void:
 	if not p.dead:
 		await get_tree().create_timer(Player.REGEN_DELAY + 1.0).timeout
 		check(p.health > low, "health comes back")
+	await _unload()
+
+
+func test_a_fast_brick_on_the_head_always_hurts() -> void:
+	await _load()
+	var p := world.player
+	p.global_position = FAR
+	await frames(5)
+	var feet := p.global_position
+	# Fast hits used to slip through when the step that stopped the brick
+	# on your head came before the check. Several phases of the fall.
+	var missed := 0
+	for v: float in [15.0, 30.0]:
+		for k in 4:
+			p.health = Player.MAX_HEALTH
+			p.global_position = feet
+			await frames(2)
+			var y := 1.8 + 0.25 + 0.5 + (v / 60.0) * k / 4.0
+			var i := world.debris.spawn(
+				Transform3D(Basis(), feet + Vector3(0, y, 0)), Vector3(1.0, 0.5, 0.5), Vector3(0, -v, 0)
+			)
+			await get_tree().create_timer(0.5).timeout
+			if p.health >= Player.MAX_HEALTH - 1.0:
+				missed += 1
+			p.dead = false
+			world.debris.despawn(i)
+			await get_tree().create_timer(1.1).timeout
+	check_eq(missed, 0, "every drop hurts")
+	await _unload()
+
+
+func test_a_floor_falling_away_under_you_is_not_a_hit() -> void:
+	await _load()
+	var s := world.structures
+	var st := Structure.new()
+	st.kind = Structure.Kind.BUILDING
+	st.counts = Vector3i(1, 2, 1)
+	st.block = Vector3(5.0, 2.0, 0.4)
+	var base := FAR + Vector3(0, -0.05, -10)
+	var first := s.segment_count()
+	s.add_structure(Transform3D(Basis(), base), st.build_segments())
+	st.free()
+	var p := world.player
+	p.global_position = base + Vector3(0, 2.05, 0)  # on the first floor
+	await frames(10)
+	for i in range(first, s.segment_count()):
+		if s.is_alive(i) and s.transform_of(i).origin.y < 1.7:
+			s.break_segment(i)
+	await get_tree().create_timer(0.35).timeout
+	check(p.health > 50.0, "riding the floor down is no hit (%.0f left)" % p.health)
+	await _unload()
+
+
+func test_something_dropping_on_the_shield_wears_it() -> void:
+	await _load()
+	var p := world.player
+	p.global_position = FAR
+	p.rotation.y = 0.0
+	await frames(5)
+	check(world.player.power.cast_now(PowerDefs.Power.SHIELD), "shield up")
+	await get_tree().create_timer(0.5).timeout
+	var shield := get_tree().get_first_node_in_group("ice_shield") as IceShield
+	check(shield != null, "shield exists")
+	if shield == null:
+		await _unload()
+		return
+	var before := shield.hp
+	# A heavy slab falls straight onto the front of the shell from above.
+	var top := shield.global_transform * shield.shell_point(0.0, deg_to_rad(55.0), true)
+	world.debris.spawn(
+		Transform3D(Basis(), top + Vector3(0, 4.0, 0)), Vector3(1.2, 0.6, 1.2), Vector3(0, -12, 0)
+	)
+	await get_tree().create_timer(0.6).timeout
+	if is_instance_valid(shield):
+		check(shield.hp < before, "it took the hit (%.0f -> %.0f)" % [before, shield.hp])
 	await _unload()
 
 

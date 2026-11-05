@@ -1,5 +1,6 @@
-// Loads a web export, clicks into the game and holds movement keys,
-// printing the player's position so CI can prove keyboard input works.
+// Loads a web export, clicks into the game and holds movement keys, then
+// checks that the player moved (keyboard input works) and that tapping Play
+// on the main menu starts the level (touch input works).
 // Usage: node tools/web_input_probe.mjs build/web
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
@@ -21,19 +22,26 @@ const server = createServer(async (req, res) => {
 await new Promise((r) => server.listen(8061, r));
 const browser = await chromium.launch({ args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"] });
 const page = await browser.newPage({ viewport: { width: 960, height: 540 } });
-const lines = [];
+const positions = [];
 page.on("console", (m) => {
   const t = m.text();
-  if (/PROBE|ERROR|error/.test(t)) {
-    lines.push(t);
-    console.log(t);
-  }
+  if (/PROBE|ERROR|error/.test(t)) console.log(t);
+  const pm = t.match(/PROBE pos=([-\d.]+),([-\d.]+),([-\d.]+)/);
+  if (pm) positions.push([Number(pm[1]), Number(pm[3])]);
 });
+// Software WebGL is slow: the game prints its position every half second of
+// game time, which can take many seconds of wall time.
+async function nextPosition() {
+  const n = positions.length;
+  for (let i = 0; i < 120 && positions.length === n; i++) await page.waitForTimeout(500);
+  return positions.at(-1);
+}
 await page.goto("http://localhost:8061/index.html?mode=probe");
 await page.waitForFunction(() => !document.getElementById("status"), null, { timeout: 120000 });
 await page.waitForTimeout(3000);
 await page.mouse.click(480, 270);
 await page.waitForTimeout(1500);
+const before = await nextPosition();
 for (const key of ["KeyW", "ArrowUp", "KeyD"]) {
   console.log(`HOLD ${key}`);
   await page.keyboard.down(key);
@@ -41,6 +49,10 @@ for (const key of ["KeyW", "ArrowUp", "KeyD"]) {
   await page.keyboard.up(key);
   await page.waitForTimeout(1000);
 }
+const after = await nextPosition();
+const moved = before && after ? Math.hypot(after[0] - before[0], after[1] - before[1]) : 0;
+const keysOk = moved > 0.5;
+console.log(keysOk ? `KEYBOARD_OK moved=${moved.toFixed(2)}` : `KEYBOARD_FAIL moved=${moved.toFixed(2)}`);
 // Free the (software-rendered) CPU for the next pages.
 await page.close();
 
@@ -78,4 +90,4 @@ const ok = await menuTap(true);
 console.log(ok ? "TOUCH_MENU_OK" : `TOUCH_MENU_FAIL (mouse ${mouseOk ? "ok" : "also fails"})`);
 await browser.close();
 server.close();
-if (!ok) process.exit(1);
+if (!ok || !keysOk) process.exit(1);

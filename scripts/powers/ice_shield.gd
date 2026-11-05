@@ -26,6 +26,7 @@ var _t := 0.0
 var _mat: ShaderMaterial
 var _area: Area3D
 var _recent := {}  # body rid -> time of last counted hit
+var _inside := {}  # body rid -> its node (or null) while in the sensor
 var _broken := false
 var _flash := 0.0
 var _solid := false
@@ -51,6 +52,8 @@ func setup(world: GameWorld, base: Transform3D) -> void:
 func _ready() -> void:
 	add_to_group("ice_shield")
 	sync_to_physics = true
+	# Before the debris: hits are judged on how fast things came in.
+	process_physics_priority = -5
 	collision_layer = DebrisSystem.LAYER_STRUCTURES
 	collision_mask = 0
 	_build_mesh()
@@ -66,6 +69,7 @@ func _ready() -> void:
 	_area.add_child(sensor)
 	add_child(_area)
 	_area.body_shape_entered.connect(_on_body_entered)
+	_area.body_shape_exited.connect(_on_body_exited)
 	Sfx.play("ice_rise", _rest.origin, 3.0, 0.75)
 	if _world and _world.dust:
 		_world.dust.puff(_rest.origin + _rest.basis.z * -radius, radius * 0.8, Materials.Kind.CONCRETE, 18)
@@ -173,6 +177,7 @@ func _physics_process(delta: float) -> void:
 		_solid = true
 		for p in _panels:
 			p.disabled = false
+	_check_hits()
 	_mat.set_shader_parameter("damage", 1.0 - hp / max_hp)
 	_flash = maxf(_flash - delta * 4.0, 0.0)
 	_mat.set_shader_parameter("flash", _flash)
@@ -204,28 +209,49 @@ func is_outside(p: Vector3) -> bool:
 
 
 func _on_body_entered(rid: RID, body: Node, _bs: int, _ls: int) -> void:
-	var now := _t
-	if not _solid or now - float(_recent.get(rid, -10.0)) < 0.4:
-		return
-	_recent[rid] = now
-	var motion := Hazards.motion_of(_world, rid, body)
-	if motion.is_empty():
-		return
-	var src: Vector3 = (body as Node3D).global_position if body is Node3D else _debris_position(rid)
-	if src == Vector3.INF or not is_outside(src):
-		return
-	var q := global_transform.affine_inverse() * src
-	var n := global_basis * Vector3(q.x / radius, maxf(q.y, 0.0) / height, q.z / radius).normalized()
-	var v: Vector3 = motion["velocity"]
-	var closing := -v.dot(n)
-	if closing < HIT_MIN_SPEED:
-		return
-	hit(float(motion["mass"]) * closing / 12.0)
+	_inside[rid] = body
 
 
-func _debris_position(rid: RID) -> Vector3:
-	var i := _world.debris.index_of(rid) if _world else -1
-	return _world.debris.position_of(i) if i >= 0 else Vector3.INF
+func _on_body_exited(rid: RID, _body: Node, _bs: int, _ls: int) -> void:
+	_inside.erase(rid)
+
+
+## Every step, what is about to touch the shell from outside and moves at
+## it wears it down: pieces dropping on it from above, falling floors and
+## pieces that were already near it count too, not only what flies in.
+func _check_hits() -> void:
+	if not _solid or _broken or _world == null:
+		return
+	for rid: RID in _inside.keys():
+		if _t - float(_recent.get(rid, -10.0)) < 0.4:
+			continue
+		var body: Object = _inside[rid]
+		var motion := Hazards.motion_of(_world, rid, body)
+		if motion.is_empty():
+			continue
+		var src := _source_point(rid, body)
+		if src == Vector3.INF or not is_outside(src):
+			continue
+		var q := global_transform.affine_inverse() * src
+		var e := Vector3(q.x / radius, maxf(q.y, 0.0) / height, q.z / radius)
+		if e.length() > 1.45:
+			continue  # not at the shell yet
+		var n := global_basis * e.normalized()
+		var v: Vector3 = motion["velocity"]
+		var closing := -v.dot(n)
+		if closing < HIT_MIN_SPEED:
+			continue
+		_recent[rid] = _t
+		hit(float(motion["mass"]) * closing / 12.0)
+
+
+func _source_point(rid: RID, body: Object) -> Vector3:
+	if body is Node3D:
+		return (body as Node3D).global_position
+	var i := _world.debris.index_of(rid)
+	if i >= 0:
+		return _world.debris.position_of(i)
+	return _world.structures.cluster_point(rid, global_position + Vector3.UP * height * 0.5)
 
 
 ## Breaks into black ice shards that stay in the world as debris, thrown
@@ -240,7 +266,8 @@ func shatter() -> void:
 			var size := (col.shape as BoxShape3D).size
 			var xf := global_transform * col.transform
 			var out := xf.basis.z
-			for piece: AABB in Fracture.pattern(size, 6, 2):
+			# Fewer, bigger shards on phones: 32 panels add up fast.
+			for piece: AABB in Fracture.pattern(size, int(Quality.pick(2, 4, 6)), 2, -1, false):
 				var at := xf * piece.get_center()
 				var kick := out * randf_range(2.5, 4.5) + Vector3.UP * 1.0
 				var spin := Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * 4.0

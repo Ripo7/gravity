@@ -7,8 +7,6 @@ const INK := Color(0.12, 0.11, 0.18)
 const INK_SOFT := Color(0.12, 0.11, 0.18, 0.55)
 const PAPER := Color(0.985, 0.985, 0.99, 0.94)
 const VIOLET := Color(0.55, 0.24, 1.0)
-const STAR_ON := Color(1.0, 0.76, 0.2)
-const STAR_OFF := Color(0.12, 0.11, 0.18, 0.18)
 
 static var _theme: Theme
 static var _bold: FontFile
@@ -87,13 +85,3 @@ static func label(text: String, variation := "") -> Label:
 		l.theme_type_variation = variation
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	return l
-
-
-## Three stars drawn as polygons (no texture assets needed).
-static func draw_star(ci: CanvasItem, center: Vector2, r: float, color: Color) -> void:
-	var pts := PackedVector2Array()
-	for k in 10:
-		var a := -PI / 2.0 + k * PI / 5.0
-		var rr := r if k % 2 == 0 else r * 0.45
-		pts.append(center + Vector2(cos(a), sin(a)) * rr)
-	ci.draw_colored_polygon(pts, color)

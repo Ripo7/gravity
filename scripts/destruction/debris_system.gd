@@ -37,6 +37,10 @@ const FLOATS_PER_INSTANCE := 20  # 12 transform + 4 colour + 4 custom
 const TINT_DECAY := 0.6  # violet glow fades per second
 const FADE_TIME := 1.2  ## seconds a retired piece takes to shrink away
 const RETIRE_PER_FRAME := 4
+## When the pool is full, fragments smaller than this (m^3) become gravel
+## instead of pushing a resting piece out of the pool (which also wakes
+## what rested on it).
+const FULL_POOL_GRAVEL := 0.15
 
 ## Set before the scene loads to force a pool size (benchmarks).
 static var capacity_override := 0
@@ -71,6 +75,7 @@ var fading_count := 0
 
 var _bodies: Array[RID] = []
 var _speed := PackedFloat32Array()  ## last frame's speed, for hard landings
+var _last_vel := PackedVector3Array()  ## velocity one physics step ago
 var _breaks_left := 0
 var _shapes: Array[RID] = []
 var _hulls: Array[RID] = []  ## convex hull shape per slot, made on first use
@@ -115,7 +120,7 @@ func _ready() -> void:
 	# Phones call rubble still a little sooner.
 	_quiet_speed = QUIET_SPEED * (1.7 if low else 1.0)
 	_quiet_spin = QUIET_SPIN * (1.7 if low else 1.0)
-	Fracture.max_pieces = int(Quality.pick(3, 6, 10))
+	Fracture.max_pieces = int(Quality.pick(3, 4, 6))
 	lifetime = lifetime_desktop if Quality.tier() == Quality.Tier.HIGH else lifetime_web
 	if hull_min_volume < 0.0:
 		hull_min_volume = tier_hull_min_volume()
@@ -157,6 +162,8 @@ func _build_pool() -> void:
 	_quiet.fill(0)
 	_speed.resize(capacity)
 	_speed.fill(0.0)
+	_last_vel.resize(capacity)
+	_last_vel.fill(Vector3.ZERO)
 	_frozen.resize(capacity)
 	_frozen.fill(0)
 	_shade.resize(capacity)
@@ -321,7 +328,11 @@ func shatter_box(
 		# (and keeps the physics budget where it was).
 		for shard: Dictionary in ShardLibrary.pattern(kind, maxi(count - 1, 2), variant):
 			var centre: Vector3 = block * ((Basis.from_scale(size) * turn) * (shard["center"] as Vector3))
-			if shard["volume"] * vol < shard_min_volume and chips:
+			var piece_vol: float = shard["volume"] * vol
+			if (
+				chips
+				and (piece_vol < shard_min_volume or (_free.is_empty() and piece_vol < FULL_POOL_GRAVEL))
+			):
 				# Too small to be worth a body: gravel.
 				chips.burst(centre, (shard["size"] as Vector3) * size, kind, 3, 2.0 + push, inherit)
 				continue
@@ -340,6 +351,9 @@ func shatter_box(
 			(world.origin - from).normalized() if world.origin.distance_to(from) > 0.01 else Vector3.UP
 		)
 		var spin := Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * 3.0
+		if chips and _free.is_empty() and piece.get_volume() < FULL_POOL_GRAVEL:
+			chips.burst(world.origin, piece.size, kind, 3, 2.0 + push, inherit)
+			continue
 		var j := spawn(world, piece.size * 0.985, away * push + inherit, spin, tint, shade, kind, seed_value)
 		if j >= 0:
 			out.append(j)
@@ -382,6 +396,7 @@ func _place(
 		PhysicsServer3D.body_set_mode(body, PhysicsServer3D.BODY_MODE_RIGID)
 	_quiet[i] = 0
 	_speed[i] = velocity.length()
+	_last_vel[i] = velocity
 	PhysicsServer3D.body_set_param(body, PhysicsServer3D.BODY_PARAM_MASS, mass)
 	PhysicsServer3D.body_set_param(
 		body, PhysicsServer3D.BODY_PARAM_FRICTION, Materials.prop(kind, "friction")
@@ -416,6 +431,10 @@ func despawn(i: int) -> void:
 	PhysicsServer3D.body_set_space(_bodies[i], RID())
 	_active[i] = 0
 	active_count -= 1
+	if _frozen[i]:
+		_frozen[i] = 0
+		frozen_count -= 1
+		PhysicsServer3D.body_set_mode(_bodies[i], PhysicsServer3D.BODY_MODE_RIGID)
 	# What rested on it must be free to fall now.
 	if frozen_count > 0:
 		var r := _size[i].length() * 0.5 + 0.2
@@ -428,7 +447,9 @@ func despawn(i: int) -> void:
 	for k in FLOATS_PER_INSTANCE:
 		_buffer[o + k] = 0.0
 	_buffer_dirty = true
-	_free.append(i)
+	# Kept highest first so pop_back() hands out the lowest free slot: live
+	# pieces stay packed at the start and only they are drawn.
+	_free.insert(_free.bsearch_custom(i, func(a: int, b: int) -> bool: return a > b), i)
 
 
 func clear() -> void:
@@ -521,6 +542,19 @@ func transform_of(i: int) -> Transform3D:
 
 func velocity_of(i: int) -> Vector3:
 	return PhysicsServer3D.body_get_state(_bodies[i], PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY)
+
+
+## The faster of its velocity now and one physics step ago: a piece stopped
+## dead by what it hit (the player, a shield) still counts at the speed it
+## came in at.
+func recent_velocity_of(i: int) -> Vector3:
+	var now := velocity_of(i)
+	return _last_vel[i] if _last_vel[i].length_squared() > now.length_squared() else now
+
+
+## One past the highest slot in use (loops over live pieces stop here).
+func slot_end() -> int:
+	return _multimesh.visible_instance_count
 
 
 func set_velocity(i: int, v: Vector3) -> void:
@@ -674,6 +708,7 @@ func _check_landing(i: int, at: Vector3) -> void:
 	var speed := v.length()
 	var before := _speed[i]
 	_speed[i] = speed
+	_last_vel[i] = v
 	if frozen_count > 0 and speed > THAW_AHEAD_SPEED and volume_of(i) >= PLOUGH_MIN_VOLUME:
 		var r := _size[i][_size[i].max_axis_index()] * 0.6 + 0.2
 		thaw_box(AABB(at + v * 0.1 - Vector3.ONE * r, Vector3.ONE * r * 2.0), 0.5)

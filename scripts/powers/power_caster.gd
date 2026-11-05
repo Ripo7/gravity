@@ -5,7 +5,6 @@ extends Node3D
 ## raises a curved shell of black ice around your front at once. Each power
 ## has its own cooldown. A faint marker shows where the black hole would land.
 
-signal selection_changed(power: int)
 signal cast(power: int)
 signal denied(power: int)
 
@@ -16,11 +15,14 @@ var selected := PowerDefs.Power.VORTEX
 var cooldown_left := [0.0, 0.0]
 var auto_input := false  ## true when a script (demo, tests) drives the caster
 var touch_held := false  ## set by TouchControls while the cast button is held
+## Set by TouchControls on finger down: a tap shorter than a frame still casts.
+var touch_tapped := false
 var enabled := true
 ## Where the selected power would land.
 var target := Vector3.ZERO
 
 var _was_held := false
+var _mouse_armed := false
 var _mark: MeshInstance3D
 var _mark_mat: StandardMaterial3D
 
@@ -50,15 +52,29 @@ func _read_input() -> void:
 	var player := _player()
 	if player and not player.input_enabled:
 		_was_held = false
+		touch_tapped = false
 		return
 	if Input.is_action_just_pressed("shield") and _pointer_ready():
 		cast_power(PowerDefs.Power.SHIELD)
-	var held := touch_held or (Input.is_action_pressed("cast") and _pointer_ready())
-	if held and not _was_held:
+	# The click that grabs the mouse (or resumes) must not also cast: the
+	# mouse button only counts once it has been up with the pointer held.
+	var captured := Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
+	var mouse_down := Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
+	if not captured:
+		_mouse_armed = false
+	elif not mouse_down:
+		_mouse_armed = true
+	var pressed := Input.is_action_pressed("cast") and _pointer_ready()
+	if mouse_down and not _mouse_armed:
+		pressed = false
+	var held := touch_held or pressed
+	if (held or touch_tapped) and not _was_held:
 		cast_selected()
+	touch_tapped = false
 	_was_held = held
 
 
+## Gamepad aiming works without the mouse; the mouse needs to be captured.
 func _pointer_ready() -> bool:
 	var captured := Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
 	return captured or not Input.get_connected_joypads().is_empty()
@@ -73,7 +89,6 @@ func select(power: int) -> void:
 	if power == selected:
 		return
 	selected = power
-	selection_changed.emit(selected)
 	Sfx.ui("select", -10.0, 0.9 + power * 0.1)
 
 

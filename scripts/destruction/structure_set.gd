@@ -15,7 +15,6 @@ extends Node3D
 ## A falling cluster breaks apart on impact: blocks near the hit shatter,
 ## the rest tumble as loose debris, and whatever it hits takes damage.
 
-signal segment_broken(index: int)
 signal shattered(at: Vector3, size: Vector3, kind: int)
 signal cluster_released(at: Vector3, count: int, toppled: bool)
 signal cluster_impact(at: Vector3, mass: float, speed: float, count: int)
@@ -23,7 +22,6 @@ signal cluster_impact(at: Vector3, mass: float, speed: float, count: int)
 signal about_to_fail(at: Vector3, count: int)
 ## A falling floor crushed the one below it and keeps going.
 signal floor_crushed(at: Vector3, count: int, speed: float)
-signal destruction_changed(fraction: float)
 
 enum State { GONE, STATIC, FALLING }
 
@@ -74,8 +72,6 @@ const LEAN_SPEED := 2.0  ## leaning counts like an impact at this speed
 var dust: DustSystem  ## optional: gravel and dust when rubble is crushed
 var rebar: RebarSystem  ## optional: steel rods left in broken concrete
 var alive_count := 0
-var scored_total := 0.0
-var scored_destroyed := 0.0
 
 var _state := PackedByteArray()
 var _xform: Array[Transform3D] = []  # global rest transform
@@ -92,8 +88,9 @@ var _health := PackedFloat32Array()
 var _max_health := PackedFloat32Array()
 var _mass := PackedFloat32Array()
 var _capacity := PackedFloat32Array()
+## Load a block held only from the side can carry, calibrated like _capacity.
+var _shear_cap := PackedFloat32Array()
 var _load := PackedFloat32Array()
-var _score := PackedFloat32Array()  # volume counted toward the level score
 var _group := PackedInt32Array()
 var _grounded := PackedByteArray()
 var _neighbors: Array[PackedInt32Array] = []
@@ -104,10 +101,15 @@ var _group_origin: Array[Transform3D] = []
 var _bodies: Array[RID] = []
 var _shape_cache := {}
 var _rid_to_seg := {}
-var _grid := {}
+var _grid := SphereGrid.new(GRID_CELL)
+## One instance row, reused (no allocation per block per frame).
+var _row := PackedFloat32Array()
 var _dirty_groups := {}
+## group -> heights (structure space) where blocks went since its last check:
+## where a tower may now pivot over what is left of a course.
+var _cut_levels := {}
 var _tip := Vector2.ZERO  # last tipping direction (structure space)
-var _clusters: Array[Cluster] = []
+var _clusters: Array[FallingCluster] = []
 var _pending: Array[Dictionary] = []  # {comp, toppled, time, group}
 ## Structures standing on other structures (a water tower on a roof):
 ## block -> blocks of other structures it rests on, and the reverse.
@@ -118,23 +120,6 @@ var _anchored_by := {}
 var _multimesh: MultiMesh
 var _buffer := PackedFloat32Array()
 var _buffer_dirty := false
-var _score_dirty := false
-
-
-## A falling piece of a structure: one rigid body with a box per block.
-class Cluster:
-	extends RefCounted
-	var body: RID
-	var members := PackedInt32Array()
-	var offsets: Array[Transform3D] = []  # block transform in body space
-	var mass := 0.0
-	var age := 0.0
-	var prev_velocity := Vector3.ZERO
-	var recent := PackedFloat32Array([0.0, 0.0, 0.0, 0.0])  # last speeds
-	var toppled := false  # pivoting over its base: falls toward the cut side
-	var lean_time := 0.0  # seconds resting against a standing structure
-	var leaned := false
-	var crush_tick := 0.0
 
 
 func _exit_tree() -> void:
@@ -154,8 +139,7 @@ func _exit_tree() -> void:
 
 ## `segments`: Array of {"local": Transform3D, "size": Vector3, "strength",
 ## "material", "shade", "seed"}; `origin` is the structure's transform.
-## `scored`: whether these blocks count toward the level's destruction score.
-func add_structure(origin: Transform3D, segments: Array[Dictionary], scored := true) -> int:
+func add_structure(origin: Transform3D, segments: Array[Dictionary]) -> int:
 	var group_id := _groups.size()
 	var members := PackedInt32Array()
 	var space := get_world_3d().space
@@ -185,8 +169,8 @@ func add_structure(origin: Transform3D, segments: Array[Dictionary], scored := t
 		_max_health.append(hp)
 		_mass.append(volume * Materials.prop(kind, "density"))
 		_capacity.append(0.0)
+		_shear_cap.append(0.0)
 		_load.append(0.0)
-		_score.append(volume if scored else 0.0)
 		_group.append(group_id)
 		_grounded.append(1 if _local[i].position.y <= GROUND_EPS else 0)
 		_neighbors.append(PackedInt32Array())
@@ -201,21 +185,23 @@ func add_structure(origin: Transform3D, segments: Array[Dictionary], scored := t
 		PhysicsServer3D.body_set_space(body, space)
 		_bodies.append(body)
 		_rid_to_seg[body] = i
-		_grid_insert(i)
+		_grid.insert(i, global.origin, size.length() * 0.5)
 		members.append(i)
 		alive_count += 1
-		if scored:
-			scored_total += volume
 	_groups.append(members)
 	_group_origin.append(origin)
 	_link(members)
 	# Calibrate capacities on the intact structure so it always stands.
-	_compute_loads(members)
+	# Blocks held from the side (lintels, arch stones) get the same reserve
+	# over what they hold when intact, so every intact structure stands.
+	var shear := _compute_loads(members)
 	for k in members.size():
 		var i := members[k]
 		var floor_cap := _mass[i] * 3.0
 		var robust: float = segments[k].get("robust", 1.0)
 		_capacity[i] = maxf(_load[i] * SAFETY[_kind[i]] * robust, floor_cap)
+		var held: float = shear.get(i, 0.0)
+		_shear_cap[i] = maxf(held * SAFETY[_kind[i]] * robust, _mass[i] * SHEAR_WEIGHTS[_kind[i]])
 	_rebuild_multimesh()
 	return group_id
 
@@ -339,10 +325,6 @@ func is_alive(i: int) -> bool:
 	return _state[i] == State.STATIC
 
 
-func is_falling(i: int) -> bool:
-	return _state[i] == State.FALLING
-
-
 func transform_of(i: int) -> Transform3D:
 	return _xform[i]
 
@@ -359,32 +341,36 @@ func health_of(i: int) -> float:
 	return _health[i]
 
 
-func load_of(i: int) -> float:
-	return _load[i]
-
-
-func capacity_of(i: int) -> float:
-	return _capacity[i]
-
-
 func cluster_count() -> int:
 	return _clusters.size()
 
 
-## {mass, velocity} of the falling piece whose body is `rid`, or empty.
+## {mass, velocity} of the falling piece whose body is `rid`, or empty. The
+## velocity is the faster of now and the last step (what it hit stopped it).
 func cluster_motion(rid: RID) -> Dictionary:
 	for c in _clusters:
 		if c.body == rid:
 			var v: Vector3 = PhysicsServer3D.body_get_state(
 				c.body, PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY
 			)
+			if c.prev_velocity.length_squared() > v.length_squared():
+				v = c.prev_velocity
 			return {"mass": c.mass, "velocity": v}
 	return {}
 
 
-## Share of scored volume that is no longer standing (0..1).
-func destruction() -> float:
-	return scored_destroyed / scored_total if scored_total > 0.0 else 0.0
+## World position of the block of falling piece `rid` nearest to `p`, or
+## Vector3.INF. Tells whether a falling floor comes at you or falls away.
+func cluster_point(rid: RID, p: Vector3) -> Vector3:
+	for c in _clusters:
+		if c.body == rid:
+			return c.nearest_point(p)
+	return Vector3.INF
+
+
+## Share of all blocks still standing (1 = intact).
+func standing_fraction() -> float:
+	return float(alive_count) / maxf(_xform.size(), 1.0)
 
 
 # --- Damage --------------------------------------------------------------------
@@ -413,17 +399,9 @@ func apply_field(
 
 ## Tears falling pieces within `radius` apart so their blocks can be caught.
 func tear_clusters(center: Vector3, radius: float) -> void:
-	for c: Cluster in _clusters.duplicate():
-		if _cluster_distance(c, center) < radius:
+	for c: FallingCluster in _clusters.duplicate():
+		if c.nearest_point(center).distance_to(center) < radius:
 			_dissolve(c, center, 0.0)
-
-
-func _cluster_distance(c: Cluster, p: Vector3) -> float:
-	var xf: Transform3D = PhysicsServer3D.body_get_state(c.body, PhysicsServer3D.BODY_STATE_TRANSFORM)
-	var best := INF
-	for off in c.offsets:
-		best = minf(best, (xf * off.origin).distance_to(p))
-	return best
 
 
 ## Damage at a point, e.g. from a heavy impact.
@@ -503,24 +481,32 @@ func _dislodge(i: int, velocity: Vector3, spin := Vector3.ZERO, tint := 0.5) -> 
 func _remove(i: int) -> void:
 	if _state[i] == State.GONE:
 		return
-	if _state[i] == State.STATIC:
+	var was_standing := _state[i] == State.STATIC
+	# Gone first: whatever stood on it must not count it as support.
+	_state[i] = State.GONE
+	if was_standing:
 		alive_count -= 1
-		scored_destroyed += _score[i]
-		_score_dirty = true
 		PhysicsServer3D.body_set_space(_bodies[i], RID())
 		_dirty_groups[_group[i]] = true
-		# Rubble frozen on or against it must be free to fall.
+		_note_cut(i)
+		# Rubble frozen on or against it must be free to fall (the box turns
+		# with the block: ramps, rotated cornices).
 		if debris:
-			var r := _size[i] * 0.5 + Vector3.ONE * 0.2
-			debris.thaw_box(AABB(_xform[i].origin - r, r * 2.0), 0.3)
+			debris.thaw_box((_xform[i] * AABB(-_size[i] * 0.5, _size[i])).grow(0.2), 0.3)
 		_unanchor(i)
-	_state[i] = State.GONE
 	_clear_instance(i)
 	_buffer_dirty = true
-	segment_broken.emit(i)
 
 
 # --- Stability -----------------------------------------------------------------
+
+
+## Marks every structure as changed and settles them at once. A sound,
+## intact building returns 0 (tests and level authoring).
+func recheck_all() -> int:
+	for g in _groups.size():
+		_dirty_groups[g] = true
+	return settle()
 
 
 ## Re-checks every changed structure. Returns how many blocks started
@@ -539,6 +525,8 @@ func settle() -> int:
 
 func _settle_group(g: int, hesitate := false) -> int:
 	var changed := 0
+	var levels: PackedFloat32Array = _cut_levels.get(g, PackedFloat32Array())
+	var waiting := false
 	for comp in _components(_groups[g]):
 		if hesitate and _is_pending(comp[0]):
 			continue
@@ -553,8 +541,79 @@ func _settle_group(g: int, hesitate := false) -> int:
 		if comp.size() > 2 and _is_tipping(comp):
 			changed += _release_or_wait(comp, true, g, hesitate)
 			continue
+		# Standing on what is left of a cut course: the part above may pivot
+		# over its edge (a tower cut at the foot on one side).
+		var upper := _tipping_above(comp, levels)
+		if upper.size() > 2:
+			if hesitate and _is_pending(upper[0]):
+				waiting = true
+				continue
+			var n := _release_or_wait(upper, true, g, hesitate)
+			waiting = waiting or n == 0
+			changed += n
+			continue
 		changed += _crush_overloaded(comp)
+	if not waiting:
+		_cut_levels.erase(g)
 	return changed
+
+
+## Remembers where block `i` went (for _tipping_above).
+func _note_cut(i: int) -> void:
+	var g := _group[i]
+	var levels: PackedFloat32Array = _cut_levels.get(g, PackedFloat32Array())
+	var h := _local[i].get_center().y
+	for l in levels:
+		if absf(l - h) < 0.3:
+			return
+	if levels.size() < 8:
+		levels.append(h)
+	_cut_levels[g] = levels
+
+
+## The blocks above one of `levels` whose centre of mass has left the
+## section of what still crosses that level, or an empty array.
+func _tipping_above(comp: PackedInt32Array, levels: PackedFloat32Array) -> PackedInt32Array:
+	for h in levels:
+		var pts := PackedVector2Array()
+		var upper := PackedInt32Array()
+		var com := Vector2.ZERO
+		var mass := 0.0
+		for i in comp:
+			var a := _local[i]
+			if a.position.y < h - 0.01 and a.end.y > h + 0.01:
+				pts.append(Vector2(a.position.x, a.position.z))
+				pts.append(Vector2(a.end.x, a.position.z))
+				pts.append(Vector2(a.end.x, a.end.z))
+				pts.append(Vector2(a.position.x, a.end.z))
+			elif a.position.y >= h - 0.01:
+				var c := a.get_center()
+				com += Vector2(c.x, c.z) * _mass[i]
+				mass += _mass[i]
+				upper.append(i)
+		if upper.size() < 3 or mass <= 0.0 or pts.size() < 3:
+			continue
+		com /= mass
+		if not _inside_section(com, pts):
+			return upper
+	return PackedInt32Array()
+
+
+## True when `com` is inside the convex section of `pts`, shrunk a little
+## so knife-edge balance still tips; sets _tip to the way it would fall.
+func _inside_section(com: Vector2, pts: PackedVector2Array) -> bool:
+	var hull := Geometry2D.convex_hull(pts)
+	if hull.size() < 3:
+		return false
+	var centroid := Vector2.ZERO
+	for p in hull:
+		centroid += p
+	centroid /= hull.size()
+	var inset := PackedVector2Array()
+	for p in hull:
+		inset.append(p + (centroid - p).limit_length(0.06))
+	_tip = com - centroid
+	return Geometry2D.is_point_in_polygon(com, inset)
 
 
 func _components(members: PackedInt32Array) -> Array[PackedInt32Array]:
@@ -586,20 +645,22 @@ func _compute_loads(comp: PackedInt32Array) -> Dictionary:
 			if _state[s] == State.STATIC:
 				supported[i] = true
 				break
-	var order: Array = Array(comp)
-	# Highest first; at equal height, side-held blocks first so the load they
-	# hand sideways is counted by their neighbours.
-	order.sort_custom(
-		func(a: int, b: int) -> bool:
-			var ya := _local[a].position.y
-			var yb := _local[b].position.y
-			if absf(ya - yb) > 0.01:
-				return ya > yb
-			return not supported.has(a) and supported.has(b)
-	)
+	# Highest first; at equal height (to the cm), side-held blocks first so
+	# the load they hand sideways is counted by their neighbours. Sorted as
+	# packed integer keys: a GDScript comparator over a whole palace on
+	# every re-check cost milliseconds.
+	var order := PackedInt64Array()
+	order.resize(comp.size())
+	for k in comp.size():
+		var i := comp[k]
+		var y_cm := int(roundf(_local[i].position.y * 100.0))
+		var rank := (100000 - y_cm) * 2 + (1 if supported.has(i) else 0)
+		order[k] = (rank << 20) | i
+	order.sort()
 	var incoming := {}
 	var shear := {}
-	for i: int in order:
+	for key in order:
+		var i := key & 0xFFFFF
 		var total: float = _mass[i] + incoming.get(i, 0.0)
 		_load[i] = total
 		if _grounded[i]:
@@ -635,7 +696,7 @@ func _crush_overloaded(comp: PackedInt32Array) -> int:
 		var cap := _capacity[i] * clampf(_health[i] / _max_health[i], 0.15, 1.0)
 		if _load[i] > cap:
 			victims.append(Vector2(_load[i] / cap, i))
-		elif shear.has(i) and shear[i] > _mass[i] * SHEAR_WEIGHTS[_kind[i]]:
+		elif shear.has(i) and shear[i] > _shear_cap[i] * clampf(_health[i] / _max_health[i], 0.15, 1.0):
 			victims.append(Vector2(-1.0, i))
 	if victims.is_empty():
 		return 0
@@ -673,21 +734,9 @@ func _is_tipping(comp: PackedInt32Array) -> bool:
 	if mass <= 0.0 or pts.size() < 3:
 		return false
 	com /= mass
-	var hull := Geometry2D.convex_hull(pts)
-	if hull.size() < 3:
-		return true
-	# Shrink the footprint a little so knife-edge balance still tips.
-	var centroid := Vector2.ZERO
-	for p in hull:
-		centroid += p
-	centroid /= hull.size()
-	var inset := PackedVector2Array()
-	for p in hull:
-		inset.append(p + (centroid - p).limit_length(0.06))
 	# It falls away from what still holds it: from the footprint toward the
 	# centre of mass.
-	_tip = com - centroid
-	return not Geometry2D.is_point_in_polygon(com, inset)
+	return not _inside_section(com, pts)
 
 
 # --- Falling clusters -----------------------------------------------------------
@@ -738,7 +787,7 @@ func _release(comp: PackedInt32Array, toppled: bool) -> int:
 		return comp.size()
 	if _clusters.size() >= MAX_CLUSTERS:
 		_dissolve(_clusters[0], Vector3.ZERO, 0.0)
-	var c := Cluster.new()
+	var c := FallingCluster.new()
 	var com := Vector3.ZERO
 	var bounds := AABB(_xform[comp[0]].origin, Vector3.ZERO)
 	for i in comp:
@@ -760,9 +809,7 @@ func _release(comp: PackedInt32Array, toppled: bool) -> int:
 		_state[i] = State.FALLING
 		_unanchor(i)
 		alive_count -= 1
-		scored_destroyed += _score[i]
 		PhysicsServer3D.body_set_space(_bodies[i], RID())
-	_score_dirty = true
 	PhysicsServer3D.body_set_param(c.body, PhysicsServer3D.BODY_PARAM_MASS, c.mass)
 	if comp.size() >= PANCAKE_MIN:
 		PhysicsServer3D.body_set_param(c.body, PhysicsServer3D.BODY_PARAM_GRAVITY_SCALE, CLUSTER_GRAVITY)
@@ -796,7 +843,7 @@ func _release(comp: PackedInt32Array, toppled: bool) -> int:
 
 ## Breaks a cluster into loose debris. `severity` (impact speed) decides how
 ## much of it shatters around `hit`.
-func _dissolve(c: Cluster, hit: Vector3, severity: float) -> void:
+func _dissolve(c: FallingCluster, hit: Vector3, severity: float) -> void:
 	_clusters.erase(c)
 	var xf: Transform3D = PhysicsServer3D.body_get_state(c.body, PhysicsServer3D.BODY_STATE_TRANSFORM)
 	var v: Vector3 = PhysicsServer3D.body_get_state(c.body, PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY)
@@ -839,12 +886,16 @@ func falling_cluster_positions(speed: float) -> PackedVector3Array:
 
 
 func _update_clusters(delta: float) -> void:
-	for c: Cluster in _clusters.duplicate():
+	for c: FallingCluster in _clusters.duplicate():
+		# An earlier one may have dissolved this one (knocked over, too many).
+		if not _clusters.has(c):
+			continue
 		c.age += delta
 		var xf: Transform3D = PhysicsServer3D.body_get_state(c.body, PhysicsServer3D.BODY_STATE_TRANSFORM)
 		var v: Vector3 = PhysicsServer3D.body_get_state(c.body, PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY)
 		var asleep: bool = PhysicsServer3D.body_get_state(c.body, PhysicsServer3D.BODY_STATE_SLEEPING)
-		var dv := (c.prev_velocity - v).length()
+		var before := c.prev_velocity
+		var dv := (before - v).length()
 		c.prev_velocity = v
 		# Contacts can spread a landing over a few steps: compare with the
 		# fastest recent speed too.
@@ -858,23 +909,23 @@ func _update_clusters(delta: float) -> void:
 		# A big falling block landing on rubble crushes a storey too.
 		var heavy := c.members.size() >= PANCAKE_MIN
 		if c.age > 0.1 and drop > IMPACT_DV and peak > IMPACT_MIN_SPEED and (heavy or _touches_solid(c)):
-			_impact(c, xf, peak)
+			_impact(c, xf, peak, before)
 			continue
 		_check_lean(c, xf, delta)
+		if not _clusters.has(c):
+			continue
 		# Push through rubble rather than stopping dead on frozen pieces.
 		if debris and debris.frozen_count > 0 and v.length() > 1.0:
 			c.crush_tick -= delta
 			if c.crush_tick <= -0.05:
 				c.crush_tick = 0.0
-				debris.thaw_box(
-					_cluster_bounds(c, xf).grow(0.4).merge(_cluster_bounds(c, xf.translated(v * 0.15))), 0.4
-				)
+				debris.thaw_box(c.bounds(xf).grow(0.4).merge(c.bounds(xf.translated(v * 0.15))), 0.4)
 		# A heavy block resting on loose rubble grinds it down and sinks.
 		if c.members.size() >= PANCAKE_MIN and v.length() < 1.0 and c.age > 0.3:
 			c.crush_tick -= delta
 			if c.crush_tick <= 0.0:
 				c.crush_tick = 0.1
-				if _crush_rubble_under(c, xf):
+				if _crush_rubble_under(c, xf) or not _clusters.has(c):
 					continue
 		if c.age > CLUSTER_MAX_AGE or (asleep and c.age > 0.5) or xf.origin.y < DebrisSystem.KILL_Y:
 			_dissolve(c, Vector3.ZERO, 0.0)
@@ -887,7 +938,7 @@ func _update_clusters(delta: float) -> void:
 ## the rest keeps falling, slowed down, onto it: floors pile up one after
 ## the other instead of the whole thing bursting at once. Returns false
 ## when there is nothing left to crush (then it breaks up as usual).
-func _pancake(c: Cluster, xf: Transform3D, speed: float) -> bool:
+func _pancake(c: FallingCluster, xf: Transform3D, speed: float) -> bool:
 	var low := INF
 	for off in c.offsets:
 		low = minf(low, (xf * off.origin).y)
@@ -930,17 +981,10 @@ func _pancake(c: Cluster, xf: Transform3D, speed: float) -> bool:
 	return true
 
 
-func _cluster_bounds(c: Cluster, xf: Transform3D) -> AABB:
-	var box := AABB((xf * c.offsets[0]).origin, Vector3.ZERO)
-	for off in c.offsets:
-		box = box.expand((xf * off).origin)
-	return box.grow(1.0)
-
-
 ## Loose pieces under a heavy resting block are ground into gravel so it
 ## keeps settling instead of standing on a few broken stubs. Returns true
 ## if anything was crushed.
-func _crush_rubble_under(c: Cluster, xf: Transform3D) -> bool:
+func _crush_rubble_under(c: FallingCluster, xf: Transform3D) -> bool:
 	if debris == null:
 		return false
 	var low := INF
@@ -982,7 +1026,7 @@ func _crush_rubble_under(c: Cluster, xf: Transform3D) -> bool:
 
 
 ## A heavy piece leaning on a standing one pushes it over (tower into tower).
-func _check_lean(c: Cluster, xf: Transform3D, delta: float) -> void:
+func _check_lean(c: FallingCluster, xf: Transform3D, delta: float) -> void:
 	if c.leaned or c.age < 0.2:
 		return
 	var state := PhysicsServer3D.body_get_direct_state(c.body)
@@ -1005,10 +1049,12 @@ func _check_lean(c: Cluster, xf: Transform3D, delta: float) -> void:
 
 
 ## A falling piece hit something: damage what it struck, then break it up.
-func _impact(c: Cluster, xf: Transform3D, speed: float) -> void:
+## `push` is the velocity it had just before the hit (the direction it was
+## going: after the hit it may be stopped or bouncing back).
+func _impact(c: FallingCluster, xf: Transform3D, speed: float, push: Vector3) -> void:
 	if c.members.size() >= PANCAKE_MIN and _pancake(c, xf, speed):
 		return
-	var hit := _lowest_point(c, xf)
+	var hit := c.lowest_point(xf)
 	var struck := -1
 	var state := PhysicsServer3D.body_get_direct_state(c.body)
 	if state:
@@ -1025,7 +1071,6 @@ func _impact(c: Cluster, xf: Transform3D, speed: float) -> void:
 	var heft := clampf(c.mass / 800.0, 1.0, 3.0)
 	var reach := clampf(0.8 + c.members.size() * 0.02, 1.0, 2.5)
 	apply_impact(hit, reach, speed * 0.35 * heft)
-	var push := c.prev_velocity
 	_dissolve(c, hit, speed)
 	if struck >= 0 and _state[struck] == State.STATIC:
 		_knock(struck, push, c.mass * speed, hit)
@@ -1048,17 +1093,22 @@ func _knock(seg: int, velocity: Vector3, momentum: float, at: Vector3) -> void:
 	var flat := Vector3(velocity.x, 0, velocity.z)
 	if flat.length() < 0.1:
 		return
-	var n := _release(comp, false)
-	if n == 0 or _clusters.is_empty():
-		return
-	var c := _clusters[_clusters.size() - 1]
 	var dir := flat.normalized()
 	var share := clampf(momentum / (mass + 1.0) * 0.4, 0.5, 4.0)
+	if comp.size() < 3 or debris == null:
+		# Too small for a falling body of its own: the pieces take the push.
+		for i in comp:
+			_dislodge(i, dir * share, Vector3.UP.cross(dir) * share * 0.35)
+		return
+	var before := _clusters.size()
+	_release(comp, false)
+	if _clusters.size() <= before:
+		return
+	var c := _clusters[_clusters.size() - 1]
 	PhysicsServer3D.body_set_state(c.body, PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY, dir * share)
 	PhysicsServer3D.body_set_state(
 		c.body, PhysicsServer3D.BODY_STATE_ANGULAR_VELOCITY, Vector3.UP.cross(dir) * share * 0.35
 	)
-	cluster_released.emit(at, comp.size(), true)
 
 
 func _component_of(seg: int) -> PackedInt32Array:
@@ -1077,7 +1127,7 @@ func _component_of(seg: int) -> PackedInt32Array:
 
 ## True when the piece touches the ground, a structure or another falling
 ## piece; flying debris bumping into it does not count as a landing.
-func _touches_solid(c: Cluster) -> bool:
+func _touches_solid(c: FallingCluster) -> bool:
 	var state := PhysicsServer3D.body_get_direct_state(c.body)
 	if state == null:
 		return true
@@ -1085,15 +1135,6 @@ func _touches_solid(c: Cluster) -> bool:
 		if debris == null or debris.index_of(state.get_contact_collider(k)) < 0:
 			return true
 	return false
-
-
-func _lowest_point(c: Cluster, xf: Transform3D) -> Vector3:
-	var best := Vector3(0, INF, 0)
-	for off in c.offsets:
-		var p := xf * off.origin
-		if p.y < best.y:
-			best = p
-	return best
 
 
 func _current_transform(i: int) -> Transform3D:
@@ -1116,45 +1157,14 @@ func _physics_process(delta: float) -> void:
 		_multimesh.buffer = _buffer
 		_round_mm.buffer = _rbuffer
 		_buffer_dirty = false
-	if _score_dirty:
-		_score_dirty = false
-		destruction_changed.emit(destruction())
-
-
-# --- Spatial grid ----------------------------------------------------------------
-
-
-func _grid_insert(i: int) -> void:
-	var r := _size[i].length() * 0.5
-	var p := _xform[i].origin
-	var lo := Vector3i(((p - Vector3.ONE * r) / GRID_CELL).floor())
-	var hi := Vector3i(((p + Vector3.ONE * r) / GRID_CELL).floor())
-	for x in range(lo.x, hi.x + 1):
-		for y in range(lo.y, hi.y + 1):
-			for z in range(lo.z, hi.z + 1):
-				var key := Vector3i(x, y, z)
-				if not _grid.has(key):
-					_grid[key] = PackedInt32Array()
-				_grid[key].append(i)
 
 
 ## Static blocks whose bounds may reach within `radius` of `p`.
 func _query(p: Vector3, radius: float) -> PackedInt32Array:
 	var out := PackedInt32Array()
-	var seen := {}
-	var lo := Vector3i(((p - Vector3.ONE * radius) / GRID_CELL).floor())
-	var hi := Vector3i(((p + Vector3.ONE * radius) / GRID_CELL).floor())
-	for x in range(lo.x, hi.x + 1):
-		for y in range(lo.y, hi.y + 1):
-			for z in range(lo.z, hi.z + 1):
-				var cell: Variant = _grid.get(Vector3i(x, y, z))
-				if cell == null:
-					continue
-				for i: int in cell:
-					if _state[i] == State.STATIC and not seen.has(i):
-						seen[i] = true
-						if _xform[i].origin.distance_to(p) <= radius + _size[i].length() * 0.5:
-							out.append(i)
+	for i in _grid.query(p, radius):
+		if _state[i] == State.STATIC:
+			out.append(i)
 	return out
 
 
@@ -1175,39 +1185,36 @@ func _write_instance(i: int, xf: Transform3D) -> void:
 	# slot in the box one stays empty.
 	var b := xf.basis
 	var s := _size[i]
-	var dmg := 1.0 - clampf(_health[i] / _max_health[i], 0.0, 1.0)
-	var row := PackedFloat32Array(
-		[
-			b.x.x * s.x,
-			b.y.x * s.y,
-			b.z.x * s.z,
-			xf.origin.x,
-			b.x.y * s.x,
-			b.y.y * s.y,
-			b.z.y * s.z,
-			xf.origin.y,
-			b.x.z * s.x,
-			b.y.z * s.y,
-			b.z.z * s.z,
-			xf.origin.z,
-			_shade[i],
-			1.0 if _round[i] >= 0 else 0.0,
-			fposmod(_seed[i], 1.0),
-			0.0,
-			Materials.custom(_kind[i], dmg, _seed[i]),
-			_hit[i].x,
-			_hit[i].y,
-			_hit[i].z,
-		]
-	)
+	if _row.size() != FLOATS_PER_INSTANCE:
+		_row.resize(FLOATS_PER_INSTANCE)
+	_row[0] = b.x.x * s.x
+	_row[1] = b.y.x * s.y
+	_row[2] = b.z.x * s.z
+	_row[3] = xf.origin.x
+	_row[4] = b.x.y * s.x
+	_row[5] = b.y.y * s.y
+	_row[6] = b.z.y * s.z
+	_row[7] = xf.origin.y
+	_row[8] = b.x.z * s.x
+	_row[9] = b.y.z * s.y
+	_row[10] = b.z.z * s.z
+	_row[11] = xf.origin.z
+	_row[12] = _shade[i]
+	_row[13] = 1.0 if _round[i] >= 0 else 0.0
+	_row[14] = fposmod(_seed[i], 1.0)
+	_row[15] = 0.0
+	_row[16] = Materials.custom(_kind[i], 1.0 - clampf(_health[i] / _max_health[i], 0.0, 1.0), _seed[i])
+	_row[17] = _hit[i].x
+	_row[18] = _hit[i].y
+	_row[19] = _hit[i].z
 	if _round[i] >= 0:
 		var o := _round[i] * FLOATS_PER_INSTANCE
 		for k in FLOATS_PER_INSTANCE:
-			_rbuffer[o + k] = row[k]
+			_rbuffer[o + k] = _row[k]
 	else:
 		var o := i * FLOATS_PER_INSTANCE
 		for k in FLOATS_PER_INSTANCE:
-			_buffer[o + k] = row[k]
+			_buffer[o + k] = _row[k]
 	_buffer_dirty = true
 
 
@@ -1261,6 +1268,9 @@ func _make_multimesh(mesh: Mesh, label: String) -> MultiMesh:
 	mm.use_colors = true
 	mm.use_custom_data = true
 	mm.mesh = mesh
+	# Fixed bounds over the arena: setting the buffer then does not walk
+	# every instance to find them (it is re-sent while pieces fall).
+	mm.custom_aabb = AABB(Vector3(-90, -45, -90), Vector3(180, 140, 180))
 	var mmi := MultiMeshInstance3D.new()
 	mmi.name = label
 	mmi.multimesh = mm

@@ -297,10 +297,17 @@ void fragment() {
 	vec3 albedo;
 	vec3 lit_window = vec3(0.0);
 	vec3 face = abs(local_normal);
-	float rough;
+	float rough = 0.9;
 	float metallic = 0.0;
+	// A finish (stone, plaster, tiles...) paints the whole surface: the bare
+	// material's noise is only worked out where it shows (no finish, glass,
+	// and the shutters that flake to the wood under them).
+	int fin = int(finish + 0.5);
+	bool bare = fin == 0 || fin == 11 || material_id > 3.5;
 
-	if (material_id < 0.5) {
+	if (!bare) {
+		albedo = vec3(0.5);
+	} else if (material_id < 0.5) {
 		// Concrete: mottled, with small dark pores.
 		float m = fbm(p * 2.2);
 		float pores = step(0.82, noise(p * 26.0)) * 0.12;
@@ -362,12 +369,12 @@ void fragment() {
 	// Finishes (Materials.Finish): what the printers copied. Static blocks
 	// use world space so courses and joints run on across blocks; debris
 	// uses its own space so the pattern stays on the piece.
-	int fin = int(finish + 0.5);
 	vec3 q = chunky ? local_pos + seed * 7.0 : world_p;
 	vec2 fuv = face.y > 0.5 ? q.xz : vec2(face.x > 0.5 ? q.z : q.x, q.y);
-	float around = atan(local_pos.z, local_pos.x);
+	float around = 0.0;
 	if (is_round > 0.5 && face.y < 0.5) {
 		// Round columns: unwrap the pattern around the shaft (no seams).
+		around = atan(local_pos.z, local_pos.x);
 		fuv = vec2(around * half_size.x, q.y);
 	}
 	if (fin > 0) {

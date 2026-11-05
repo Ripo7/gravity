@@ -25,7 +25,7 @@ static func motion_of(world: GameWorld, rid: RID, body: Object) -> Dictionary:
 		# Nor do the pieces your own black hole just flung (they glow).
 		if world.debris.tint_of(i) > 0.3:
 			return {}
-		return {"mass": world.debris.mass_of(i), "velocity": world.debris.velocity_of(i)}
+		return {"mass": world.debris.mass_of(i), "velocity": world.debris.recent_velocity_of(i)}
 	return world.structures.cluster_motion(rid)
 
 

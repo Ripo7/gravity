@@ -1,13 +1,15 @@
 # Gravity
 
 First-person destruction game in Godot 4.7 (GDScript, Jolt physics).
-You have overpowered powers. Flatten each map as fast as you can, without
-getting crushed by what you bring down.
+You have overpowered powers and one building to bring down, without
+getting crushed by what falls.
 
-One sandbox map: a dense city district you stand inside. Streets and alleys
-between closed multi-storey buildings you can walk into, switchback ramps in
-the alleys, walkways across the avenue and over the boulevard, water towers
-on the roofs; the rest of the city fades into the haze around it.
+**Le Palais:** a Renaissance palace (about 34 × 26 m, three storeys round an
+arcaded courtyard, a loggia, a deep cornice, a tile roof) and its brick
+campanile (45 m to the cross) at one corner, alone on a paved square.
+Beyond the square, only the plain fading into the haze. Walk in through the
+portal and across the courtyard; cut the foot of the tower and it falls on
+the palace.
 
 **Powers** (each with its own cooldown):
 
@@ -23,7 +25,7 @@ on the roofs; the rest of the city fades into the haze around it.
 **Rules:** you are fragile. Anything heavy that hits you (debris, stones,
 collapsing floors), the black hole's band and hard landings hurt; health
 comes back after a few seconds without being hit. When you go down you
-respawn at the start; the HUD counts destruction and K.O.s.
+respawn at the start. No score, no counter: the HUD shows only your health.
 
 ## Controls
 
@@ -67,36 +69,36 @@ cost as little of it as possible:
   hurts phones), lit and eroded in the shader.
 - Phones get a lighter tier (render scale, shadow range, fewer pieces), and
   the adaptive quality steps down further if frames run long.
-- Measure with `godot --headless --path . -- --mode=showcase --prof --seed=7`
-  (add `--quality=low` for the phone settings).
+- Measure with `godot --headless --path . -- --mode=showcase --prof --seed=1`
+  (add `--quality=low` for the phone settings). The physics time is the real
+  mean and worst step of each second (`scripts/core/physics_clock.gd`), not
+  the engine's monitor, which reports the worst frame of the last second.
 
 ## How it works
 
 | Piece | File |
 | --- | --- |
-| Sandbox map (open in the editor; structures preview) | `levels/sandbox.tscn`, `scripts/game/level.gd`, `scripts/destruction/structure.gd` |
-| Sandbox flow, K.O. and respawn, callouts | `scripts/game/level_run.gd`, `scripts/game/game_state.gd` |
+| The map (open in the editor; structures preview) | `levels/sandbox.tscn`, `scripts/game/level.gd`, `scripts/game/arena.gd` |
+| The palace and the campanile: storeys, rusticated ground floor, window dressings, arcades and voussoirs, loggia, cornice, roof, tower with belfry and copper dome | `scripts/destruction/palazzo.gd`, `scripts/destruction/structure.gd` |
+| The square: flagstones, travertine bands and kerbs, the plain beyond, the haze | `shaders/floor.gdshader`, `materials/environment.tres` |
+| K.O. and respawn | `scripts/game/level_run.gd`, `scripts/game/game_state.gd` |
 | Powers: tuning, cooldowns, aiming | `scripts/powers/power_defs.gd`, `scripts/powers/power_caster.gd` |
 | Black hole / black ice shield | `scripts/powers/vortex.gd`, `ice_shield.gd` |
 | Health and what hurts | `scripts/player/player.gd`, `scripts/powers/hazards.gd` |
 | Menu (live attract-mode backdrop) | `scenes/menu.tscn`, `scripts/ui/main_menu.gd` |
-| Structural physics: health, loads, toppling, creak-and-hold, floor-by-floor pancake collapses, roof structures tied to what they stand on | `scripts/destruction/structure_set.gd` |
+| Structural physics: loads and shear, toppling (also above a cut course), creak-and-hold, floor-by-floor pancake collapses | `scripts/destruction/structure_set.gd`, `falling_cluster.gd`, `sphere_grid.gd` |
 | Loose pieces: pooled server bodies + one MultiMesh; resting rubble freezes into static bodies until disturbed | `scripts/destruction/debris_system.gd` |
 | Shard library: how concrete, wood and metal break (cut in Blender) | `tools/make_shards.py`, `assets/shards/shards.json`, `scripts/destruction/shard_library.gd` |
 | Box patterns (fallback, and materials without shards) | `scripts/destruction/fracture.gd` |
-| Concrete / wood / metal / glass: look, weight, strength, breakage; irregular chunks cut in the vertex shader; cracks from the hit point; weathering | `scripts/destruction/materials.gd`, `shaders/block.gdshader` |
+| Materials and finishes (stone, plaster, travertine, marble, brick, terracotta, shutters, verdigris, bronze): look, weight, strength, breakage; cracks from the hit point | `scripts/destruction/materials.gd`, `shaders/block.gdshader` |
 | Gravel and glass shards without physics (one bounce, rest, fade) | `scripts/fx/chip_system.gd` |
-| Dust clouds, rolling dust walls, haze, trails (one noise texture, one draw call) | `scripts/fx/dust_system.gd`, `shaders/dust.gdshader` |
+| Dust clouds, rolling dust walls (one noise texture, one draw call) | `scripts/fx/dust_system.gd`, `shaders/dust.gdshader` |
 | Rebar left in broken concrete | `scripts/fx/rebar_system.gd` |
 | Quality tiers and adaptive quality (render scale, shadows, pieces kept) | `scripts/core/quality.gd`, `scripts/core/adaptive_quality.gd` |
+| Physics timing (mean and worst step per second) | `scripts/core/physics_clock.gd` |
 | Shake, slow motion on big collapses | `scripts/fx/*`, `scripts/core/game_world.gd` |
 | Sound effects (synthesised, regenerate with `python3 tools/make_sounds.py`) | `audio/*.wav`, `scripts/core/sfx.gd` |
-| Music, city ambience, distant sirens, wing claps (synthesised, `python3 tools/make_music.py`) | `audio/*.ogg`, `scripts/core/sfx.gd` |
-| Birds: pigeons on the roofs that flee from destruction, gulls circling (one draw call, no physics) | `scripts/fx/bird_system.gd`, `shaders/bird.gdshader` |
-| The printed city: building styles (Roman, medieval, Renaissance), finishes (ashlar, brick, printed travertine and marble, plaster, tiles, composite) carried by every piece, the honeycomb inside printed stone, lit windows, the skyline | `scripts/destruction/structure.gd`, `scripts/destruction/materials.gd`, `shaders/block.gdshader`, `shaders/skyline.gdshader` |
-| The colossal city around the district (temple towers, aqueduct, guardians, chimneys; scenery, one draw call per piece) and the street decor (lamps, braziers, standards, statues, pipes), modelled in Blender: `python3 tools/make_megacity.py` | `tools/make_megacity.py`, `assets/megacity/kit.glb`, `scripts/game/megacity.gd`, `scripts/game/street_decor.gd` |
-| The district layout (forum, temple, arcades, round temple, triumphal arch, imperial blocks, bridges, ramps): `python3 tools/make_district.py` regenerates `levels/sandbox.tscn` | `tools/make_district.py` |
-| One of every building, to look at: `godot --path . -- --level=res://levels/showroom.tscn` | `levels/showroom.tscn` |
+| Music and the wind on the square (seamless loops, `python3 tools/make_music.py`) | `audio/*.ogg`, `scripts/core/sfx.gd` |
 
 ### Shards: cut once in Blender, reused forever
 
@@ -104,7 +106,7 @@ Breaking is never computed at runtime: `tools/make_shards.py` (Blender's
 Python module, `pip install bpy`) cuts unit cubes into Voronoi cells once,
 with rough fracture faces, and writes `assets/shards/shards.json`:
 
-- **Concrete:** 2 to 10 chunky pieces. **Wood:** long splinters along the
+- **Concrete:** 2 to 6 chunky pieces (at most 3 on phones, 4 in browsers). **Wood:** long splinters along the
   grain. **Metal:** a few torn lengths (bent a little in the shader).
 - Every shard is resampled onto the same 152-vertex layout, so one mesh
   draws all of them: the shapes live in a small texture the block shader
@@ -122,12 +124,6 @@ pip install bpy && python3 tools/make_shards.py   # also writes art/shards_previ
 godot --headless --path . --import
 ```
 
-Measured on the showcase (`--prof --seed=7`, physics ms per frame, same
-machine): phone settings 6.2-6.8 with shards vs 5.6-5.8 with the old boxes;
-desktop with hulls 8.3-11.2 vs 6.5-6.9. Resting rubble now freezes faster
-and fast pieces only plough through rubble when they are big enough, which
-paid for most of it.
-
 ### Structural physics
 
 After anything changes, each structure is re-checked:
@@ -135,10 +131,13 @@ After anything changes, each structure is re-checked:
 1. **Connected pieces.** A piece with no contact to the ground falls as one
    rigid body (a compound of its blocks) and breaks apart where it lands.
 2. **Toppling.** If a grounded piece's centre of mass leaves the footprint it
-   stands on, it tips over as one body.
+   stands on, it tips over as one body. The same check runs at every course
+   where blocks were cut out: a tower whose foot is half gone falls over
+   from there.
 3. **Loads.** Weight flows top-down from each block to the blocks it rests on,
-   split by contact area. Capacities are calibrated on the intact structure
-   (safety factor 2 for concrete, 1.8 wood, 2.8 metal), so a building stands
+   split by contact area. Capacities (in compression and in shear) are
+   calibrated on the intact structure (safety factor 2.4 for stone and
+   concrete, 2 for wood, 3 for metal), so a building stands
    until enough supports are lost; then the most overloaded blocks crush, a
    few per frame, and the collapse spreads floor by floor.
 4. **Impacts.** A falling piece damages the blocks it hits (heavier hits
@@ -150,12 +149,18 @@ their capacity.
 ### Performance budget
 
 - Pieces are raw `PhysicsServer3D` bodies (no nodes), created once and pooled.
-- Sleeping pieces are skipped every frame; Jolt sleeps them after 0.4 s at rest.
-- Budget: 1500 pieces on desktop, 900 in desktop browsers, 700 on phones.
+- Budget: 1500 pieces on desktop, 900 in desktop browsers, 500 on phones.
   Above 80% the oldest resting pieces shrink away; on web, pieces also
   expire after 240 s.
-- Run the benchmark: `godot -- --mode=bench` (desktop) or open the web build with `?mode=bench`
-  (web). CI runs the web one in headless Chromium and prints it in the job summary.
+- The palace and the tower start with about 1,730 blocks (static bodies,
+  one MultiMesh per kind).
+- Showcase (`--mode=showcase --prof --seed=1`, native build on a 4-core
+  Linux VM), physics ms per step while things are moving: phone
+  settings 2.2–2.5 mean (worst second 3.4–4.1), browser settings 4.3–4.8
+  (6.9–7.7), desktop 9.7–10.7 (15–24).
+- CI fails if the browser-settings showcase averages more than 12 ms per
+  busy step (`tools/perf_gate.py`). `godot -- --mode=bench` still measures
+  raw body counts by hand.
 
 ## Develop
 
@@ -163,9 +168,11 @@ their capacity.
 tools/install_godot.sh                     # official 4.7.2 editor into ~/.godot-ci
 godot --headless --path . --import
 godot --headless --path . res://tests/test_runner.tscn   # tests
-pip install "gdtoolkit==4.*" && gdlint scripts tests && gdformat --check scripts tests
+godot --headless --path . res://tests/test_runner.tscn -- --quality=low   # phone settings
+pip install "gdtoolkit==4.5.0" && gdlint scripts tests && gdformat --check scripts tests
 godot --path . -- --mode=showcase --shots=/tmp/shots     # scripted blasts + screenshots
 ```
 
-Workflow: branch → pull request → CI (lint, headless tests, exports, web
-benchmark) and a Vercel preview → merge.
+Workflow: branch → pull request → CI (lint, headless tests at desktop and
+phone settings, physics perf gate, exports, keyboard and touch probe in
+headless Chromium) and a Vercel preview → merge.

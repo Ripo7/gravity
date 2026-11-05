@@ -23,9 +23,13 @@ static var _cache := {}
 ## Returns an Array of AABBs centred on the block origin, covering a box of
 ## `size`. `pieces` is the target piece count; `seed_value` picks the pattern.
 ## `grain` (wood) is an axis that is never cut across, giving long splinters.
-static func pattern(size: Vector3, pieces: int, seed_value: int = 0, grain := -1) -> Array[AABB]:
+## `cache`: false for one-off sizes (shield panels), which would only grow
+## the cache.
+static func pattern(
+	size: Vector3, pieces: int, seed_value: int = 0, grain := -1, cache := true
+) -> Array[AABB]:
 	var key := "%s|%d|%d|%d" % [size.snappedf(0.001), pieces, seed_value, grain]
-	if _cache.has(key):
+	if cache and _cache.has(key):
 		return _cache[key]
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash(key)
@@ -46,7 +50,8 @@ static func pattern(size: Vector3, pieces: int, seed_value: int = 0, grain := -1
 		b.size[axis] = edge * (1.0 - t)
 		result[idx] = a
 		result.append(b)
-	_cache[key] = result
+	if cache:
+		_cache[key] = result
 	return result
 
 

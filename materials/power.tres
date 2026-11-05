@@ -1,8 +1,0 @@
-[gd_resource type="ShaderMaterial" load_steps=2 format=3]
-
-[ext_resource type="Shader" path="res://shaders/power.gdshader" id="1_power"]
-
-[resource]
-shader = ExtResource("1_power")
-shader_parameter/violet = Color(0.55, 0.24, 1, 1)
-shader_parameter/hot = Color(0.92, 0.82, 1, 1)

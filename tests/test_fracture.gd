@@ -53,9 +53,13 @@ func test_wood_splits_along_the_grain() -> void:
 
 
 func test_metal_breaks_into_fewer_pieces() -> void:
+	# Compare the materials, not the per-tier cap (6 pieces at most on desktop).
+	var cap := Fracture.max_pieces
+	Fracture.max_pieces = 100
 	var size := Vector3(1, 1, 1)
 	var metal := Fracture.piece_count_for(size, Materials.prop(Materials.Kind.METAL, "pieces"))
 	var concrete := Fracture.piece_count_for(size, Materials.prop(Materials.Kind.CONCRETE, "pieces"))
+	Fracture.max_pieces = cap
 	check(metal < concrete / 2, "metal %d vs concrete %d" % [metal, concrete])
 	check(
 		Materials.prop(Materials.Kind.METAL, "strength") > Materials.prop(Materials.Kind.WOOD, "strength"),

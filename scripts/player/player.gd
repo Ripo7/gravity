@@ -25,8 +25,6 @@ const KILL_Y := -25.0
 @export var stick_sensitivity := 3.2  ## radians per second at full tilt
 @export var push_strength := 2.5  ## how hard walking shoves debris
 
-## Velocity from blasts; decays separately so the player can be flung.
-var external_velocity := Vector3.ZERO
 var input_enabled := true
 ## Set by TouchControls: stick vector (x right, y back) and a jump request.
 var touch_move := Vector2.ZERO
@@ -51,6 +49,9 @@ var _probe := PhysicsShapeQueryParameters3D.new()
 
 
 func _ready() -> void:
+	# Before the debris and the structures: hits are judged on what came at
+	# you during the last step, before those update their own state.
+	process_physics_priority = -10
 	_spawn = global_transform
 	add_to_group("player")
 	var capsule := CapsuleShape3D.new()
@@ -72,7 +73,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		var motion := event as InputEventMouseMotion
 		look(Vector2(-motion.relative.x, -motion.relative.y) * mouse_sensitivity)
 	elif event is InputEventMouseButton and event.pressed:
-		if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED and not TouchControls.should_show():
+		# A real mouse takes the pointer, even on a laptop with a touchscreen;
+		# a tap turned into a click (emulation) never does.
+		var real_mouse := event.device != InputEvent.DEVICE_ID_EMULATION
+		if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED and real_mouse:
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 			get_viewport().set_input_as_handled()
 
@@ -80,10 +84,6 @@ func _unhandled_input(event: InputEvent) -> void:
 func look(delta_angles: Vector2) -> void:
 	rotate_y(delta_angles.x)
 	head.rotation.x = clampf(head.rotation.x + delta_angles.y, -1.5, 1.5)
-
-
-func add_impulse(v: Vector3) -> void:
-	external_velocity += v
 
 
 func _physics_process(delta: float) -> void:
@@ -118,23 +118,15 @@ func _physics_process(delta: float) -> void:
 
 	touch_jump = false
 
-	# Blast velocity is added on top and bleeds off quickly on the ground.
-	velocity += external_velocity
 	_air_speed = maxf(-velocity.y, 0.0)
 	move_and_slide()
 	if is_on_floor() and not _was_on_floor and _air_speed > SAFE_FALL_SPEED:
 		hurt((_air_speed - SAFE_FALL_SPEED) * FALL_DAMAGE, global_position + Vector3.DOWN)
 	_was_on_floor = is_on_floor()
-	velocity -= external_velocity
-	var drag := 6.0 if is_on_floor() else 1.2
-	external_velocity = external_velocity.move_toward(
-		Vector3.ZERO, drag * delta * maxf(external_velocity.length(), 4.0)
-	)
-	if is_on_floor() and external_velocity.y < 0.0:
-		external_velocity.y = 0.0
 
-	_push_debris()
+	# Hits first: a piece you are pushing is marked as touched (no damage).
 	_check_hazards()
+	_push_debris()
 	if global_position.y < KILL_Y:
 		hurt(MAX_HEALTH * 2.0, global_position)
 
@@ -142,7 +134,6 @@ func _physics_process(delta: float) -> void:
 func respawn() -> void:
 	global_transform = _spawn
 	velocity = Vector3.ZERO
-	external_velocity = Vector3.ZERO
 	health = MAX_HEALTH
 	dead = false
 
@@ -216,4 +207,8 @@ func _body_position(world: GameWorld, rid: RID, collider: Object) -> Vector3:
 	if collider is Node3D:
 		return (collider as Node3D).global_position
 	var i := world.debris.index_of(rid)
-	return world.debris.position_of(i) if i >= 0 else Vector3.INF
+	if i >= 0:
+		return world.debris.position_of(i)
+	# A falling piece of building: its nearest block, so a floor dropping
+	# away under your feet does not count as coming at you.
+	return world.structures.cluster_point(rid, global_position + Vector3(0, 0.9, 0))

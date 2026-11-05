@@ -11,13 +11,21 @@ static var _tier := -1
 
 static func tier() -> int:
 	if _tier < 0:
-		if OS.has_feature("web_android") or OS.has_feature("web_ios") or OS.has_feature("mobile"):
+		if is_handheld():
 			_tier = Tier.LOW
 		elif OS.has_feature("web"):
 			_tier = Tier.MEDIUM
 		else:
 			_tier = Tier.HIGH
 	return _tier
+
+
+## Phones and tablets. Godot reads web_ios from the user agent, and Safari
+## on iPadOS sends a Mac one: a "Mac" with a touchscreen is an iPad.
+static func is_handheld() -> bool:
+	if OS.has_feature("mobile") or OS.has_feature("web_android") or OS.has_feature("web_ios"):
+		return true
+	return OS.has_feature("web_macos") and DisplayServer.is_touchscreen_available()
 
 
 ## For tests and the --quality launch option.

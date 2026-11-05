@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
-"""Synthesises the music and the city ambience (no third-party samples).
+"""Synthesises the music and the ambience (no third-party samples).
 
 Run:  python3 tools/make_music.py      (needs numpy, scipy and ffmpeg)
-Writes audio/music.ogg, audio/ambience.ogg (seamless loops) and the
-one-shots audio/siren.ogg and audio/birds_flap.wav.
+Writes audio/music.ogg and audio/ambience.ogg (seamless loops).
 
 The music is a slow sunset loop in D dorian: a warm pad, a soft electric
-piano arpeggio with echoes, a round bass; the ambience is the city around
-the district: traffic rumble, cars passing, wind, birds.
+piano arpeggio with echoes, a round bass; the ambience is the empty square
+round the palace: wind, gusts and a distant hum.
 """
 import os
 import subprocess
@@ -184,111 +183,40 @@ def music():
     return np.stack([left, right], axis=1)
 
 
-# --- Ambience ------------------------------------------------------------------
+# --- Ambience ----------------------------------------------------------------
 
 
-def car_pass(sec, pan_dir):
-    """One car passing a few blocks away: a swelling hiss and engine hum
-    that pans across."""
-    tt = t(sec)
-    shape = np.exp(-(((tt - sec / 2) / (sec / 5)) ** 2))
-    hiss = bp(rng.standard_normal(len(tt)), 250, 1400) * 0.6
-    f = 55 + 10 * np.tanh((tt - sec / 2) * 2) * -1  # a hint of Doppler
-    hum = np.sin(2 * np.pi * np.cumsum(f) / SR) * 0.5
-    x = (hiss + hum) * shape
-    pan = 0.5 + 0.45 * np.tanh((tt - sec / 2) * 1.5) * pan_dir
-    return np.stack([x * np.sqrt(1 - pan), x * np.sqrt(pan)], axis=1)
+def periodic_noise(n, shape):
+    """Noise whose spectrum follows shape(freq_hz); built in the frequency
+    domain, so it is exactly periodic over n samples (a seamless loop)."""
+    f = np.fft.rfftfreq(n, 1 / SR)
+    spec = (rng.standard_normal(len(f)) + 1j * rng.standard_normal(len(f))) * shape(f)
+    spec[0] = 0
+    x = np.fft.irfft(spec, n)
+    return x / np.max(np.abs(x))
 
 
-def chirp(sec=0.09, f0=3800.0, f1=5200.0):
-    tt = t(sec)
-    f = np.linspace(f0, f1, len(tt))
-    x = np.sin(2 * np.pi * np.cumsum(f) / SR)
-    return x * np.sin(np.pi * tt / sec) ** 2
+def cycles(n, k, phase=0.0):
+    """A slow sine with exactly k periods over the loop."""
+    return np.sin(2 * np.pi * k * np.arange(n) / n + phase)
 
 
 def ambience():
+    """An empty square in the evening: wind over the stones, gusts that
+    whistle round the tower, a very distant hum. Everything is periodic
+    over the loop length, so it repeats without a seam."""
     sec = 32.0
     n = int(SR * sec)
     out = np.zeros((n, 2))
-    # Rumble of the city: brown noise, slowly swelling.
-    brown = np.cumsum(rng.standard_normal(n + SR))[SR:]
-    brown = hp(brown - np.mean(brown), 25)
-    rumble = lp(brown, 180)
-    swell = 0.75 + 0.25 * np.sin(2 * np.pi * np.arange(n) / n * 3)
-    rumble = rumble / np.max(np.abs(rumble)) * swell * 0.45
-    out[:, 0] += rumble
-    out[:, 1] += np.roll(rumble, SR // 3)
-    # Wind between the buildings.
-    wind = bp(rng.standard_normal(n), 300, 1100)
-    gust = 0.5 + 0.5 * np.sin(2 * np.pi * np.arange(n) / n * 2 + 1.0)
-    wind = wind / np.max(np.abs(wind)) * (0.08 + 0.12 * gust)
-    out[:, 0] += wind
-    out[:, 1] += np.roll(wind, SR)
-    out[:, 0] = lp(out[:, 0], 2400, 4)
-    out[:, 1] = lp(out[:, 1], 2400, 4)
-    # Cars passing in the distance (muffled by the blocks between).
-    for k in range(7):
-        c = car_pass(rng.uniform(5.0, 8.0), 1 if k % 2 else -1) * rng.uniform(0.12, 0.22)
-        c = np.stack([lp(c[:, 0], 1800, 4), lp(c[:, 1], 1800, 4)], axis=1)
-        start = int(SR * (k * sec / 7 + rng.uniform(0, 2.0)))
-        for ch in range(2):
-            col = np.zeros(n)
-            add_loop(col, c[:, ch], start)
-            out[:, ch] += col
-    # Birds: little phrases of chirps here and there.
-    for k in range(9):
-        start = int(SR * rng.uniform(0, sec))
-        side = rng.uniform(0.15, 0.85)
-        phrase = np.zeros(int(SR * 1.2))
-        base = rng.uniform(3200, 4600)
-        for j in range(rng.integers(2, 5)):
-            c = chirp(rng.uniform(0.05, 0.11), base * rng.uniform(0.9, 1.1), base * rng.uniform(1.15, 1.45))
-            s = int(SR * j * rng.uniform(0.12, 0.2))
-            phrase[s : s + len(c)] += c[: len(phrase) - s]
-        phrase *= rng.uniform(0.05, 0.1)
-        for ch, g in ((0, np.sqrt(1 - side)), (1, np.sqrt(side))):
-            col = np.zeros(n)
-            add_loop(col, phrase * g, start)
-            out[:, ch] += col
-    out[:, 0] = loop_reverb(out[:, 0], reverb_ir(1.4, 3), 0.25)
-    out[:, 1] = loop_reverb(out[:, 1], reverb_ir(1.4, 4), 0.25)
+    for ch in range(2):
+        hum = periodic_noise(n, lambda f: np.where(f > 20, 1 / np.maximum(f, 1), 0) * (f < 160))
+        body = periodic_noise(n, lambda f: np.exp(-(((f - 520) / 380) ** 2)))
+        whistle = periodic_noise(n, lambda f: np.exp(-(((f - 1350) / 160) ** 2)))
+        gust = 0.5 + 0.5 * cycles(n, 3, 1.1 + ch * 0.6) * (0.6 + 0.4 * cycles(n, 2, ch))
+        out[:, ch] = hum * 0.22 + body * (0.12 + 0.2 * gust) + whistle * 0.05 * gust**3
     return out
-
-
-def siren():
-    """A siren far away: the two-tone wail, muffled by the city."""
-    sec = 7.0
-    tt = t(sec)
-    f = 760 + 340 * (0.5 + 0.5 * np.sin(2 * np.pi * tt / 1.9))
-    x = signal.sawtooth(2 * np.pi * np.cumsum(f) / SR, 0.5)
-    x = lp(x, 1500) * np.clip(tt / 1.2, 0, 1) * np.clip((sec - tt) / 2.0, 0, 1)
-    wet = signal.fftconvolve(x, reverb_ir(2.0, 5))[: len(x)]
-    y = x * 0.4 + wet * 0.8
-    return np.stack([y, np.roll(y, int(SR * 0.02))], axis=1)
-
-
-def birds_flap():
-    """A flock taking off: fast wing claps and a few alarm chirps."""
-    sec = 1.6
-    n = int(SR * sec)
-    x = np.zeros(n)
-    for _ in range(70):
-        s = int(SR * rng.uniform(0, 1.1) ** 1.6)
-        clap = bp(rng.standard_normal(int(SR * 0.025)), 500, 3500) * np.hanning(int(SR * 0.025))
-        x[s : s + len(clap)] += clap[: n - s] * rng.uniform(0.3, 1.0)
-    for _ in range(4):
-        c = chirp(0.07, 2800, 3600) * 0.5
-        s = int(SR * rng.uniform(0.05, 0.6))
-        x[s : s + len(c)] += c
-    x *= np.exp(-np.arange(n) / SR * 1.4)
-    m = np.max(np.abs(x)) or 1.0
-    wavfile.write(os.path.join(OUT, "birds_flap.wav"), SR, (x / m * 0.85 * 32767).astype(np.int16))
-    print("wrote birds_flap.wav")
 
 
 if __name__ == "__main__":
     save_ogg("music", music(), quality=3)
     save_ogg("ambience", ambience(), quality=2)
-    save_ogg("siren", siren(), quality=3)
-    birds_flap()

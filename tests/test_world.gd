@@ -30,44 +30,35 @@ func test_arena_builds_structures() -> void:
 func test_unsupported_blocks_fall() -> void:
 	await _load_world()
 	var s := world.structures
-	# Knock out the ground floor of one building: the floors above have
-	# nothing left to stand on.
-	var at := Vector3(-29, 0, -31)
+	# Knock out the ground floor of the palace's right front corner: the
+	# floors above have nothing left to stand on.
+	var at := Vector3(12, 0, 0)
 	var broke := 0
 	for i in s.segment_count():
 		var p := s.transform_of(i).origin
-		if s.is_alive(i) and p.y < 2.9 and absf(p.x - at.x) < 6.5 and absf(p.z - at.z) < 6.5:
+		if s.is_alive(i) and p.y < 5.5 and absf(p.x - at.x) < 6.5 and absf(p.z - at.z) < 6.5:
 			s.break_segment(i)
 			broke += 1
 	var fell := s.settle()
 	check(broke > 15, "broke the ground floor (%d)" % broke)
-	check(fell > 60, "the storeys above lost support (%d fell)" % fell)
+	check(fell > 40, "the storeys above lost support (%d fell)" % fell)
 	await _unload()
 
 
-func test_ramps_and_walkway_stand_and_lead_up() -> void:
+func test_the_portal_leads_into_the_courtyard() -> void:
 	await _load_world()
-	await frames(60)
+	await frames(30)
 	check_eq(world.structures.cluster_count(), 0, "nothing falls on its own")
-	# The bridge over the south avenue is walkable at the 2nd floor (6.4 m).
-	var q := PhysicsRayQueryParameters3D.create(Vector3(0, 12, 31), Vector3(0, 0, 31))
-	var hit := world.get_world_3d().direct_space_state.intersect_ray(q)
-	check(not hit.is_empty(), "something under the walkway centre")
-	if not hit.is_empty():
-		check_near(hit["position"].y, 6.4, 0.05, "walkway deck at 6.4 m")
-	# Walk the player up the south-east alley ramp's first flight (it climbs
-	# toward +z to the first floor, 3.2 m).
+	# Walk in from the square: through the door, the hall, under an arch.
 	var p := world.player
 	p.input_enabled = true
-	p.global_position = Vector3(19.4, 0.1, 25.8)
-	p.rotation.y = PI
+	p.global_position = Vector3(0, 0.1, 9)
+	p.rotation.y = 0.0
 	p.touch_move = Vector2(0, -1)
-	var top := 0.0
-	for k in 120:
+	for k in 150:
 		await get_tree().physics_frame
-		top = maxf(top, p.global_position.y)
 	p.touch_move = Vector2.ZERO
-	check(top > 2.9, "climbed the ramp (reached y %.2f)" % top)
+	check(p.global_position.z < -5.0, "reached the courtyard (z %.1f)" % p.global_position.z)
 	await _unload()
 
 
@@ -79,6 +70,24 @@ func test_debris_budget_recycles_oldest() -> void:
 		d.spawn(Transform3D(Basis(), Vector3(i % 20, 5 + i / 20.0 * 0.6, 40)), Vector3.ONE * 0.3)
 	check_eq(d.active_count, cap, "never exceeds capacity")
 	check_eq(d.recycled_total, 25, "oldest recycled")
+	await _unload()
+
+
+func test_freed_slots_are_reused_lowest_first_and_counted() -> void:
+	await _load_world()
+	var d := world.debris
+	var ids: Array[int] = []
+	for k in 6:
+		ids.append(d.spawn(Transform3D(Basis(), Vector3(40 + k, 0.5, 40)), Vector3.ONE * 0.4))
+	d.despawn(ids[1])
+	d.despawn(ids[4])
+	var again := d.spawn(Transform3D(Basis(), Vector3(40, 3, 40)), Vector3.ONE * 0.4)
+	check_eq(again, ids[1], "the lowest free slot comes first")
+	# A frozen piece taken out of the world is no longer counted as frozen.
+	d._freeze(ids[2])
+	var frozen := d.frozen_count
+	d.despawn(ids[2])
+	check_eq(d.frozen_count, frozen - 1, "frozen count follows despawn")
 	await _unload()
 
 
