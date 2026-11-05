@@ -49,11 +49,20 @@ func test_wood_splinters_run_along_the_grain() -> void:
 	ShardLibrary.ensure()
 	var along := 0.0
 	var across := 0.0
-	for shard: Dictionary in ShardLibrary.pattern(Materials.Kind.WOOD, 6, 0):
-		var size: Vector3 = shard["size"]
-		along += size.x
-		across += (size.y + size.z) * 0.5
+	var kids_along := 0.0
+	var kids_across := 0.0
+	for count in [4, 6]:
+		for variant in 2:
+			for shard: Dictionary in ShardLibrary.pattern(Materials.Kind.WOOD, count, variant):
+				var size: Vector3 = shard["size"]
+				along += size.x
+				across += (size.y + size.z) * 0.5
+				for kid: Dictionary in ShardLibrary.children_of(shard["id"]):
+					var ks: Vector3 = kid["size"]
+					kids_along += ks.x
+					kids_across += (ks.y + ks.z) * 0.5
 	check(along > across * 1.5, "splinters are long along x (%.2f vs %.2f)" % [along, across])
+	check(kids_along > kids_across * 2.0, "and so are their own splinters")
 
 
 func test_concrete_block_breaks_into_shards() -> void:

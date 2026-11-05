@@ -56,7 +56,11 @@ Physics, not drawing, is what limits the game, so the effects are built to
 cost as little of it as possible:
 
 - Only big pieces are physics bodies. Gravel, splinters and glass shards are
-  chips with no collision (an arc, one bounce on the surface below, rest).
+  chips with no collision (an arc, one bounce on the surface below, rest),
+  and they stay on the ground as the rubble field's gravel.
+- What the black hole grinds down becomes grains of a cloud swirling round
+  it: thousands of grains moved entirely by their shader (one draw call, no
+  physics), flung out as dust and gravel when it closes.
 - Broken pieces are shards cut in Blender, but they share one mesh: the
   shader moves its vertices to each shard's shape, so all debris is still
   one draw call. On phones every shard collides as a box of the same volume
@@ -93,6 +97,7 @@ cost as little of it as possible:
 | Materials and finishes (stone, plaster, travertine, marble, brick, terracotta, shutters, verdigris, bronze): look, weight, strength, breakage; cracks from the hit point | `scripts/destruction/materials.gd`, `shaders/block.gdshader` |
 | Gravel and glass shards without physics (one bounce, rest, fade) | `scripts/fx/chip_system.gd` |
 | Dust clouds, rolling dust walls (one noise texture, one draw call) | `scripts/fx/dust_system.gd`, `shaders/dust.gdshader` |
+| The black hole's cloud of grains (moved by the shader) | `scripts/fx/grain_cloud.gd`, `shaders/grain.gdshader` |
 | Rebar left in broken concrete | `scripts/fx/rebar_system.gd` |
 | Quality tiers and adaptive quality (render scale, shadows, pieces kept) | `scripts/core/quality.gd`, `scripts/core/adaptive_quality.gd` |
 | Physics timing (mean and worst step per second) | `scripts/core/physics_clock.gd` |
@@ -106,7 +111,13 @@ Breaking is never computed at runtime: `tools/make_shards.py` (Blender's
 Python module, `pip install bpy`) cuts unit cubes into Voronoi cells once,
 with rough fracture faces, and writes `assets/shards/shards.json`:
 
-- **Concrete:** 2 to 6 chunky pieces (at most 3 on phones, 4 in browsers). **Wood:** long splinters along the
+- **Concrete:** 2 to 6 chunky pieces (at most 3 on phones, 4 in browsers).
+- **The cascade:** every concrete and wood shard is cut again into 3 to 5
+  sub-shards that tile it exactly. When a piece breaks a second time (a
+  hard landing, the black hole's grinding) it splits along cracks that were
+  already inside it; after that, pieces crumble into gravel. The seeds of
+  these cuts come from a Geometry Nodes group (Mesh to Volume, then
+  Distribute Points in Volume), so they fill any closed shape. **Wood:** long splinters along the
   grain. **Metal:** a few torn lengths (bent a little in the shader).
 - Every shard is resampled onto the same 152-vertex layout, so one mesh
   draws all of them: the shapes live in a small texture the block shader
@@ -117,7 +128,7 @@ with rough fracture faces, and writes `assets/shards/shards.json`:
   spawned from the pool: a break is a lookup, never a mesh build.
 - Shards too small to be worth a body become gravel chips.
 
-Regenerate after changing the script (about a second):
+Regenerate after changing the script (a few seconds, Blender 5.2's module):
 
 ```sh
 pip install bpy && python3 tools/make_shards.py   # also writes art/shards_preview.glb
@@ -142,6 +153,8 @@ After anything changes, each structure is re-checked:
    few per frame, and the collapse spreads floor by floor.
 4. **Impacts.** A falling piece damages the blocks it hits (heavier hits
    harder), so towers can be toppled into each other.
+5. **Coming loose.** A block bigger than 0.4 m³ (1 m³ on phones) cracks into
+   shards as it comes away: a wall panel never tumbles off whole.
 
 Blocks keep their damage between blasts (shown as cracks), which lowers
 their capacity.
@@ -156,8 +169,8 @@ their capacity.
   one MultiMesh per kind).
 - Showcase (`--mode=showcase --prof --seed=1`, native build on a 4-core
   Linux VM), physics ms per step while things are moving: phone
-  settings 2.2–2.5 mean (worst second 3.4–4.1), browser settings 4.3–4.8
-  (6.9–7.7), desktop 9.7–10.7 (15–24).
+  settings 2.8–2.9 mean (worst second 4.3–4.6), browser settings 4.1–4.7
+  (7.4–8.4), desktop 7.4 (12.7–12.9).
 - CI fails if the browser-settings showcase averages more than 12 ms per
   busy step (`tools/perf_gate.py`). `godot -- --mode=bench` still measures
   raw body counts by hand.

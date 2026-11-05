@@ -7,6 +7,11 @@ Run with Blender's Python module (pip install bpy), from the project root:
 Blender does the cutting: every pattern is a unit cube split into Voronoi
 cells with bmesh bisects (the same method as Blender's Cell Fracture),
 stretched along the grain for wood, cut across into torn lengths for metal.
+Each concrete and wood shard is then cut again into a few sub-shards that
+tile it exactly (the cascade): when a piece breaks a second time it splits
+along cracks that were already inside it. The fracture seeds come from a
+Geometry Nodes group (Mesh to Volume -> Distribute Points in Volume), so
+they fill any closed shape, not just boxes.
 Each shard is then sampled onto one shared vertex layout (a subdivided cube
 wrapped around the shard) so the game can draw every shard of every
 pattern with a single mesh, one draw call, reading the shape from a
@@ -37,12 +42,19 @@ OUT_GLB = os.path.join(ROOT, "art", "shards_preview.glb")
 GRID = 5  # base layout: cube faces split GRID x GRID -> 6*GRID^2+2 vertices
 MAX_HULL = 20  # collision hull points per shard
 
-# Patterns per material: (piece count, variants).
+# Patterns per material: (piece count, variants). A break asks for at most
+# five pieces (see Fracture.max_pieces), so bigger patterns would never be used.
 PATTERNS = {
-    "concrete": [(2, 3), (3, 2), (4, 2), (5, 2), (6, 2), (8, 2), (10, 2)],
-    "wood": [(2, 2), (3, 2), (4, 2), (6, 2), (8, 2)],
+    "concrete": [(2, 3), (3, 3), (4, 2), (5, 2), (6, 2)],
+    "wood": [(2, 2), (3, 2), (4, 2), (6, 2)],
     "metal": [(2, 3), (3, 3)],
 }
+STATS = {"gn_points": 0, "fallbacks": 0}
+# Materials whose shards are cut again into sub-shards (metal tears, it
+# does not crumble).
+CASCADE = ("concrete", "wood")
+# Grain of the cut for wood (squashed along x before cutting: splinters).
+STRETCH = {"concrete": (1.0, 1.0, 1.0), "wood": (0.25, 1.0, 1.0)}
 # Roughness of the fracture faces (unit-cube units, inward only).
 ROUGH = {"concrete": 0.045, "wood": 0.06, "metal": 0.05}
 
@@ -104,9 +116,9 @@ def unit_cube(scale=(1.0, 1.0, 1.0)):
     return bm
 
 
-def cut(bm, co, no):
+def cut(bm, co, no, mat=1):
     """Keeps the side of the plane behind `no`, closing the hole with a
-    fracture face (material 1)."""
+    fracture face (material `mat`: 1 for the first break, 2 for the cascade)."""
     geom = bm.verts[:] + bm.edges[:] + bm.faces[:]
     res = bmesh.ops.bisect_plane(bm, geom=geom, plane_co=co, plane_no=no, clear_outer=True, dist=1e-6)
     edges = [e for e in res["geom_cut"] if isinstance(e, bmesh.types.BMEdge)]
@@ -119,7 +131,7 @@ def cut(bm, co, no):
         bmesh.ops.holes_fill(bm, edges=edges, sides=0)
     for f in bm.faces:
         if f not in before:
-            f.material_index = 1
+            f.material_index = mat
 
 
 def voronoi_cells(count, rng, stretch=(1.0, 1.0, 1.0)):
@@ -165,6 +177,119 @@ def torn_lengths(count, rng):
     return pieces
 
 
+# --- The cascade: sub-shards ---------------------------------------------------
+
+
+def seed_group():
+    """Geometry Nodes: candidate fracture seeds scattered inside a closed
+    mesh (Mesh to Volume -> Distribute Points in Volume -> Points to
+    Vertices, so the evaluated object is a mesh whose vertices we read)."""
+    ng = bpy.data.node_groups.get("FractureSeeds")
+    if ng is not None:
+        return ng
+    ng = bpy.data.node_groups.new("FractureSeeds", "GeometryNodeTree")
+    ng.interface.new_socket("Geometry", in_out="INPUT", socket_type="NodeSocketGeometry")
+    ng.interface.new_socket("Geometry", in_out="OUTPUT", socket_type="NodeSocketGeometry")
+    gin = ng.nodes.new("NodeGroupInput")
+    gout = ng.nodes.new("NodeGroupOutput")
+    to_volume = ng.nodes.new("GeometryNodeMeshToVolume")
+    scatter = ng.nodes.new("GeometryNodeDistributePointsInVolume")
+    scatter.name = "Scatter"  # its density and seed are set per shard
+    to_verts = ng.nodes.new("GeometryNodePointsToVertices")
+    set_input(to_volume, "Resolution Mode", "Amount", "resolution_mode", "VOXEL_AMOUNT")
+    set_input(to_volume, "Voxel Amount", 48.0)
+    link = ng.links.new
+    link(gin.outputs["Geometry"], to_volume.inputs["Mesh"])
+    link(to_volume.outputs["Volume"], scatter.inputs["Volume"])
+    link(scatter.outputs["Points"], to_verts.inputs["Points"])
+    link(to_verts.outputs["Mesh"], gout.inputs["Geometry"])
+    return ng
+
+
+def set_input(node, name, value, prop=None, prop_value=None):
+    """Sets a node option that is a socket in newer Blender (5.x), a
+    property in older ones."""
+    sock = node.inputs.get(name)
+    if sock is not None:
+        sock.default_value = value
+    elif prop is not None and hasattr(node, prop):
+        setattr(node, prop, value if prop_value is None else prop_value)
+
+
+def gn_seeds(bm, count, rng):
+    """`count` well spread fracture seeds inside the closed mesh `bm`."""
+    volume = max(bm.calc_volume(), 1e-6)
+    mesh = bpy.data.meshes.new("cell")
+    bm.to_mesh(mesh)
+    obj = bpy.data.objects.new("cell", mesh)
+    bpy.context.scene.collection.objects.link(obj)
+    group = seed_group()
+    scatter = group.nodes["Scatter"]
+    scatter.inputs["Density"].default_value = 60.0 / volume
+    scatter.inputs["Seed"].default_value = rng.randrange(1 << 20)
+    mod = obj.modifiers.new("seeds", "NODES")
+    mod.node_group = group
+    obj.update_tag()
+    evaluated = obj.evaluated_get(bpy.context.evaluated_depsgraph_get())
+    candidates = [v.co.copy() for v in evaluated.data.vertices]
+    bpy.data.objects.remove(obj)
+    bpy.data.meshes.remove(mesh)
+    STATS["gn_points"] += len(candidates)
+    if len(candidates) < count:
+        STATS["fallbacks"] += 1
+        candidates += inside_points(bm, count * 8, rng)
+    rng.shuffle(candidates)
+    # Farthest-point picks: even-ish pieces, never two seeds side by side.
+    chosen = [candidates[0]]
+    while len(chosen) < count and len(chosen) < len(candidates):
+        chosen.append(max(candidates, key=lambda p: min((p - c).length for c in chosen) * rng.uniform(0.7, 1.0)))
+    return chosen
+
+
+def inside_points(bm, n, rng):
+    """Fallback seeds: random points inside a convex cell (behind every face)."""
+    lo = Vector((min(v.co[k] for v in bm.verts) for k in range(3)))
+    hi = Vector((max(v.co[k] for v in bm.verts) for k in range(3)))
+    bm.normal_update()
+    planes = [(f.calc_center_median(), f.normal.copy()) for f in bm.faces]
+    out = []
+    for _ in range(n * 50):
+        p = Vector((rng.uniform(lo.x, hi.x), rng.uniform(lo.y, hi.y), rng.uniform(lo.z, hi.z)))
+        if all((p - c).dot(no) < -1e-4 for c, no in planes):
+            out.append(p)
+            if len(out) >= n:
+                break
+    return out
+
+
+def split_cell(cell, count, rng, stretch):
+    """Cuts a shard (a closed bmesh in unit pattern space) into `count`
+    sub-shards that tile it, along the grain given by `stretch`."""
+    squashed = cell.copy()
+    for v in squashed.verts:
+        v.co = Vector((v.co.x * stretch[0], v.co.y * stretch[1], v.co.z * stretch[2]))
+    seeds = gn_seeds(squashed, count, rng)
+    parts = []
+    for i, s in enumerate(seeds):
+        bm = squashed.copy()
+        for j, t in enumerate(seeds):
+            if i != j:
+                cut(bm, (s + t) * 0.5, (t - s).normalized(), 2)
+        if len(bm.faces) < 4 or bm.calc_volume() < 1e-5:
+            bm.free()
+            continue
+        for v in bm.verts:
+            v.co = Vector((v.co.x / stretch[0], v.co.y / stretch[1], v.co.z / stretch[2]))
+        parts.append(bm)
+    squashed.free()
+    return parts
+
+
+def child_count(volume):
+    """Sub-shards per shard: bigger shards crack into more pieces."""
+    return 3 if volume < 0.12 else (4 if volume < 0.28 else 5)
+
+
 # --- Sampling onto the shared layout ---------------------------------------------
 
 
@@ -180,7 +305,7 @@ def rough(kind, p, seed):
     return 0.5 + 0.5 * noise.fractal(q, 0.6, 2.0, 3)
 
 
-def sample(bm, layout, kind, seed):
+def sample(bm, layout, kind, seed, first_seed=None):
     bm.normal_update()
     tree = BVHTree.FromBMesh(bm)
     centre = Vector()
@@ -199,8 +324,11 @@ def sample(bm, layout, kind, seed):
             loc, _, idx, _ = hit
         outer = 1.0 if mats[idx] == 0 else 0.0
         if outer < 0.5:
+            # A sub-shard keeps its parent's roughness on the parent's own
+            # fracture faces, so nothing jumps when the parent splits.
+            face_seed = first_seed if (mats[idx] == 1 and first_seed is not None) else seed
             depth = (loc - centre).length
-            loc = loc - d * min(ROUGH[kind] * rough(kind, loc, seed), depth * 0.35)
+            loc = loc - d * min(ROUGH[kind] * rough(kind, loc, face_seed), depth * 0.35)
         out.append((loc, outer))
     lo = Vector((min(v.co.x for v in bm.verts), min(v.co.y for v in bm.verts), min(v.co.z for v in bm.verts)))
     hi = Vector((max(v.co.x for v in bm.verts), max(v.co.y for v in bm.verts), max(v.co.z for v in bm.verts)))
@@ -209,10 +337,10 @@ def sample(bm, layout, kind, seed):
     hull = farthest_points([v.co - mid for v in bm.verts], MAX_HULL)
     return {
         "verts": verts,
-        "center": list(mid),
-        "size": list(hi - lo),
-        "hull": [c for v in hull for c in v],
-        "volume": bm.calc_volume(),
+        "center": [round(c, 4) for c in mid],
+        "size": [round(c, 4) for c in hi - lo],
+        "hull": [round(c, 4) for v in hull for c in v],
+        "volume": round(bm.calc_volume(), 6),
     }
 
 
@@ -271,12 +399,25 @@ def main():
                     cells = voronoi_cells(count, rng)
                 pattern = {"count": len(cells), "shards": []}
                 for k, bm in enumerate(cells):
-                    s = sample(bm, layout, kind, rng.random())
+                    first_seed = rng.random()
+                    s = sample(bm, layout, kind, first_seed)
                     s["id"] = len(rows)
                     rows.append(s.pop("verts"))
-                    pattern["shards"].append(s)
                     explode = Vector(s["center"]) * 0.35
-                    add_preview(bm, "%s_%d_%d" % (kind, col, k), Vector((col * 1.8, row_y, 0)) + explode, kind)
+                    at = Vector((col * 1.8, row_y, 0)) + explode
+                    if kind in CASCADE:
+                        s["children"] = []
+                        for c, part in enumerate(split_cell(bm, child_count(s["volume"]), rng, STRETCH[kind])):
+                            child = sample(part, layout, kind, rng.random(), first_seed)
+                            child["id"] = len(rows)
+                            rows.append(child.pop("verts"))
+                            s["children"].append(child)
+                            spread = (Vector(child["center"]) - Vector(s["center"])) * 0.25
+                            add_preview(part, "%s_%d_%d_%d" % (kind, col, k, c), at + spread, kind)
+                            part.free()
+                    else:
+                        add_preview(bm, "%s_%d_%d" % (kind, col, k), at, kind)
+                    pattern["shards"].append(s)
                     bm.free()
                 library[kind].append(pattern)
                 col += 1
@@ -303,6 +444,7 @@ def main():
     os.makedirs(os.path.dirname(OUT_GLB), exist_ok=True)
     bpy.ops.export_scene.gltf(filepath=OUT_GLB, export_format="GLB")
     print("%d shards, %d vertices each -> %s" % (len(rows), len(layout), OUT_JSON))
+    print("Geometry Nodes seeds: %d candidates, %d fallbacks" % (STATS["gn_points"], STATS["fallbacks"]))
 
 
 if __name__ == "__main__":

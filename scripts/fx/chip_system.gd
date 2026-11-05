@@ -2,11 +2,14 @@ class_name ChipSystem
 extends Node3D
 ## Gravel and splinters: hundreds of tiny irregular chips per collapse with
 ## no physics bodies at all. Each chip flies on a simple arc, bounces once
-## on the surface below the break, then lies there and fades away. Only
-## flying chips cost anything per frame; one draw call for all of them.
+## on the surface below the break, then lies there for a long while (the
+## gravel of the rubble field) until the oldest are recycled. Only flying
+## chips cost anything per frame; one draw call for all of them.
 
 const GRAVITY := 18.0
 const FADE := 0.8
+## Seconds between lifetime checks (resting chips only change then).
+const LIFE_TICK := 0.25
 const FLOATS := 20  # same instance layout as the debris (block shader)
 
 var capacity := 0
@@ -30,7 +33,7 @@ var _multimesh: MultiMesh
 
 
 func _ready() -> void:
-	capacity = Quality.pick(260, 600, 1100)
+	capacity = Quality.pick(500, 1400, 2600)
 	_pos.resize(capacity)
 	_vel.resize(capacity)
 	_size.resize(capacity)
@@ -65,7 +68,9 @@ func _ready() -> void:
 
 ## Throws `count` chips out of a box of `size` centred on `at`. `kick` is
 ## the velocity the pieces inherit, `speed` how hard chips spray out.
-func burst(at: Vector3, size: Vector3, kind: int, count: int, speed := 4.0, kick := Vector3.ZERO) -> void:
+func burst(
+	at: Vector3, size: Vector3, kind: int, count: int, speed := 4.0, kick := Vector3.ZERO, seed_value := -1.0
+) -> void:
 	count = mini(count, capacity / 6)
 	if count <= 0:
 		return
@@ -94,16 +99,18 @@ func burst(at: Vector3, size: Vector3, kind: int, count: int, speed := 4.0, kick
 		_angle[i] = randf() * TAU
 		_spin[i] = randf_range(-14.0, 14.0)
 		_floor[i] = floor_y
-		_life[i] = randf_range(4.0, 7.0) * float(Quality.pick(0.6, 0.8, 1.0))
+		_life[i] = randf_range(40.0, 70.0) * float(Quality.pick(0.5, 0.8, 1.0))
 		_state[i] = 1
 		if was != 1 and was != 2:  # a recycled flying chip is already listed
 			_flying.append(i)
 		var o := i * FLOATS
 		_buffer[o + 12] = shade * randf_range(0.9, 1.05)
 		_buffer[o + 13] = Materials.encode(kind)
-		_buffer[o + 14] = randf()
+		# The finish (plaster, brick...) of what broke rides in the seed.
+		var chip_seed := seed_value if seed_value >= 0.0 else randf()
+		_buffer[o + 14] = fposmod(chip_seed + randf() * 0.5, 1.0)
 		_buffer[o + 15] = 0.0
-		_buffer[o + 16] = Materials.custom(kind, 0.0)
+		_buffer[o + 16] = Materials.custom(kind, 0.0, chip_seed)
 		_write(i, 1.0)
 
 
@@ -164,7 +171,7 @@ func _process(delta: float) -> void:
 	# Lifetime and the fade at the end, ten times a second (resting chips
 	# only change here).
 	_life_tick += delta
-	if _life_tick >= 0.1:
+	if _life_tick >= LIFE_TICK:
 		for i in capacity:
 			if _state[i] == 0:
 				continue
