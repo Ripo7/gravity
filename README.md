@@ -91,6 +91,9 @@ cost as little of it as possible:
 | Quality tiers and adaptive quality (render scale, shadows, pieces kept) | `scripts/core/quality.gd`, `scripts/core/adaptive_quality.gd` |
 | Shake, slow motion on big collapses | `scripts/fx/*`, `scripts/core/game_world.gd` |
 | Sound effects (synthesised, regenerate with `python3 tools/make_sounds.py`) | `audio/*.wav`, `scripts/core/sfx.gd` |
+| Music, city ambience, distant sirens, wing claps (synthesised, `python3 tools/make_music.py`) | `audio/*.ogg`, `scripts/core/sfx.gd` |
+| Birds: pigeons on the roofs that flee from destruction, gulls circling (one draw call, no physics) | `scripts/fx/bird_system.gd`, `shaders/bird.gdshader` |
+| Painted facades (one colour per building, carried by every piece), lit windows, the painted skyline | `shaders/block.gdshader`, `scripts/destruction/materials.gd`, `shaders/skyline.gdshader` |
 
 ### Shards: cut once in Blender, reused forever
 

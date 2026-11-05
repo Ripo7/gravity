@@ -1,12 +1,15 @@
 extends Node
 ## Autoload: every sound effect. Pooled players, per-sound rate limits so a
 ## collapse of 200 blocks sounds like a rumble and not a machine gun.
-## Sounds are synthesised by tools/make_sounds.py.
+## Sounds are synthesised by tools/make_sounds.py, the music and the city
+## ambience (two seamless loops that always play) by tools/make_music.py.
 
 const POOL_3D := 14
 const POOL_UI := 4
 const MIN_GAP := 0.05  ## seconds between two starts of the same sound
 const MAX_ALIVE := 4  ## same sound playing at once
+const MUSIC_DB := -15.0
+const AMBIENCE_DB := -11.0
 
 const SOUNDS := {
 	"implode": preload("res://audio/implode.wav"),
@@ -30,6 +33,8 @@ const SOUNDS := {
 	"select": preload("res://audio/select.wav"),
 	"tier": preload("res://audio/tier.wav"),
 	"ready": preload("res://audio/ready.wav"),
+	"siren": preload("res://audio/siren.ogg"),
+	"birds_flap": preload("res://audio/birds_flap.wav"),
 }
 const BREAKS := {
 	Materials.Kind.CONCRETE: "break_concrete",
@@ -42,6 +47,8 @@ const BREAKS := {
 var _players: Array[AudioStreamPlayer3D] = []
 var _ui: Array[AudioStreamPlayer] = []
 var _charge: AudioStreamPlayer
+var _music: AudioStreamPlayer
+var _ambience: AudioStreamPlayer
 var _next := 0
 var _next_ui := 0
 var _last := {}  # name -> time of last start
@@ -70,6 +77,30 @@ func _ready() -> void:
 	_charge.stream = loop
 	_charge.volume_db = -14.0
 	add_child(_charge)
+	_music = _loop_player("res://audio/music.ogg", MUSIC_DB)
+	_ambience = _loop_player("res://audio/ambience.ogg", AMBIENCE_DB)
+
+
+func _loop_player(path: String, db: float) -> AudioStreamPlayer:
+	var p := AudioStreamPlayer.new()
+	var stream := (load(path) as AudioStreamOggVorbis).duplicate() as AudioStreamOggVorbis
+	stream.loop = true
+	p.stream = stream
+	p.volume_db = db
+	add_child(p)
+	if DisplayServer.get_name() != "headless":
+		p.play()
+	return p
+
+
+## Lowers the music for a moment so a big collapse is heard (it comes back
+## over `back` seconds).
+func duck(db := -9.0, back := 3.0) -> void:
+	if _music == null:
+		return
+	var tw := create_tween()
+	tw.tween_property(_music, "volume_db", MUSIC_DB + db, 0.15)
+	tw.tween_property(_music, "volume_db", MUSIC_DB, back)
 
 
 ## Plays a sound at a world position (Vector3.INF = not positional).

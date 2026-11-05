@@ -87,11 +87,16 @@ func build_segments() -> Array[Dictionary]:
 			_build_bridge(out)
 		Kind.APARTMENT:
 			_build_apartment(out, rng)
+	# Lived-in buildings are painted, one colour each (see Materials.PAINTS);
+	# walls, ramps and bridges stay raw concrete.
+	var paint := 0
+	if kind in [Kind.APARTMENT, Kind.BUILDING, Kind.TOWER]:
+		paint = 1 + (seed_value * 5 + int(kind) * 3) % Materials.PAINT_COUNT
 	for seg in out:
 		seg["strength"] = seg.get("strength", strength)
 		seg["material"] = seg.get("material", material)
 		seg["shade"] = rng.randf_range(0.93, 1.04)
-		seg["seed"] = rng.randf()
+		seg["seed"] = Materials.paint_seed(paint, rng.randf())
 	return out
 
 
