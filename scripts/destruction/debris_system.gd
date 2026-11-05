@@ -203,6 +203,7 @@ func _build_pool() -> void:
 		box.subdivide_depth = 1
 		_multimesh.mesh = box
 	_multimesh.instance_count = capacity
+	_multimesh.visible_instance_count = 0
 	var mmi := MultiMeshInstance3D.new()
 	mmi.name = "DebrisMesh"
 	mmi.multimesh = _multimesh
@@ -399,6 +400,8 @@ func _place(
 	_fade[i] = 0.0
 	active_count += 1
 	_write_instance(i, clean)
+	if i >= _multimesh.visible_instance_count:
+		_multimesh.visible_instance_count = i + 1
 
 
 func despawn(i: int) -> void:
@@ -599,10 +602,12 @@ func _enforce_budget() -> void:
 func _physics_process(delta: float) -> void:
 	_clock += delta
 	var awake := 0
+	var last := -1
 	var tint_step := TINT_DECAY * delta
 	for i in capacity:
 		if not _active[i]:
 			continue
+		last = i
 		var body := _bodies[i]
 		var asleep: bool = (
 			_frozen[i] == 1 or PhysicsServer3D.body_get_state(body, PhysicsServer3D.BODY_STATE_SLEEPING)
@@ -632,6 +637,10 @@ func _physics_process(delta: float) -> void:
 		if not asleep and _storm[i] == 0:
 			_check_landing(i, xform.origin)
 	awake_count = awake
+	# Free slots are handed out lowest first, so pieces sit at the start of
+	# the pool: only draw up to the last one (each shard is 152 vertices).
+	if last + 1 < _multimesh.visible_instance_count:
+		_multimesh.visible_instance_count = last + 1
 	_breaks_left = MAX_BREAKS_PER_FRAME
 	_sweep += delta
 	if _sweep >= QUIET_SWEEP:
