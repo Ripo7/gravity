@@ -13,6 +13,9 @@ uniform float glow_strength = 0.9;
 // Debris and chips: the unit box (subdivided once) is cut into an
 // irregular faceted chunk, different for every piece.
 uniform bool chunky = false;
+// Shard shapes from the library: xyz = vertex, w = 1 on the block's outer
+// surface, 0 on a fresh fracture face.
+uniform sampler2D shard_shapes : filter_nearest;
 
 uniform vec3 concrete : source_color = vec3(0.78, 0.76, 0.72);
 uniform vec3 wood : source_color = vec3(0.84, 0.75, 0.62);
@@ -32,6 +35,7 @@ varying float tint;
 varying float damage;
 varying vec3 hit_at;  // metres in block space; x > 90 when never hit
 varying float world_y;
+varying float outer;  // 0 on fresh fracture faces
 
 float hash(vec3 p) {
 	p = fract(p * 0.3183099 + 0.1);
@@ -65,8 +69,9 @@ float fbm(vec3 p) {
 // move together, so the chunk stays closed; nothing grows past the box, so
 // it never pokes through what it rests on.
 vec3 chunk(vec3 v, float s) {
-	vec3 a = abs(v) * 2.0;
-	float k = a.x + a.y + a.z;  // 3 corner, 2 edge middle, 1 face centre
+	// How many coordinates sit on the cube's surface: 3 corner, 2 edge,
+	// 1 face (works for any grid the cube is split into).
+	float k = step(0.49, abs(v.x)) + step(0.49, abs(v.y)) + step(0.49, abs(v.z));
 	vec3 h = vec3(hash(v * 7.13 + s * 31.7), hash(v * 3.71 + s * 17.3 + 5.0), hash(v * 5.27 + s * 11.9 + 9.0));
 	float pull = k > 2.5 ? 0.16 + 0.34 * h.x : (k > 1.5 ? 0.03 + 0.17 * h.y : 0.02 * h.z);
 	vec3 o = v * (1.0 - pull);
@@ -75,23 +80,40 @@ vec3 chunk(vec3 v, float s) {
 }
 
 void vertex() {
-	if (chunky) {
-		VERTEX = chunk(VERTEX, COLOR.b);
-	}
 	vec3 scale = vec3(length(MODEL_MATRIX[0].xyz), length(MODEL_MATRIX[1].xyz), length(MODEL_MATRIX[2].xyz));
-	local_pos = VERTEX * scale;
-	half_size = scale * 0.5;
-	local_normal = NORMAL;
-	shade = COLOR.r;
-	// Undo the sRGB->linear conversion applied to instance colours.
 	// Material in the integer part of the first custom float, damage in
 	// its fraction (see Materials.custom).
 	material_id = floor(INSTANCE_CUSTOM.r + 0.001);
 	seed = COLOR.b;
+	outer = 1.0;
+	if (chunky) {
+		// Debris: a shard shape from the library (one texture row per
+		// shard, one texel per vertex), or a plain chunk cut from the cube.
+		int shard = int(INSTANCE_CUSTOM.g + 0.5) - 1;
+		if (shard >= 0) {
+			vec4 t = texelFetch(shard_shapes, ivec2(VERTEX_ID, shard), 0);
+			VERTEX = t.xyz;
+			outer = t.w;
+			if (material_id > 1.5 && material_id < 2.5) {
+				// Metal does not shatter, it bends: curve the length of the
+				// piece (pattern x is its grain) by a seeded amount.
+				float len = max(scale.x, 0.01);
+				float x = VERTEX.x * len;
+				float bend = (hash(vec3(seed * 17.0, 3.1, 7.7)) - 0.5) * 0.5;
+				VERTEX.y += bend * x * x / (0.5 * len) / max(scale.y, 0.01);
+			}
+		} else {
+			VERTEX = chunk(VERTEX, seed);
+		}
+	}
+	local_pos = VERTEX * scale;
+	half_size = scale * 0.5;
+	local_normal = NORMAL;
+	shade = COLOR.r;
 	tint = COLOR.a;
 	damage = clamp(fract(INSTANCE_CUSTOM.r + 0.001) / 0.9, 0.0, 1.0);
 	vec3 h = INSTANCE_CUSTOM.gba;
-	hit_at = (h.x + h.y + h.z) > 0.0 ? (h - 1.0) * scale : vec3(99.0);
+	hit_at = (!chunky && (h.x + h.y + h.z) > 0.0) ? (h - 1.0) * scale : vec3(99.0);
 	world_y = (MODEL_MATRIX * vec4(VERTEX, 1.0)).y;
 }
 
@@ -193,6 +215,28 @@ void fragment() {
 		metallic = 0.65;
 	}
 
+	// Fresh fracture faces: the inside of the material, never weathered.
+	if (chunky && outer < 0.99) {
+		float inner = 1.0 - smoothstep(0.2, 0.8, outer);
+		vec3 fresh = albedo;
+		if (material_id < 0.5) {
+			// Concrete: lighter cement with dark aggregate and pores.
+			float grit = step(0.72, noise(p * 22.0)) * 0.25 + step(0.88, noise(p * 47.0)) * 0.2;
+			fresh = concrete * 1.08 * (1.0 - grit);
+			rough = 0.98;
+		} else if (material_id < 1.5) {
+			// Wood: pale raw fibres.
+			fresh = mix(wood * 1.12, vec3(0.93, 0.86, 0.7), 0.35) * (0.9 + 0.2 * noise(p * vec3(40.0, 3.0, 40.0)));
+			rough = 0.9;
+		} else if (material_id < 2.5) {
+			// Metal: bright torn steel.
+			fresh = metal * 1.15;
+			rough = 0.22;
+			metallic = 0.9;
+		}
+		albedo = mix(albedo, fresh, inner);
+	}
+
 	// Weathering, all procedural (no textures, no extra passes):
 	// - dust settles on upward faces, lighter and warmer, patchy;
 	// - grime streaks run down vertical faces from their top edge;
@@ -221,7 +265,7 @@ void fragment() {
 	if (face.x < 0.5) { edge_dist = min(edge_dist, d.x); }
 	if (face.y < 0.5) { edge_dist = min(edge_dist, d.y); }
 	if (face.z < 0.5) { edge_dist = min(edge_dist, d.z); }
-	float edge = 1.0 - smoothstep(0.0, 0.05, edge_dist);
+	float edge = chunky ? 0.0 : 1.0 - smoothstep(0.0, 0.05, edge_dist);
 	albedo *= 1.0 - edge * 0.22;
 
 	// Cracks: they start where the block was hit and spread out across it

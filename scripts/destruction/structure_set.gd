@@ -469,14 +469,9 @@ func _shatter(i: int, from: Vector3, dmg: float, inherit := Vector3.ZERO) -> voi
 	# Glass bursts into shards (chips, see the shattered signal): no bodies.
 	if debris == null or kind == Materials.Kind.GLASS:
 		return
-	var count := Fracture.piece_count_for(size, Materials.prop(kind, "pieces"))
-	var grain := Fracture.grain_for(kind, size)
-	for piece: AABB in Fracture.pattern(size, count, i % 4, grain):
-		var world := xf * Transform3D(Basis(), piece.get_center())
-		var away := (world.origin - from).normalized()
-		var kick := away * minf(dmg, 6.0) * 0.4 + inherit
-		var spin := Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * 3.0
-		debris.spawn(world, piece.size * 0.985, kick, spin, _power_tint, _shade[i], kind, _seed[i])
+	debris.shatter_box(
+		xf, size, kind, from, minf(dmg, 6.0) * 0.4, inherit, _power_tint, _shade[i], _seed[i], i
+	)
 
 
 func _dislodge(i: int, velocity: Vector3, spin := Vector3.ZERO, tint := 0.5) -> void:

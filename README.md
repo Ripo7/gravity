@@ -55,7 +55,11 @@ cost as little of it as possible:
 
 - Only big pieces are physics bodies. Gravel, splinters and glass shards are
   chips with no collision (an arc, one bounce on the surface below, rest).
-- Pieces look like irregular chunks but collide as boxes.
+- Broken pieces are shards cut in Blender, but they share one mesh: the
+  shader moves its vertices to each shard's shape, so all debris is still
+  one draw call. On phones every shard collides as a box of the same volume
+  (hulls cost them 20-30% more physics time); desktop browsers give hulls to
+  the big chunks, native desktop to nearly all of them.
 - Resting rubble is frozen into static bodies (piles used to stay awake
   forever), and thawed when anything disturbs it.
 - Every kind of thing is one draw call: blocks, debris, chips, dust, rebar.
@@ -63,7 +67,8 @@ cost as little of it as possible:
   hurts phones), lit and eroded in the shader.
 - Phones get a lighter tier (render scale, shadow range, fewer pieces), and
   the adaptive quality steps down further if frames run long.
-- Measure with `godot --headless --path . -- --mode=showcase --prof`.
+- Measure with `godot --headless --path . -- --mode=showcase --prof --seed=7`
+  (add `--quality=low` for the phone settings).
 
 ## How it works
 
@@ -77,7 +82,8 @@ cost as little of it as possible:
 | Menu (live attract-mode backdrop) | `scenes/menu.tscn`, `scripts/ui/main_menu.gd` |
 | Structural physics: health, loads, toppling, creak-and-hold, floor-by-floor pancake collapses, roof structures tied to what they stand on | `scripts/destruction/structure_set.gd` |
 | Loose pieces: pooled server bodies + one MultiMesh; resting rubble freezes into static bodies until disturbed | `scripts/destruction/debris_system.gd` |
-| Pre-fractured patterns | `scripts/destruction/fracture.gd` |
+| Shard library: how concrete, wood and metal break (cut in Blender) | `tools/make_shards.py`, `assets/shards/shards.json`, `scripts/destruction/shard_library.gd` |
+| Box patterns (fallback, and materials without shards) | `scripts/destruction/fracture.gd` |
 | Concrete / wood / metal / glass: look, weight, strength, breakage; irregular chunks cut in the vertex shader; cracks from the hit point; weathering | `scripts/destruction/materials.gd`, `shaders/block.gdshader` |
 | Gravel and glass shards without physics (one bounce, rest, fade) | `scripts/fx/chip_system.gd` |
 | Dust clouds, rolling dust walls, haze, trails (one noise texture, one draw call) | `scripts/fx/dust_system.gd`, `shaders/dust.gdshader` |
@@ -86,23 +92,35 @@ cost as little of it as possible:
 | Shake, slow motion on big collapses | `scripts/fx/*`, `scripts/core/game_world.gd` |
 | Sound effects (synthesised, regenerate with `python3 tools/make_sounds.py`) | `audio/*.wav`, `scripts/core/sfx.gd` |
 
-### Why pre-fractured box pieces (not runtime Voronoi)
+### Shards: cut once in Blender, reused forever
 
-Each block breaks into a cached recursive-split pattern of smaller boxes.
+Breaking is never computed at runtime: `tools/make_shards.py` (Blender's
+Python module, `pip install bpy`) cuts unit cubes into Voronoi cells once,
+with rough fracture faces, and writes `assets/shards/shards.json`:
 
-- **Physics cost:** box–box contacts are the cheapest shape pair in Jolt.
-  Voronoi pieces need convex hulls, which are several times slower per contact
-  and tend to jitter when they pile up.
-- **Draw cost:** every piece is the same unit cube scaled per instance, so all
-  debris renders in **one draw call**. Voronoi pieces are unique meshes,
-  so each needs its own draw call. That is what limits WebGL first.
-- **Break cost:** a break is a cache lookup plus spawning pooled bodies.
-  Runtime Voronoi has to generate meshes, hulls and colliders on the frame of
-  the hit, which stalls the browser build at exactly the most exciting moment.
-- **Look:** clean boxy shards fit the block architecture. Each material
-  breaks its own way: concrete into many chunks, wood into long splinters
-  along the grain, metal into a few heavy plates (and it is often knocked
-  loose whole).
+- **Concrete:** 2 to 10 chunky pieces. **Wood:** long splinters along the
+  grain. **Metal:** a few torn lengths (bent a little in the shader).
+- Every shard is resampled onto the same 152-vertex layout, so one mesh
+  draws all of them: the shapes live in a small texture the block shader
+  reads by vertex index. **All debris is still one draw call.**
+- Each shard carries its volume (mass, piece counts) and a collision hull
+  of at most 20 points. To break a block, a pattern is turned so its grain
+  follows the block's long axis, stretched to the block, and its shards are
+  spawned from the pool: a break is a lookup, never a mesh build.
+- Shards too small to be worth a body become gravel chips.
+
+Regenerate after changing the script (about a second):
+
+```sh
+pip install bpy && python3 tools/make_shards.py   # also writes art/shards_preview.glb
+godot --headless --path . --import
+```
+
+Measured on the showcase (`--prof --seed=7`, physics ms per frame, same
+machine): phone settings 6.2-6.8 with shards vs 5.6-5.8 with the old boxes;
+desktop with hulls 8.3-11.2 vs 6.5-6.9. Resting rubble now freezes faster
+and fast pieces only plough through rubble when they are big enough, which
+paid for most of it.
 
 ### Structural physics
 
@@ -127,8 +145,9 @@ their capacity.
 
 - Pieces are raw `PhysicsServer3D` bodies (no nodes), created once and pooled.
 - Sleeping pieces are skipped every frame; Jolt sleeps them after 0.4 s at rest.
-- Budget: 2000 pieces on desktop, 900 on web. When full, the oldest sleeping
-  piece is recycled. On web, pieces also expire after 120 s.
+- Budget: 1500 pieces on desktop, 900 in desktop browsers, 700 on phones.
+  Above 80% the oldest resting pieces shrink away; on web, pieces also
+  expire after 240 s.
 - Run the benchmark: `godot -- --mode=bench` (desktop) or open the web build with `?mode=bench`
   (web). CI runs the web one in headless Chromium and prints it in the job summary.
 

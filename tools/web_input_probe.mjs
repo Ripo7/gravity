@@ -41,6 +41,8 @@ for (const key of ["KeyW", "ArrowUp", "KeyD"]) {
   await page.keyboard.up(key);
   await page.waitForTimeout(1000);
 }
+// Free the (software-rendered) CPU for the next pages.
+await page.close();
 
 // Phase 2: on a touch screen, tapping Play on the main menu must start a level.
 async function menuTap(useTouch) {
@@ -54,7 +56,7 @@ async function menuTap(useTouch) {
     const mm = t.match(/^MENU_PLAY (\d+) (\d+)/);
     if (mm) play = [Number(mm[1]), Number(mm[2])];
   });
-  await p.goto("http://localhost:8061/index.html");
+  await p.goto("http://localhost:8061/index.html", { timeout: 120000 });
   await p.waitForFunction(() => !document.getElementById("status"), null, { timeout: 120000 });
   for (let i = 0; i < 60 && !play; i++) await p.waitForTimeout(500);
   // The live menu backdrop can keep a software-WebGL runner busy: be patient.

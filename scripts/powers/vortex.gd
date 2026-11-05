@@ -212,7 +212,7 @@ func _shred_band(dt: float) -> void:
 		var d := debris.position_of(i).distance_to(center)
 		if d <= r or d > outer:
 			continue
-		if debris.size_of(i).length() > 0.7 and randf() < 0.5 * dt:
+		if debris.volume_of(i) > 0.08 and randf() < 0.5 * dt:
 			debris.fracture(i)
 
 

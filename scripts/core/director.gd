@@ -29,6 +29,8 @@ func _ready() -> void:
 		return
 	player.input_enabled = false
 	player.power.auto_input = true
+	if options.has("seed"):
+		seed(int(options["seed"]))  # repeatable runs for measurements
 	if options.has("prof"):
 		_profile()
 	match options.get("mode", ""):
@@ -214,6 +216,30 @@ func _still() -> void:
 	if options.has("vortex"):
 		await _wait(0.2)
 		world.cast_vortex(t)
+	if options.has("drop"):
+		# Concrete, wood and metal blocks dropped in front of the camera:
+		# they break on landing (shard library close-up).
+		var at := _vec(options["drop"])
+		var d := world.debris
+		d.spawn(Transform3D(Basis(), at + Vector3(-2.2, 5, 0)), Vector3(1.2, 0.9, 0.9), Vector3(0, -8, 0))
+		d.spawn(
+			Transform3D(Basis(), at + Vector3(0, 6, 0)),
+			Vector3(0.35, 0.35, 2.4),
+			Vector3(0, -8, 0),
+			Vector3(1, 0, 0),
+			0.0,
+			1.0,
+			Materials.Kind.WOOD
+		)
+		d.spawn(
+			Transform3D(Basis(), at + Vector3(2.2, 5, 0)),
+			Vector3(0.3, 0.3, 2.6),
+			Vector3(0, -9, 0),
+			Vector3(0, 0, 1),
+			0.0,
+			1.0,
+			Materials.Kind.METAL
+		)
 	if options.has("dust"):
 		await _wait(0.1)
 		world.dust.roll(_vec(options["dust"]), 4.0, 1.0)
