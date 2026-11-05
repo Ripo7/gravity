@@ -26,7 +26,7 @@ uniform vec3 glass : source_color = vec3(0.16, 0.2, 0.26);
 uniform vec3 glass_sky : source_color = vec3(0.98, 0.8, 0.64);
 // Warm light behind some windows (the city is lived in).
 uniform vec3 window_light : source_color = vec3(1.0, 0.68, 0.38);
-uniform float window_lit_share = 0.16;
+uniform float window_lit_share = 0.1;
 uniform float window_glow = 0.8;
 
 
@@ -190,6 +190,18 @@ void apply_finish(int f, vec2 uv, vec3 p, inout vec3 albedo, inout float rough, 
 		albedo = mix(green, vec3(0.42, 0.3, 0.18), smoothstep(0.7, 0.85, streak) * 0.6);
 		rough = 0.7;
 		metallic = 0.2;
+	} else if (f == 13) {
+		// Polished bronze, a little darker in the recesses.
+		albedo = vec3(0.78, 0.56, 0.28) * (0.85 + 0.2 * fbm(p * 0.8));
+		rough = 0.32;
+		metallic = 0.85;
+	} else if (f == 14) {
+		// Blackened steel plates with a rivet line.
+		float seam = grid_line(uv.x / 1.2, 0.02) + grid_line(uv.y / 0.9, 0.02);
+		float rivet = step(0.82, noise(vec3(uv * 11.0, 1.0))) * grid_line(uv.y / 0.9 + 0.06, 0.08);
+		albedo = vec3(0.13, 0.13, 0.15) * (1.0 - seam * 0.4) + vec3(0.25) * rivet;
+		rough = 0.5;
+		metallic = 0.6;
 	}
 }
 

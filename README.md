@@ -94,6 +94,7 @@ cost as little of it as possible:
 | Music, city ambience, distant sirens, wing claps (synthesised, `python3 tools/make_music.py`) | `audio/*.ogg`, `scripts/core/sfx.gd` |
 | Birds: pigeons on the roofs that flee from destruction, gulls circling (one draw call, no physics) | `scripts/fx/bird_system.gd`, `shaders/bird.gdshader` |
 | The printed city: building styles (Roman, medieval, Renaissance), finishes (ashlar, brick, printed travertine and marble, plaster, tiles, composite) carried by every piece, the honeycomb inside printed stone, lit windows, the skyline | `scripts/destruction/structure.gd`, `scripts/destruction/materials.gd`, `shaders/block.gdshader`, `shaders/skyline.gdshader` |
+| The colossal city around the district (temple towers, aqueduct, guardians, chimneys; scenery, one draw call per piece) and the street decor (lamps, braziers, standards, statues, pipes), modelled in Blender: `python3 tools/make_megacity.py` | `tools/make_megacity.py`, `assets/megacity/kit.glb`, `scripts/game/megacity.gd`, `scripts/game/street_decor.gd` |
 | One of every building, to look at: `godot --path . -- --level=res://levels/showroom.tscn` | `levels/showroom.tscn` |
 
 ### Shards: cut once in Blender, reused forever

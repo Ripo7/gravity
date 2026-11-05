@@ -75,6 +75,10 @@ func build_structures() -> void:
 		structures.add_structure(st.global_transform, st.build_segments(), st.scored)
 		st.visible = false
 	structures.link_anchors()
+	var decor := StreetDecor.new()
+	decor.name = "StreetDecor"
+	add_child(decor)
+	decor.setup(structures, level.player_start().origin)
 
 
 ## Dust, chips, camera shake and sound for breaks and collapses.

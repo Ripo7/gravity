@@ -84,7 +84,7 @@ strength = 3.0
 accent_material = 1
 seed_value = 6
 doors = PackedVector3Array(2, 0, 1, 2, 2, 2, 2, 0, 3, 2, 2, 4, 3, 1, 2)
-style = 3
+style = 1
 
 [node name="Immeuble_NO_ext" type="Node3D" parent="."]
 transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, -29, 0, -14)
@@ -95,7 +95,7 @@ block = Vector3(4.0, 3.2, 0.45)
 strength = 3.0
 seed_value = 7
 doors = PackedVector3Array(3, 0, 1, 3, 2, 2, 3, 0, 3, 3, 2, 4)
-style = 2
+style = 1
 
 [node name="Immeuble_NO_int2" type="Node3D" parent="."]
 transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, -12, 0, -31)
@@ -106,7 +106,7 @@ block = Vector3(4.0, 3.2, 0.45)
 strength = 3.0
 accent_material = 2
 seed_value = 8
-style = 3
+style = 1
 
 [node name="Immeuble_NO_ext2" type="Node3D" parent="."]
 transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, -29, 0, -31)
@@ -130,7 +130,7 @@ strength = 3.0
 material = 2
 seed_value = 10
 doors = PackedVector3Array(2, 1, 2, 1, 1, 4)
-style = 2
+style = 1
 
 [node name="Immeuble_NE_ext" type="Node3D" parent="."]
 transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 29, 0, -14)
@@ -141,7 +141,7 @@ block = Vector3(4.0, 3.2, 0.45)
 strength = 3.0
 accent_material = 1
 seed_value = 11
-style = 3
+style = 1
 
 [node name="Immeuble_NE_int2" type="Node3D" parent="."]
 transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 12, 0, -31)
@@ -162,7 +162,7 @@ block = Vector3(4.0, 3.2, 0.45)
 strength = 3.0
 accent_material = 2
 seed_value = 13
-style = 3
+style = 1
 
 [node name="Immeuble_SO_int" type="Node3D" parent="."]
 transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, -12, 0, 14)
@@ -173,7 +173,7 @@ block = Vector3(4.0, 3.2, 0.45)
 strength = 3.0
 seed_value = 14
 doors = PackedVector3Array(3, 1, 3)
-style = 2
+style = 1
 
 [node name="Immeuble_SO_ext" type="Node3D" parent="."]
 transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, -29, 0, 14)
@@ -185,7 +185,7 @@ strength = 3.0
 material = 1
 accent_material = 1
 seed_value = 15
-style = 3
+style = 1
 
 [node name="Immeuble_SO_int2" type="Node3D" parent="."]
 transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, -12, 0, 31)
@@ -196,7 +196,7 @@ block = Vector3(4.0, 3.2, 0.45)
 strength = 3.0
 accent_material = 1
 seed_value = 16
-style = 3
+style = 1
 
 [node name="Immeuble_SO_ext2" type="Node3D" parent="."]
 transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, -29, 0, 31)
@@ -207,7 +207,7 @@ block = Vector3(4.0, 3.2, 0.45)
 strength = 3.0
 material = 2
 seed_value = 17
-style = 2
+style = 1
 
 [node name="Immeuble_SE_int" type="Node3D" parent="."]
 transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 12, 0, 14)
@@ -219,7 +219,7 @@ strength = 3.0
 accent_material = 1
 seed_value = 18
 doors = PackedVector3Array(3, 2, 1, 3, 0, 2, 3, 2, 3, 3, 0, 4, 3, 2, 5, 2, 1, 3, 0, 1, 4)
-style = 3
+style = 1
 
 [node name="Immeuble_SE_ext" type="Node3D" parent="."]
 transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 29, 0, 14)
@@ -241,7 +241,7 @@ block = Vector3(4.0, 3.2, 0.45)
 strength = 3.0
 accent_material = 2
 seed_value = 20
-style = 2
+style = 1
 
 [node name="Immeuble_SE_ext2" type="Node3D" parent="."]
 transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 29, 0, 31)
@@ -253,7 +253,7 @@ strength = 3.0
 material = 1
 accent_material = 1
 seed_value = 21
-style = 3
+style = 1
 
 [node name="FondNord" type="Node3D" parent="."]
 transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 0, 0, -46)
@@ -275,7 +275,7 @@ block = Vector3(4.0, 3.2, 0.45)
 strength = 3.0
 accent_material = 1
 seed_value = 23
-style = 3
+style = 1
 
 [node name="FondOuest" type="Node3D" parent="."]
 transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, -44, 0, 0)
@@ -285,7 +285,7 @@ counts = Vector3i(2, 5, 4)
 block = Vector3(4.0, 3.2, 0.45)
 strength = 3.0
 seed_value = 24
-style = 2
+style = 1
 
 [node name="FondEst" type="Node3D" parent="."]
 transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 44, 0, 0)
@@ -296,7 +296,7 @@ block = Vector3(4.0, 3.2, 0.45)
 strength = 3.0
 material = 2
 seed_value = 25
-style = 3
+style = 1
 
 [node name="Citerne" type="Node3D" parent="."]
 transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 12, 19.200000000000003, -14)
@@ -308,6 +308,7 @@ strength = 2.5
 material = 1
 accent_material = 1
 seed_value = 26
+style = 1
 
 [node name="CiterneB" type="Node3D" parent="."]
 transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 29, 16.0, -31)
@@ -319,6 +320,7 @@ strength = 2.5
 material = 1
 accent_material = 1
 seed_value = 27
+style = 1
 
 [node name="Colonnade" type="Node3D" parent="."]
 transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 0, 0, 0)
@@ -330,6 +332,7 @@ strength = 3.0
 material = 2
 accent_material = 1
 seed_value = 28
+style = 1
 
 [node name="Kiosque" type="Node3D" parent="."]
 transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, -14, 0, 0)
@@ -341,6 +344,7 @@ strength = 2.5
 material = 1
 accent_material = 1
 seed_value = 29
+style = 1
 
 [node name="KiosqueB" type="Node3D" parent="."]
 transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 18, 0, 3)
@@ -352,6 +356,7 @@ strength = 2.5
 material = 2
 accent_material = 1
 seed_value = 30
+style = 1
 
 [node name="Caisses" type="Node3D" parent="."]
 transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, -4, 0, 22)
@@ -363,6 +368,7 @@ strength = 2.0
 material = 1
 accent_material = 1
 seed_value = 31
+style = 1
 
 [node name="Futs" type="Node3D" parent="."]
 transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 4.2, 0, -22)
@@ -374,6 +380,7 @@ strength = 2.0
 material = 2
 accent_material = 2
 seed_value = 32
+style = 1
 
 [node name="Barriere" type="Node3D" parent="."]
 transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 0, 0, -38)
@@ -384,6 +391,7 @@ strength = 2.0
 material = 2
 accent_material = 2
 seed_value = 33
+style = 1
 
 [node name="MuretO" type="Node3D" parent="."]
 transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, -24, 0, -6.5)
@@ -392,6 +400,7 @@ counts = Vector3i(6, 2, 1)
 block = Vector3(1, 0.5, 0.4)
 strength = 2.5
 seed_value = 34
+style = 1
 
 [node name="MuretE" type="Node3D" parent="."]
 transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 24, 0, 6.5)
@@ -400,3 +409,4 @@ counts = Vector3i(6, 2, 1)
 block = Vector3(1, 0.5, 0.4)
 strength = 2.5
 seed_value = 35
+style = 1
