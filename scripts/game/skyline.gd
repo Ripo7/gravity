@@ -1,9 +1,12 @@
 @tool
 class_name Skyline
 extends Node3D
-## The rest of the city around the playable district: rows of tall plain
-## blocks fading into the haze (no physics, one draw call), and invisible
+## The rest of the city around the playable district: rows of tall painted
+## blocks with lit windows fading into the haze (no physics, one draw
+## call), and invisible
 ## walls that keep the player inside.
+
+const SKYLINE_SHADER := preload("res://shaders/skyline.gdshader")
 
 ## Half size of the playable square (the invisible walls stand on its edge).
 @export var inner := 52.0:
@@ -38,6 +41,7 @@ func _rebuild() -> void:
 	rng.seed = seed_value
 	var boxes: Array[Transform3D] = []
 	var shades: Array[float] = []
+	var paints: Array[Color] = []
 	# Two rings of blocks, the back one taller.
 	for ring in 2:
 		var d0 := inner + 2.0 + ring * 12.0
@@ -51,21 +55,23 @@ func _rebuild() -> void:
 				var b := Basis.from_euler(Vector3(0, side * PI * 0.5, 0))
 				boxes.append(Transform3D(b.scaled(Vector3(w - 1.0, h, depth)), b * c))
 				shades.append(rng.randf_range(0.82, 0.97))
+				paints.append(Materials.PAINTS[rng.randi_range(0, Materials.PAINT_COUNT)])
 			x += w
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.use_colors = true
 	var box := BoxMesh.new()
-	var m := StandardMaterial3D.new()
-	m.vertex_color_use_as_albedo = true
-	m.roughness = 1.0
+	var m := ShaderMaterial.new()
+	m.shader = SKYLINE_SHADER
 	box.material = m
 	mm.mesh = box
 	mm.instance_count = boxes.size()
 	for i in boxes.size():
 		mm.set_instance_transform(i, boxes[i])
-		var s := shades[i]
-		mm.set_instance_color(i, Color(s * 0.93, s * 0.95, s))
+		# Painted like the district, a little paler with distance.
+		var c := paints[i].lerp(Color(0.95, 0.9, 0.86), 0.3) * shades[i]
+		c.a = rng.randf()
+		mm.set_instance_color(i, c)
 	_mesh = MultiMeshInstance3D.new()
 	_mesh.multimesh = mm
 	_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF

@@ -2,7 +2,7 @@ shader_type spatial;
 // Every block and piece of debris, all materials, in one draw call.
 // Per-instance COLOR: r = shade, g = unused,
 // b = random seed, a = violet glow from the power.
-// INSTANCE_CUSTOM.r = material kind + damage * 0.9 (cracks); .gba = where it was
+// INSTANCE_CUSTOM.r = paint * 5 + material kind + damage * 0.9 (cracks); .gba = where it was
 // hit, in the block's unit space + 1 (0 = never hit): cracks spread from there.
 // Patterns are procedural in the block's own space (scaled to metres), so
 // they stay put on moving debris and need no textures.
@@ -23,13 +23,25 @@ uniform vec3 wood_dark : source_color = vec3(0.68, 0.56, 0.43);
 uniform vec3 metal : source_color = vec3(0.62, 0.66, 0.72);
 uniform vec3 ice : source_color = vec3(0.035, 0.03, 0.06);
 uniform vec3 glass : source_color = vec3(0.16, 0.2, 0.26);
-uniform vec3 glass_sky : source_color = vec3(0.78, 0.85, 0.95);
+uniform vec3 glass_sky : source_color = vec3(0.98, 0.8, 0.64);
+// Warm light behind some windows (the city is lived in).
+uniform vec3 window_light : source_color = vec3(1.0, 0.68, 0.38);
+uniform float window_lit_share = 0.3;
+uniform float window_glow = 1.1;
+
+// Facade paint per building (Materials.PAINTS): ochre, terracotta, rose,
+// sage, cream, teal, mustard. Index 0 = raw concrete.
+const vec3 PAINTS[8] = {
+	vec3(1.0), vec3(0.95, 0.68, 0.3), vec3(0.85, 0.42, 0.3), vec3(0.95, 0.62, 0.6),
+	vec3(0.55, 0.7, 0.5), vec3(0.98, 0.9, 0.7), vec3(0.4, 0.62, 0.72), vec3(0.92, 0.78, 0.38)
+};
 
 varying vec3 local_pos;   // metres, centred on the block
 varying vec3 half_size;   // metres
 varying vec3 local_normal;
 varying float shade;
 varying float material_id;
+varying float paint;
 varying float seed;
 varying float tint;
 varying float damage;
@@ -83,7 +95,9 @@ void vertex() {
 	vec3 scale = vec3(length(MODEL_MATRIX[0].xyz), length(MODEL_MATRIX[1].xyz), length(MODEL_MATRIX[2].xyz));
 	// Material in the integer part of the first custom float, damage in
 	// its fraction (see Materials.custom).
-	material_id = floor(INSTANCE_CUSTOM.r + 0.001);
+	float packed = floor(INSTANCE_CUSTOM.r + 0.001);
+	material_id = mod(packed, 5.0);
+	paint = floor(packed / 5.0 + 0.001);
 	seed = COLOR.b;
 	outer = 1.0;
 	if (chunky) {
@@ -164,6 +178,7 @@ void fragment() {
 	}
 	vec3 p = local_pos + seed * 37.0;
 	vec3 albedo;
+	vec3 lit_window = vec3(0.0);
 	vec3 face = abs(local_normal);
 	float rough;
 	float metallic = 0.0;
@@ -197,6 +212,18 @@ void fragment() {
 		albedo = mix(glass, glass_sky, clamp(fres * 0.85 + sheen * 0.12, 0.0, 1.0));
 		rough = 0.04;
 		metallic = 0.1;
+		// Some flats have the lights on: a warm room glow, brighter low in
+		// the pane, with a curtain on one side; it fades where the sky
+		// reflection takes over.
+		float h = fract(seed * 91.7);
+		if (h < window_lit_share && !chunky) {
+			vec2 uv = face.x > 0.5 ? local_pos.zy / max(half_size.zy, vec2(0.05)) : local_pos.xy / max(half_size.xy, vec2(0.05));
+			float room = 0.65 + 0.35 * (1.0 - smoothstep(-0.6, 0.9, uv.y));
+			float curtain = smoothstep(0.2, 0.35, abs(uv.x - (fract(seed * 13.1) - 0.5)));
+			vec3 lamp = window_light * mix(0.75, 1.15, fract(seed * 37.3));
+			lit_window = lamp * room * mix(0.45, 1.0, curtain) * (1.0 - fres * 0.7) * window_glow;
+			albedo *= 0.35;
+		}
 	} else if (material_id > 2.5) {
 		// Black ice: glassy near-black with faint violet veins inside.
 		vec2 e = voronoi_edge((face.x > 0.5 ? local_pos.yz : (face.y > 0.5 ? local_pos.xz : local_pos.xy)) * 1.6 + seed * 7.0);
@@ -213,6 +240,23 @@ void fragment() {
 		albedo = metal * (0.88 + 0.16 * brush + 0.06 * fbm(p * 0.8));
 		rough = 0.32 + 0.18 * brush;
 		metallic = 0.65;
+	}
+
+	// Painted buildings: wood and metal panels carry the building's colour
+	// (grain and brushing still show through), the concrete frame only a
+	// faded wash. Old paint fades in patches and peels to the bare material.
+	if (paint > 0.5 && material_id < 2.5) {
+		vec3 coat = PAINTS[int(paint + 0.5)] * (0.9 + 0.14 * fbm(p * 0.45));
+		if (material_id > 0.5 && material_id < 1.5) {
+			// Painted timber: horizontal boards with shadowed joints.
+			float board = fract(local_pos.y / 0.22 + seed);
+			coat *= 1.0 - (1.0 - smoothstep(0.0, 0.08, board)) * 0.3 - smoothstep(0.85, 1.0, board) * 0.08;
+		}
+		float peel = smoothstep(0.64, 0.72, fbm(p * 1.3 + 4.0));
+		float amount = material_id < 0.5 ? 0.3 : 0.92;
+		albedo = mix(albedo, coat, amount * (1.0 - peel * 0.85));
+		rough = max(rough, 0.6);
+		metallic *= 0.3;
 	}
 
 	// Fresh fracture faces: the inside of the material, never weathered.
@@ -298,5 +342,5 @@ void fragment() {
 	ALBEDO = mix(albedo, violet_deep, t * 0.9);
 	ROUGHNESS = rough;
 	METALLIC = metallic * (1.0 - t);
-	EMISSION = violet * t * t * t * glow_strength;
+	EMISSION = violet * t * t * t * glow_strength + lit_window * (1.0 - t);
 }

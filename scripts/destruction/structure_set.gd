@@ -340,6 +340,10 @@ func kind_of(i: int) -> int:
 	return _kind[i]
 
 
+func size_of(i: int) -> Vector3:
+	return _size[i]
+
+
 func health_of(i: int) -> float:
 	return _health[i]
 
@@ -1173,9 +1177,11 @@ func _write_instance(i: int, xf: Transform3D) -> void:
 	_buffer[o + 11] = xf.origin.z
 	_buffer[o + 12] = _shade[i]
 	_buffer[o + 13] = Materials.encode(_kind[i])
-	_buffer[o + 14] = _seed[i]
+	_buffer[o + 14] = fposmod(_seed[i], 1.0)
 	_buffer[o + 15] = 0.0
-	_buffer[o + 16] = Materials.custom(_kind[i], 1.0 - clampf(_health[i] / _max_health[i], 0.0, 1.0))
+	_buffer[o + 16] = Materials.custom(
+		_kind[i], 1.0 - clampf(_health[i] / _max_health[i], 0.0, 1.0), _seed[i]
+	)
 	_buffer[o + 17] = _hit[i].x
 	_buffer[o + 18] = _hit[i].y
 	_buffer[o + 19] = _hit[i].z

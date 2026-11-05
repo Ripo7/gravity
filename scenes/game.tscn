@@ -34,9 +34,9 @@ dust = NodePath("Dust")
 environment = ExtResource("2_env")
 
 [node name="Sun" type="DirectionalLight3D" parent="."]
-transform = Transform3D(0.4229, 0.5015, -0.7547, -0.0000, 0.8329, 0.5535, 0.9062, -0.2341, 0.3522, 0, 30, 0)
-light_color = Color(1, 0.96, 0.9, 1)
-light_energy = 0.95
+transform = Transform3D(0.7295, -0.3283, 0.6000, 0.0000, 0.8773, 0.4800, -0.6839, -0.3502, 0.6400, 0, 30, 0)
+light_color = Color(1, 0.78, 0.55, 1)
+light_energy = 1.45
 shadow_enabled = true
 shadow_opacity = 0.85
 shadow_blur = 1.5
