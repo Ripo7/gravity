@@ -21,7 +21,6 @@ const LAYER_PLAYER := 8
 const KILL_Y := -40.0
 const FLOATS_PER_INSTANCE := 20  # 12 transform + 4 colour + 4 custom
 const TINT_DECAY := 0.6  # violet glow fades per second
-const SOFT_BUDGET := 0.8  ## fraction of capacity kept before retiring pieces
 const FADE_TIME := 1.2  ## seconds a retired piece takes to shrink away
 const RETIRE_PER_FRAME := 4
 
@@ -42,6 +41,9 @@ var capacity := 0
 var lifetime := 0.0
 var active_count := 0
 var frozen_count := 0
+## Fraction of capacity kept before the oldest pieces start shrinking away;
+## lowered by the adaptive quality when the frame rate drops.
+var soft_budget := 0.8
 var awake_count := 0
 var recycled_total := 0
 var fading_count := 0
@@ -377,7 +379,7 @@ func _take_slot() -> int:
 
 ## Above the soft budget, retire a few of the oldest settled pieces per frame.
 func _enforce_budget() -> void:
-	var excess := active_count - fading_count - int(capacity * SOFT_BUDGET)
+	var excess := active_count - fading_count - int(capacity * soft_budget)
 	if excess <= 0:
 		return
 	var candidates: Array[Vector2] = []  # (score, index)

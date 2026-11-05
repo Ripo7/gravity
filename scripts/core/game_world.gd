@@ -82,6 +82,9 @@ func _connect_juice() -> void:
 	var rebar := RebarSystem.new()
 	add_child(rebar)
 	structures.rebar = rebar
+	var aq := AdaptiveQuality.new()
+	aq.world = self
+	add_child(aq)
 	structures.shattered.connect(
 		func(at: Vector3, size: Vector3, kind: int) -> void:
 			var r := size.length() * 0.5

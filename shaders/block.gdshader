@@ -193,6 +193,28 @@ void fragment() {
 		metallic = 0.65;
 	}
 
+	// Weathering, all procedural (no textures, no extra passes):
+	// - dust settles on upward faces, lighter and warmer, patchy;
+	// - grime streaks run down vertical faces from their top edge;
+	// - each block is darker near its bottom and on its underside, which
+	//   reads as ambient occlusion wherever blocks meet slabs and floors.
+	if (material_id < 2.5 && !chunky) {
+		vec3 n = local_normal;
+		if (n.y > 0.5) {
+			float patches = smoothstep(0.35, 0.75, fbm(p * 0.9));
+			albedo = mix(albedo, vec3(0.86, 0.83, 0.77), patches * 0.35);
+		} else if (abs(n.y) < 0.5) {
+			float from_top = half_size.y - local_pos.y;
+			float streak = noise(vec3((local_pos.x + local_pos.z) * 7.0, local_pos.y * 0.35, seed * 9.0));
+			float grime = smoothstep(0.55, 0.9, streak) * (1.0 - smoothstep(0.0, 1.6, from_top));
+			albedo *= 1.0 - grime * 0.18;
+			float from_bottom = local_pos.y + half_size.y;
+			albedo *= mix(0.8, 1.0, smoothstep(0.0, 0.45, from_bottom));
+		} else {
+			albedo *= 0.8;  // undersides (ceilings) catch less light
+		}
+	}
+
 	// Soft darkening near block edges: reads as a bevel / contact shadow.
 	vec3 d = half_size - abs(local_pos);
 	float edge_dist = 10.0;
