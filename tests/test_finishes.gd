@@ -53,3 +53,13 @@ func test_the_palace_keeps_its_finishes_when_broken() -> void:
 			same += 1
 	check(same >= 1, "the pieces keep their finish")
 	await _unload()
+
+
+func test_the_finishes_baked_in_blender_are_loaded() -> void:
+	for path in ["res://materials/block.tres", "res://materials/debris.tres"]:
+		var m := load(path) as ShaderMaterial
+		check(m.get_shader_parameter("use_textures"), "%s uses the baked finishes" % path)
+		for name in ["finish_albedo", "finish_detail"]:
+			# (Headless runs have no texture data: check the resource itself.)
+			var t: Variant = m.get_shader_parameter(name)
+			check(t is CompressedTexture2DArray, "%s: %s is the baked texture array" % [path, name])

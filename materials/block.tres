@@ -1,6 +1,8 @@
-[gd_resource type="ShaderMaterial" load_steps=2 format=3]
+[gd_resource type="ShaderMaterial" load_steps=4 format=3]
 
 [ext_resource type="Shader" path="res://shaders/block.gdshader" id="1_block"]
+[ext_resource type="CompressedTexture2DArray" path="res://assets/textures/finish_albedo.png" id="2_albedo"]
+[ext_resource type="CompressedTexture2DArray" path="res://assets/textures/finish_detail.png" id="3_detail"]
 
 [resource]
 shader = ExtResource("1_block")
@@ -11,3 +13,6 @@ shader_parameter/concrete = Color(0.78, 0.76, 0.72, 1)
 shader_parameter/wood = Color(0.84, 0.75, 0.62, 1)
 shader_parameter/wood_dark = Color(0.68, 0.56, 0.43, 1)
 shader_parameter/metal = Color(0.62, 0.66, 0.72, 1)
+shader_parameter/use_textures = true
+shader_parameter/finish_albedo = ExtResource("2_albedo")
+shader_parameter/finish_detail = ExtResource("3_detail")
