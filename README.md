@@ -96,6 +96,8 @@ cost as little of it as possible:
 | Shard library: how concrete, wood and metal break (cut in Blender) | `tools/make_shards.py`, `assets/shards/shards.json`, `scripts/destruction/shard_library.gd` |
 | Box patterns (fallback, and materials without shards) | `scripts/destruction/fracture.gd` |
 | Materials and finishes (stone, plaster, travertine, marble, brick, terracotta, shutters, verdigris, bronze): look, weight, strength, breakage; cracks from the hit point | `scripts/destruction/materials.gd`, `shaders/block.gdshader` |
+| Carved pieces modelled in Blender (column capitals and bases, cornice brackets, the dome's bands, the bell), each fitted to its block and drawn with the block shader (`python3 tools/make_sculptures.py`) | `tools/make_sculptures.py`, `assets/shapes/shapes.json`, `scripts/destruction/shape_library.gd` |
+| Dust puffs: a billowing cloud built in Blender (a Geometry Nodes volume churned by 4D noise) and rendered with Cycles into a 64-frame flipbook the dust plays by age (`python3 tools/make_smoke.py`, about 5 min) | `tools/make_smoke.py`, `assets/textures/dust_flipbook.png`, `shaders/dust.gdshader` |
 | Surface textures baked in Blender: stone, brick, plaster, travertine, marble and roof tiles built from nodes and baked (Cycles) into seamless colour, relief, roughness and joint maps (`python3 tools/make_textures.py`) | `tools/make_textures.py`, `assets/textures/` |
 | Gravel and glass shards without physics (one bounce, rest, fade) | `scripts/fx/chip_system.gd` |
 | Dust clouds, rolling dust walls (one noise texture, one draw call) | `scripts/fx/dust_system.gd`, `shaders/dust.gdshader` |

@@ -66,6 +66,7 @@ func _box(
 	kind := Materials.Kind.CONCRETE,
 	basis := Basis(),
 	is_round := false,
+	shape := "",
 ) -> void:
 	var seg := {
 		"local": Transform3D(basis, c),
@@ -77,6 +78,8 @@ func _box(
 	}
 	if is_round:
 		seg["round"] = true
+	if shape != "":
+		seg["shape"] = shape  # a carved piece (ShapeLibrary) instead of a box
 	out.append(seg)
 
 
@@ -400,18 +403,30 @@ func _courtyard_columns() -> Array[Vector3]:
 	return res
 
 
-## A round column of two drums from `y` up `h`.
-func _column(at: Vector3, y: float, dia: float, h: float, finish: int) -> void:
+## A round column from `y` up `h`: a carved base (unless it stands between
+## parapets), a shaft of two drums and a carved Tuscan capital (modelled in
+## Blender, tools/make_sculptures.py).
+func _column(at: Vector3, y: float, dia: float, h: float, finish: int, with_base := true) -> void:
+	var base_h := dia * 0.4 if with_base else 0.0
+	var cap_h := dia * 0.5
+	var foot := dia * 1.35
+	var concrete := Materials.Kind.CONCRETE
+	if with_base:
+		var base := Vector3(foot, base_h, foot)
+		_box(at + Vector3(0, y + base_h * 0.5, 0), base, finish, 1.6, concrete, Basis(), true, "base")
+	var shaft := (h - base_h - cap_h) * 0.5
 	for d in 2:
 		_box(
-			at + Vector3(0, y + (d + 0.5) * h * 0.5, 0),
-			Vector3(dia, h * 0.5, dia),
+			at + Vector3(0, y + base_h + (d + 0.5) * shaft, 0),
+			Vector3(dia, shaft, dia),
 			finish,
 			1.6,
-			Materials.Kind.CONCRETE,
+			concrete,
 			Basis(),
 			true
 		)
+	var cap := Vector3(foot, cap_h, foot)
+	_box(at + Vector3(0, y + h - cap_h * 0.5, 0), cap, finish, 1.6, concrete, Basis(), true, "capital")
 
 
 ## Arches from the column at `start` along `dir`, `n` of them, springing at
@@ -603,7 +618,7 @@ func _loggia() -> void:
 	var top := st.y
 	var cap_y := top - 0.35 - 0.25
 	for c in _courtyard_columns():
-		_column(c, base, 0.42, cap_y - base, Materials.Finish.MARBLE)
+		_column(c, base, 0.42, cap_y - base, Materials.Finish.MARBLE, false)
 		_box(c + Vector3(0, cap_y + 0.125, 0), Vector3(0.6, 0.25, 0.6), Materials.Finish.TRAVERTINE, 1.2)
 	var beam_y := cap_y + 0.25
 	for z: float in [-AZ, AZ]:
@@ -665,7 +680,7 @@ func _cornice() -> void:
 		var n := int(length / 1.5)
 		for k in n:
 			var c := -u + (k + 0.5) * length / n
-			_facade_box(side, c - 0.12, c + 0.12, y, y + 0.35, -0.3, 0.75, stone, 0.6)
+			_console(side, c, y)
 		# Backing course behind the brackets.
 		var bu := u if side < 2 else u
 		var pieces := ceili(length / 6.0)
@@ -702,6 +717,27 @@ func _cornice() -> void:
 	_cut(Vector3(-ix, y, -iz), Vector3(ix, y + 0.3, -iz + CT + 0.45), stone, 0.7)
 	_cut(Vector3(-ix, y, -iz + CT + 0.45), Vector3(-ix + CT + 0.45, y + 0.3, iz - CT - 0.45), stone, 0.7)
 	_cut(Vector3(ix - CT - 0.45, y, -iz + CT + 0.45), Vector3(ix, y + 0.3, iz - CT - 0.45), stone, 0.7)
+
+
+## A carved bracket under the cornice at `c` along facade `side`: a scroll
+## pushed out of the wall, its tip outward.
+func _console(side: int, c: float, y: float) -> void:
+	var a := _facade_point(side, c, y, -0.3)
+	var b := _facade_point(side, c, y, 0.75)
+	var outward := (b - a).normalized()
+	var basis := Basis(Vector3.UP.cross(outward), Vector3.UP, outward)
+	var size := Vector3(0.24, 0.35, 1.05)
+	var stone := Materials.Finish.TRAVERTINE
+	_box(
+		(a + b) * 0.5 + Vector3(0, 0.175, 0),
+		size,
+		stone,
+		0.6,
+		Materials.Kind.CONCRETE,
+		basis,
+		false,
+		"console"
+	)
 
 
 ## Low hipped roof of terracotta round the courtyard, in steps behind the
@@ -870,23 +906,16 @@ func _build_campanile() -> void:
 		0.8,
 		Materials.Kind.WOOD
 	)
+	# The bell, cast in one piece (modelled in Blender).
 	_box(
-		Vector3(0, frame_top - 0.45, 0),
-		Vector3(1.0, 0.9, 1.0),
+		Vector3(0, frame_top - 0.75, 0),
+		Vector3(1.5, 1.5, 1.5),
 		Materials.Finish.BRONZE,
 		2.0,
 		Materials.Kind.METAL,
 		Basis(),
-		true
-	)
-	_box(
-		Vector3(0, frame_top - 1.2, 0),
-		Vector3(1.5, 0.6, 1.5),
-		Materials.Finish.BRONZE,
-		2.0,
-		Materials.Kind.METAL,
-		Basis(),
-		true
+		true,
+		"bell"
 	)
 	# Roof of the belfry, a cornice, then a lantern under a copper dome.
 	y = crown
@@ -910,10 +939,18 @@ func _build_campanile() -> void:
 		Vector3(0.36, 1.6, Materials.Finish.VERDIGRIS),
 		Vector3(0.6, 0.6, Materials.Finish.BRONZE),
 	]
+	var band := 0
 	for dr in drums:
 		var metal := int(dr.z) in [Materials.Finish.BRONZE, Materials.Finish.VERDIGRIS]
 		var kind := Materials.Kind.METAL if metal else Materials.Kind.CONCRETE
-		_box(Vector3(0, y + dr.y * 0.5, 0), Vector3(dr.x, dr.y, dr.x), int(dr.z), 1.0, kind, Basis(), true)
+		# The copper dome's bands are carved pieces (their curve modelled in
+		# Blender to these sizes: tools/make_sculptures.py DOME).
+		var shape := ""
+		if int(dr.z) == Materials.Finish.VERDIGRIS and band < 5:
+			shape = "dome_%d" % band
+			band += 1
+		var size := Vector3(dr.x, dr.y, dr.x)
+		_box(Vector3(0, y + dr.y * 0.5, 0), size, int(dr.z), 1.0, kind, Basis(), true, shape)
 		y += dr.y
 	_span(
 		Vector3(-0.06, y, -0.06),

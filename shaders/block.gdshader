@@ -44,7 +44,8 @@ uniform float window_glow = 0.8;
 varying vec3 local_pos;   // metres, centred on the block
 varying vec3 half_size;   // metres
 varying vec3 local_normal;
-varying float is_round;  // 1 for columns drawn by the cylinder MultiMesh
+varying float is_round;  // 1 for columns and turned pieces (patterns wrap round)
+varying float fluted;  // 1 for column shafts
 varying float shade;
 varying float material_id;
 varying float finish;
@@ -288,6 +289,7 @@ void vertex() {
 	half_size = scale * 0.5;
 	local_normal = NORMAL;
 	is_round = COLOR.g > 0.5 ? 1.0 : 0.0;
+	fluted = COLOR.g > 0.9 ? 1.0 : 0.0;
 	shade = COLOR.r;
 	tint = COLOR.a;
 	damage = clamp(fract(INSTANCE_CUSTOM.r + 0.001) / 0.9, 0.0, 1.0);
@@ -452,7 +454,7 @@ void fragment() {
 	} else if (fin > 0) {
 		apply_finish(fin, fuv, p, albedo, rough, metallic);
 	}
-	if (is_round > 0.5 && face.y < 0.5 && !chunky) {
+	if (fluted > 0.5 && face.y < 0.5 && !chunky) {
 		// Fluted shaft: 20 grooves catch the low sun.
 		float flute = 0.5 + 0.5 * cos(around * 20.0);
 		albedo *= 0.8 + 0.2 * flute;
