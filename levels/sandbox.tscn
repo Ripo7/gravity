@@ -7,83 +7,102 @@
 [node name="Sandbox" type="Node3D"]
 script = ExtResource("1_level")
 title = "Bac à sable"
-hint = "Tu es en pleine ville. Tout se casse. Le trou noir fait tourner tout ce qui entre dans son rayon et broie ce qui est autour. Le bouclier : une coque de glace noire qui t'entoure par l'avant, dès que tu touches son bouton. Entre dans les immeubles, monte par les rampes des ruelles, traverse les passerelles. Un débris lancé suffit à te mettre K.O."
+hint = "Le forum impérial. Tout se casse. Le trou noir fait tourner tout ce qui entre dans son rayon et broie ce qui est autour. Le bouclier : une coque de glace noire qui t'entoure par l'avant, dès que tu touches son bouton. Monte par les rampes des ruelles, traverse les ponts entre les immeubles. Un débris lancé suffit à te mettre K.O."
 
 [node name="PlayerStart" type="Marker3D" parent="."]
-transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 0, 0.05, 34)
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 0, 0.05, 40)
 
 [node name="Skyline" type="Node3D" parent="."]
 script = ExtResource("3_skyline")
 
-[node name="RampeSE_int" type="Node3D" parent="."]
-transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 18.3, 0, 8.0)
+[node name="RampeSE_int2" type="Node3D" parent="."]
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 18.3, 0, 25.0)
 script = ExtResource("2_structure")
 kind = 5
-counts = Vector3i(1, 5, 1)
+counts = Vector3i(1, 3, 1)
 block = Vector3(2.2, 3.2, 8.0)
 strength = 3.5
 accent_material = 1
 seed_value = 1
 style = 1
 
-[node name="RampeNO_int" type="Node3D" parent="."]
-transform = Transform3D(-1.0, 0, 0.0, 0, 1, 0, -0.0, 0, -1.0, -18.3, 0, -8.0)
+[node name="RampeNO_int2" type="Node3D" parent="."]
+transform = Transform3D(-1.0, 0, 0.0, 0, 1, 0, -0.0, 0, -1.0, -18.3, 0, -25.0)
 script = ExtResource("2_structure")
 kind = 5
-counts = Vector3i(1, 4, 1)
+counts = Vector3i(1, 3, 1)
 block = Vector3(2.2, 3.2, 8.0)
 strength = 3.5
 accent_material = 2
 seed_value = 2
 style = 1
 
-[node name="PasserelleNord" type="Node3D" parent="."]
-transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 0.0, 0, -14.0)
-script = ExtResource("2_structure")
-kind = 6
-counts = Vector3i(4, 4, 1)
-block = Vector3(2.725, 1.525, 2.6)
-strength = 2.5
-accent_material = 1
-seed_value = 3
-end_overhang = 0.43000000000000005
-style = 1
-
-[node name="PasserelleSud" type="Node3D" parent="."]
-transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 0.0, 0, 14.0)
+[node name="PontNord" type="Node3D" parent="."]
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 0.0, 0, -31.0)
 script = ExtResource("2_structure")
 kind = 6
 counts = Vector3i(4, 7, 1)
 block = Vector3(2.725, 1.3286, 2.6)
 strength = 2.5
 accent_material = 1
+seed_value = 3
+end_overhang = 0.43000000000000005
+style = 1
+
+[node name="PontSud" type="Node3D" parent="."]
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 0.0, 0, 31.0)
+script = ExtResource("2_structure")
+kind = 6
+counts = Vector3i(4, 4, 1)
+block = Vector3(2.725, 1.525, 2.6)
+strength = 2.5
+accent_material = 1
 seed_value = 4
 end_overhang = 0.43000000000000005
 style = 1
 
-[node name="PasserelleHaute" type="Node3D" parent="."]
-transform = Transform3D(0.0, 0, 1.0, 0, 1, 0, -1.0, 0, 0.0, 12.0, 0, 0.0)
+[node name="PontOuest" type="Node3D" parent="."]
+transform = Transform3D(0.0, 0, 1.0, 0, 1, 0, -1.0, 0, 0.0, -29.0, 0, -22.5)
 script = ExtResource("2_structure")
 kind = 6
-counts = Vector3i(5, 9, 1)
-block = Vector3(2.98, 1.3889, 2.6)
+counts = Vector3i(2, 4, 1)
+block = Vector3(1.95, 1.525, 2.6)
 strength = 2.5
-material = 2
-accent_material = 2
 seed_value = 5
 end_overhang = 0.43000000000000005
 style = 1
 
-[node name="Immeuble_NO_int" type="Node3D" parent="."]
-transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, -12, 0, -14)
+[node name="PontEst" type="Node3D" parent="."]
+transform = Transform3D(0.0, 0, 1.0, 0, 1, 0, -1.0, 0, 0.0, 29.0, 0, -22.5)
 script = ExtResource("2_structure")
-kind = 7
-counts = Vector3i(3, 5, 3)
-block = Vector3(4.0, 3.2, 0.45)
-strength = 3.0
-accent_material = 1
+kind = 6
+counts = Vector3i(2, 7, 1)
+block = Vector3(1.95, 1.3286, 2.6)
+strength = 2.5
 seed_value = 6
-doors = PackedVector3Array(2, 0, 1, 2, 2, 2, 2, 0, 3, 2, 2, 4, 3, 1, 2)
+end_overhang = 0.43000000000000005
+style = 1
+
+[node name="PontSudOuest" type="Node3D" parent="."]
+transform = Transform3D(0.0, 0, 1.0, 0, 1, 0, -1.0, 0, 0.0, -29.0, 0, 22.5)
+script = ExtResource("2_structure")
+kind = 6
+counts = Vector3i(2, 7, 1)
+block = Vector3(1.95, 1.3286, 2.6)
+strength = 2.5
+seed_value = 7
+end_overhang = 0.43000000000000005
+style = 1
+
+[node name="PontSudEst" type="Node3D" parent="."]
+transform = Transform3D(0.0, 0, 1.0, 0, 1, 0, -1.0, 0, 0.0, 29.0, 0, 22.5)
+script = ExtResource("2_structure")
+kind = 6
+counts = Vector3i(2, 4, 1)
+block = Vector3(1.95, 1.525, 2.6)
+strength = 2.5
+seed_value = 8
+end_overhang = 0.43000000000000005
 style = 1
 
 [node name="Immeuble_NO_ext" type="Node3D" parent="."]
@@ -93,8 +112,8 @@ kind = 7
 counts = Vector3i(3, 4, 3)
 block = Vector3(4.0, 3.2, 0.45)
 strength = 3.0
-seed_value = 7
-doors = PackedVector3Array(3, 0, 1, 3, 2, 2, 3, 0, 3, 3, 2, 4)
+seed_value = 9
+doors = PackedVector3Array(0, 1, 2)
 style = 1
 
 [node name="Immeuble_NO_int2" type="Node3D" parent="."]
@@ -105,86 +124,67 @@ counts = Vector3i(3, 6, 3)
 block = Vector3(4.0, 3.2, 0.45)
 strength = 3.0
 accent_material = 2
-seed_value = 8
+seed_value = 10
+doors = PackedVector3Array(2, 0, 1, 2, 2, 2, 2, 0, 3, 3, 1, 3)
 style = 1
 
 [node name="Immeuble_NO_ext2" type="Node3D" parent="."]
 transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, -29, 0, -31)
 script = ExtResource("2_structure")
 kind = 7
-counts = Vector3i(3, 3, 3)
+counts = Vector3i(3, 5, 3)
 block = Vector3(4.0, 3.2, 0.45)
 strength = 3.0
-material = 1
 accent_material = 1
-seed_value = 9
-style = 1
-
-[node name="Immeuble_NE_int" type="Node3D" parent="."]
-transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 12, 0, -14)
-script = ExtResource("2_structure")
-kind = 7
-counts = Vector3i(3, 6, 3)
-block = Vector3(4.0, 3.2, 0.45)
-strength = 3.0
-material = 2
-seed_value = 10
-doors = PackedVector3Array(2, 1, 2, 1, 1, 4)
+seed_value = 11
+doors = PackedVector3Array(3, 0, 1, 3, 2, 2, 3, 0, 3, 1, 1, 2)
 style = 1
 
 [node name="Immeuble_NE_ext" type="Node3D" parent="."]
 transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 29, 0, -14)
 script = ExtResource("2_structure")
 kind = 7
-counts = Vector3i(3, 3, 3)
+counts = Vector3i(3, 5, 3)
 block = Vector3(4.0, 3.2, 0.45)
 strength = 3.0
 accent_material = 1
-seed_value = 11
+seed_value = 12
+doors = PackedVector3Array(0, 1, 3)
 style = 1
 
 [node name="Immeuble_NE_int2" type="Node3D" parent="."]
 transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 12, 0, -31)
 script = ExtResource("2_structure")
 kind = 7
-counts = Vector3i(3, 4, 3)
+counts = Vector3i(3, 5, 3)
 block = Vector3(4.0, 3.2, 0.45)
 strength = 3.0
-seed_value = 12
+seed_value = 13
+doors = PackedVector3Array(2, 1, 3)
 style = 1
 
 [node name="Immeuble_NE_ext2" type="Node3D" parent="."]
 transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 29, 0, -31)
 script = ExtResource("2_structure")
 kind = 7
-counts = Vector3i(3, 5, 3)
+counts = Vector3i(3, 6, 3)
 block = Vector3(4.0, 3.2, 0.45)
 strength = 3.0
 accent_material = 2
-seed_value = 13
-style = 1
-
-[node name="Immeuble_SO_int" type="Node3D" parent="."]
-transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, -12, 0, 14)
-script = ExtResource("2_structure")
-kind = 7
-counts = Vector3i(3, 5, 3)
-block = Vector3(4.0, 3.2, 0.45)
-strength = 3.0
 seed_value = 14
-doors = PackedVector3Array(3, 1, 3)
+doors = PackedVector3Array(1, 1, 3)
 style = 1
 
 [node name="Immeuble_SO_ext" type="Node3D" parent="."]
 transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, -29, 0, 14)
 script = ExtResource("2_structure")
 kind = 7
-counts = Vector3i(3, 3, 3)
+counts = Vector3i(3, 4, 3)
 block = Vector3(4.0, 3.2, 0.45)
 strength = 3.0
-material = 1
 accent_material = 1
 seed_value = 15
+doors = PackedVector3Array(1, 1, 3)
 style = 1
 
 [node name="Immeuble_SO_int2" type="Node3D" parent="."]
@@ -196,6 +196,7 @@ block = Vector3(4.0, 3.2, 0.45)
 strength = 3.0
 accent_material = 1
 seed_value = 16
+doors = PackedVector3Array(3, 1, 2)
 style = 1
 
 [node name="Immeuble_SO_ext2" type="Node3D" parent="."]
@@ -207,18 +208,7 @@ block = Vector3(4.0, 3.2, 0.45)
 strength = 3.0
 material = 2
 seed_value = 17
-style = 1
-
-[node name="Immeuble_SE_int" type="Node3D" parent="."]
-transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 12, 0, 14)
-script = ExtResource("2_structure")
-kind = 7
-counts = Vector3i(3, 5, 3)
-block = Vector3(4.0, 3.2, 0.45)
-strength = 3.0
-accent_material = 1
-seed_value = 18
-doors = PackedVector3Array(3, 2, 1, 3, 0, 2, 3, 2, 3, 3, 0, 4, 3, 2, 5, 2, 1, 3, 0, 1, 4)
+doors = PackedVector3Array(0, 1, 3)
 style = 1
 
 [node name="Immeuble_SE_ext" type="Node3D" parent="."]
@@ -228,19 +218,20 @@ kind = 7
 counts = Vector3i(3, 5, 3)
 block = Vector3(4.0, 3.2, 0.45)
 strength = 3.0
-seed_value = 19
-doors = PackedVector3Array(2, 2, 1, 2, 0, 2, 2, 2, 3, 2, 0, 4, 2, 2, 5)
+seed_value = 18
+doors = PackedVector3Array(1, 1, 2)
 style = 1
 
 [node name="Immeuble_SE_int2" type="Node3D" parent="."]
 transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 12, 0, 31)
 script = ExtResource("2_structure")
 kind = 7
-counts = Vector3i(3, 3, 3)
+counts = Vector3i(3, 4, 3)
 block = Vector3(4.0, 3.2, 0.45)
 strength = 3.0
 accent_material = 2
-seed_value = 20
+seed_value = 19
+doors = PackedVector3Array(3, 2, 1, 3, 0, 2, 3, 2, 3, 2, 1, 2)
 style = 1
 
 [node name="Immeuble_SE_ext2" type="Node3D" parent="."]
@@ -250,20 +241,71 @@ kind = 7
 counts = Vector3i(3, 4, 3)
 block = Vector3(4.0, 3.2, 0.45)
 strength = 3.0
-material = 1
 accent_material = 1
+seed_value = 20
+doors = PackedVector3Array(2, 2, 1, 2, 0, 2, 2, 2, 3, 0, 1, 2)
+style = 1
+
+[node name="Temple" type="Node3D" parent="."]
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 0, 0, -3)
+script = ExtResource("2_structure")
+kind = 11
+counts = Vector3i(6, 9, 1)
+block = Vector3(3.2, 8.0, 1.0)
+strength = 4.0
 seed_value = 21
 style = 1
 
-[node name="FondNord" type="Node3D" parent="."]
-transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 0, 0, -46)
+[node name="PortiqueOuest" type="Node3D" parent="."]
+transform = Transform3D(0.0, 0, 1.0, 0, 1, 0, -1.0, 0, 0.0, -19.5, 0, -3)
 script = ExtResource("2_structure")
-kind = 7
-counts = Vector3i(3, 7, 2)
-block = Vector3(4.0, 3.2, 0.45)
-strength = 3.0
-accent_material = 2
+kind = 8
+counts = Vector3i(5, 2, 1)
+block = Vector3(3.0, 4.03, 1.4)
+strength = 4.0
 seed_value = 22
+style = 1
+
+[node name="PortiqueEst" type="Node3D" parent="."]
+transform = Transform3D(0.0, 0, 1.0, 0, 1, 0, -1.0, 0, 0.0, 19.5, 0, -3)
+script = ExtResource("2_structure")
+kind = 8
+counts = Vector3i(5, 2, 1)
+block = Vector3(3.0, 4.03, 1.4)
+strength = 4.0
+seed_value = 23
+style = 1
+
+[node name="Tholos" type="Node3D" parent="."]
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 0, 0, -40)
+script = ExtResource("2_structure")
+kind = 10
+counts = Vector3i(12, 14, 9)
+block = Vector3(5.5, 0.7, 0.8)
+strength = 4.0
+seed_value = 24
+style = 1
+
+[node name="ArcDeTriomphe" type="Node3D" parent="."]
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 0, 0, 22)
+script = ExtResource("2_structure")
+kind = 8
+counts = Vector3i(1, 1, 1)
+block = Vector3(6.0, 6.0, 3.0)
+strength = 5.0
+seed_value = 25
+style = 1
+
+[node name="Belvedere" type="Node3D" parent="."]
+transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 12, 16.0, -31)
+script = ExtResource("2_structure")
+kind = 1
+counts = Vector3i(2, 5, 1)
+block = Vector3(1.2, 0.8, 0.35)
+strength = 2.5
+material = 2
+accent_material = 2
+seed_value = 26
 style = 1
 
 [node name="FondSud" type="Node3D" parent="."]
@@ -274,7 +316,7 @@ counts = Vector3i(3, 4, 2)
 block = Vector3(4.0, 3.2, 0.45)
 strength = 3.0
 accent_material = 1
-seed_value = 23
+seed_value = 27
 style = 1
 
 [node name="FondOuest" type="Node3D" parent="."]
@@ -284,7 +326,7 @@ kind = 7
 counts = Vector3i(2, 5, 4)
 block = Vector3(4.0, 3.2, 0.45)
 strength = 3.0
-seed_value = 24
+seed_value = 28
 style = 1
 
 [node name="FondEst" type="Node3D" parent="."]
@@ -295,118 +337,5 @@ counts = Vector3i(2, 4, 4)
 block = Vector3(4.0, 3.2, 0.45)
 strength = 3.0
 material = 2
-seed_value = 25
-style = 1
-
-[node name="Citerne" type="Node3D" parent="."]
-transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 12, 19.200000000000003, -14)
-script = ExtResource("2_structure")
-kind = 1
-counts = Vector3i(2, 5, 1)
-block = Vector3(1.2, 0.8, 0.35)
-strength = 2.5
-material = 1
-accent_material = 1
-seed_value = 26
-style = 1
-
-[node name="CiterneB" type="Node3D" parent="."]
-transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 29, 16.0, -31)
-script = ExtResource("2_structure")
-kind = 1
-counts = Vector3i(2, 4, 1)
-block = Vector3(1.2, 0.8, 0.35)
-strength = 2.5
-material = 1
-accent_material = 1
-seed_value = 27
-style = 1
-
-[node name="Colonnade" type="Node3D" parent="."]
-transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 0, 0, 0)
-script = ExtResource("2_structure")
-kind = 3
-counts = Vector3i(5, 7, 1)
-block = Vector3(0.7, 0.6, 0.7)
-strength = 3.0
-material = 2
-accent_material = 1
-seed_value = 28
-style = 1
-
-[node name="Kiosque" type="Node3D" parent="."]
-transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, -14, 0, 0)
-script = ExtResource("2_structure")
-kind = 4
-counts = Vector3i(1, 1, 1)
-block = Vector3(3.0, 2.8, 0.3)
-strength = 2.5
-material = 1
-accent_material = 1
 seed_value = 29
-style = 1
-
-[node name="KiosqueB" type="Node3D" parent="."]
-transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 18, 0, 3)
-script = ExtResource("2_structure")
-kind = 4
-counts = Vector3i(1, 1, 1)
-block = Vector3(3.0, 2.8, 0.3)
-strength = 2.5
-material = 2
-accent_material = 1
-seed_value = 30
-style = 1
-
-[node name="Caisses" type="Node3D" parent="."]
-transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, -4, 0, 22)
-script = ExtResource("2_structure")
-kind = 2
-counts = Vector3i(3, 1, 2)
-block = Vector3(0.9, 0.9, 0.9)
-strength = 2.0
-material = 1
-accent_material = 1
-seed_value = 31
-style = 1
-
-[node name="Futs" type="Node3D" parent="."]
-transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 4.2, 0, -22)
-script = ExtResource("2_structure")
-kind = 2
-counts = Vector3i(2, 1, 3)
-block = Vector3(0.9, 0.9, 0.9)
-strength = 2.0
-material = 2
-accent_material = 2
-seed_value = 32
-style = 1
-
-[node name="Barriere" type="Node3D" parent="."]
-transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 0, 0, -38)
-script = ExtResource("2_structure")
-counts = Vector3i(8, 2, 1)
-block = Vector3(1.2, 0.5, 0.3)
-strength = 2.0
-material = 2
-accent_material = 2
-seed_value = 33
-style = 1
-
-[node name="MuretO" type="Node3D" parent="."]
-transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, -24, 0, -6.5)
-script = ExtResource("2_structure")
-counts = Vector3i(6, 2, 1)
-block = Vector3(1, 0.5, 0.4)
-strength = 2.5
-seed_value = 34
-style = 1
-
-[node name="MuretE" type="Node3D" parent="."]
-transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 24, 0, 6.5)
-script = ExtResource("2_structure")
-counts = Vector3i(6, 2, 1)
-block = Vector3(1, 0.5, 0.4)
-strength = 2.5
-seed_value = 35
 style = 1

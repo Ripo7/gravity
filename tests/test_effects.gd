@@ -100,13 +100,13 @@ func test_tall_building_creaks_then_pancakes_floor_by_floor() -> void:
 func test_roof_water_tower_falls_with_its_building() -> void:
 	await _load_world()
 	var s := world.structures
-	var roof := Vector3(12, 0, -14)  # building with a water tower on top
+	var roof := Vector3(12, 0, -31)  # block with a belvedere on its roof
 	var tower_before := 0
 	for i in s.segment_count():
 		var p := s.transform_of(i).origin
-		if s.is_alive(i) and p.y > 19.0 and absf(p.x - roof.x) < 2.0 and absf(p.z - roof.z) < 2.0:
+		if s.is_alive(i) and p.y > 16.5 and absf(p.x - roof.x) < 2.0 and absf(p.z - roof.z) < 2.0:
 			tower_before += 1
-	check(tower_before > 10, "water tower on the roof (%d)" % tower_before)
+	check(tower_before > 10, "belvedere on the roof (%d)" % tower_before)
 	for i in s.segment_count():
 		var p := s.transform_of(i).origin
 		if s.is_alive(i) and p.y < 6.3 and absf(p.x - roof.x) < 6.5 and absf(p.z - roof.z) < 6.5:
@@ -115,7 +115,7 @@ func test_roof_water_tower_falls_with_its_building() -> void:
 	var left := 0
 	for i in s.segment_count():
 		var p := s.transform_of(i).origin
-		if s.is_alive(i) and p.y > 19.0 and absf(p.x - roof.x) < 2.0 and absf(p.z - roof.z) < 2.0:
+		if s.is_alive(i) and p.y > 16.5 and absf(p.x - roof.x) < 2.0 and absf(p.z - roof.z) < 2.0:
 			left += 1
 	check_eq(left, 0, "it comes down with the building")
 	await _unload()
