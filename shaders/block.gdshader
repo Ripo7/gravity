@@ -20,6 +20,13 @@ uniform sampler2D shard_shapes : filter_nearest;
 // drawn in the whole block's space, so they run on from piece to piece (a
 // cracked wall's cells look like the wall).
 uniform sampler2D shard_centers : filter_nearest;
+// Finishes baked in Blender (tools/make_textures.py), one layer each:
+// 0 stone, 1 brick, 2 plaster (tinted here), 3 travertine, 4 marble,
+// 5 terracotta. Detail: normal x, y (tangent space), roughness, cavity.
+uniform bool use_textures = false;
+uniform sampler2DArray finish_albedo : filter_linear_mipmap_anisotropic, repeat_enable;  // linear
+uniform sampler2DArray finish_detail : filter_linear_mipmap, repeat_enable;
+uniform float relief = 0.8;  // strength of the baked normals
 
 uniform vec3 concrete : source_color = vec3(0.78, 0.76, 0.72);
 uniform vec3 wood : source_color = vec3(0.84, 0.75, 0.62);
@@ -123,6 +130,30 @@ float courses(vec2 uv, vec2 size, float stagger, float joint, out vec2 id) {
 	float jx = grid_line((uv.x + shift) / size.x, joint / size.x);
 	float jy = grid_line(uv.y / size.y, joint / size.y);
 	return max(jx, jy);
+}
+
+// Texture layer for a finish (-1: drawn procedurally), and its tile in metres.
+int finish_layer(int f) {
+	if (f == 1) { return 0; }
+	if (f == 2) { return 1; }
+	if (f >= 5 && f <= 8) { return 2; }
+	if (f == 3) { return 3; }
+	if (f == 4) { return 4; }
+	if (f == 9) { return 5; }
+	return -1;
+}
+
+vec2 finish_tile(int layer) {
+	if (layer == 0) { return vec2(3.12, 2.52); }
+	if (layer == 1) { return vec2(1.84, 2.4); }
+	if (layer == 2) { return vec2(4.0); }
+	if (layer == 3) { return vec2(2.0); }
+	if (layer == 4) { return vec2(3.0); }
+	return vec2(2.2, 2.0);
+}
+
+vec3 plaster_tint(int f) {
+	return f == 5 ? vec3(0.88, 0.66, 0.38) : (f == 6 ? vec3(0.86, 0.6, 0.52) : (f == 7 ? vec3(0.74, 0.43, 0.29) : vec3(0.93, 0.86, 0.7)));
 }
 
 void apply_finish(int f, vec2 uv, vec3 p, inout vec3 albedo, inout float rough, inout float metallic) {
@@ -403,13 +434,40 @@ void fragment() {
 		around = atan(local_pos.z, local_pos.x);
 		fuv = vec2(around * half_size.x, q.y);
 	}
-	if (fin > 0) {
+	int layer = use_textures && fin > 0 ? finish_layer(fin) : -1;
+	vec4 detail = vec4(0.5, 0.5, rough, 1.0);
+	if (layer >= 0) {
+		// Baked in Blender: colour, relief, roughness, joints.
+		vec3 tuv = vec3(fuv / finish_tile(layer), float(layer));
+		albedo = texture(finish_albedo, tuv).rgb;
+		detail = texture(finish_detail, tuv);
+		rough = detail.b;
+		metallic = 0.0;
+		if (layer == 2) {
+			// Render over brick, worn through in patches.
+			float worn = smoothstep(0.66, 0.72, fbm(p * 0.9 + 11.0));
+			vec3 under = texture(finish_albedo, vec3(fuv / finish_tile(1), 1.0)).rgb;
+			albedo = mix(albedo * plaster_tint(fin) * 1.08, under, worn);
+		}
+	} else if (fin > 0) {
 		apply_finish(fin, fuv, p, albedo, rough, metallic);
 	}
 	if (is_round > 0.5 && face.y < 0.5 && !chunky) {
 		// Fluted shaft: 20 grooves catch the low sun.
 		float flute = 0.5 + 0.5 * cos(around * 20.0);
 		albedo *= 0.8 + 0.2 * flute;
+	}
+
+	// Baked relief on standing walls: the normal tilts by the texture's,
+	// along the face's own axes (the same ones the texture is laid on).
+	if (layer >= 0 && solid && !(is_round > 0.5 && face.y < 0.5) && outer > 0.99) {
+		vec3 wn = static_cell > 0.5 ? up_normal : normalize((INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz);
+		vec3 tan_u = face.x > 0.5 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
+		vec3 tan_v = face.y > 0.5 ? vec3(0.0, 0.0, 1.0) : vec3(0.0, 1.0, 0.0);
+		vec2 tilt = (detail.rg * 2.0 - 1.0) * relief;
+		vec3 bent = normalize(wn + tan_u * tilt.x + tan_v * tilt.y);
+		NORMAL = normalize((VIEW_MATRIX * vec4(bent, 0.0)).xyz);
+		albedo *= mix(0.72, 1.0, detail.a);  // joints and pits hold shadow
 	}
 
 	// Fresh fracture faces: the inside of the material, never weathered.
