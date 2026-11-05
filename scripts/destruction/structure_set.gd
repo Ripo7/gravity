@@ -85,6 +85,8 @@ var _xform: Array[Transform3D] = []  # global rest transform
 var _local: Array[AABB] = []  # in the structure's own space
 var _round := PackedInt32Array()  ## slot in the round (cylinder) MultiMesh, -1 = box
 var _round_count := 0
+var _piece := PackedInt32Array()  ## carved piece drawn (ShapeLibrary index), 0 = none
+var _piece_counts := PackedInt32Array()
 var _mesh: StructureMesh
 var _size := PackedVector3Array()
 var _kind := PackedByteArray()
@@ -171,7 +173,14 @@ func add_structure(origin: Transform3D, segments: Array[Dictionary]) -> int:
 			size.x * size.y * size.z * Materials.prop(kind, "density"),
 			_box_shape(size)
 		)
-		if seg.get("round", false):
+		var piece := ShapeLibrary.index(seg.get("shape", ""))
+		if piece > 0:
+			if _piece_counts.size() < piece:
+				_piece_counts.resize(piece)
+			_piece[i] = piece
+			_round[i] = _piece_counts[piece - 1]
+			_piece_counts[piece - 1] += 1
+		elif seg.get("round", false):
 			_round[i] = _round_count
 			_round_count += 1
 	members = _groups[group_id]
@@ -214,6 +223,7 @@ func add_block(
 	_kind.append(kind)
 	_seed.append(seed_value)
 	_round.append(-1)
+	_piece.append(0)
 	_shade.append(shade)
 	_hit.append(Vector3.ZERO)
 	_health.append(hp)
@@ -1261,21 +1271,21 @@ func _write_instance(i: int, xf: Transform3D) -> void:
 		walls.write(i, xf, damage)
 		return
 	var custom := Materials.custom(_kind[i], damage, _seed[i])
-	_mesh.write(i, _round[i], xf, _size[i], _shade[i], _seed[i], custom, _hit[i])
+	_mesh.write(i, _round[i], _piece[i], xf, _size[i], _shade[i], _seed[i], custom, _hit[i])
 
 
 func _clear_instance(i: int) -> void:
 	if walls and walls.is_cell(i):
 		walls.clear(i)
 	else:
-		_mesh.clear(i, _round[i])
+		_mesh.clear(i, _round[i], _piece[i])
 
 
 func _rebuild_multimesh() -> void:
 	if _mesh == null:
 		_mesh = StructureMesh.new(self, material)
 	var n := _xform.size()
-	_mesh.resize(n, _round_count)
+	_mesh.resize(n, _round_count, _piece_counts)
 	for i in n:
 		if _state[i] == State.GONE:
 			_clear_instance(i)
