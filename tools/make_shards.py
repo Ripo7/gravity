@@ -403,6 +403,84 @@ def wall_cells(aspect, count, rng):
     return out
 
 
+def square_param(x, y):
+    """Where (x, y) on the unit square's border lies along it, 0..1, going
+    round counter-clockwise from the corner (0.5, -0.5)."""
+    if abs(x - 0.5) < 1e-6:
+        return (y + 0.5) * 0.25
+    if abs(y - 0.5) < 1e-6:
+        return 0.25 + (0.5 - x) * 0.25
+    if abs(x + 0.5) < 1e-6:
+        return 0.5 + (0.5 - y) * 0.25
+    return 0.75 + (x + 0.5) * 0.25
+
+
+def sample_prism(bm, layout):
+    """Samples a wall cell (a prism through z) onto the shared layout
+    exactly: the layout's front and back faces map onto the cell's polygon
+    (radially from its centre, corners on layout points), its sides onto
+    the cell's sides. Flat faces, sharp corners: a standing cell looks like
+    the wall it is part of. Sides on the cube's border are outer surface."""
+    bm.normal_update()
+    front = max(bm.faces, key=lambda f: f.normal.z)
+    poly = [Vector((v.co.x, v.co.y)) for v in front.verts]
+    # Counter-clockwise, starting at the vertex nearest the -45 degree ray.
+    c = sum(poly, Vector((0.0, 0.0))) / len(poly)
+    area2 = sum(poly[k].x * poly[(k + 1) % len(poly)].y - poly[(k + 1) % len(poly)].x * poly[k].y for k in range(len(poly)))
+    if area2 < 0:
+        poly.reverse()
+    start = min(range(len(poly)), key=lambda k: abs(math.atan2(poly[k].y - c.y, poly[k].x - c.x) + math.pi / 4))
+    poly = poly[start:] + poly[:start]
+    n = len(poly)
+    lengths = [(poly[(k + 1) % n] - poly[k]).length for k in range(n)]
+    total = sum(lengths)
+    # Snap each polygon corner to a perimeter sample of the layout (4*GRID).
+    steps = 4 * GRID
+    marks = []
+    acc = 0.0
+    for k in range(n):
+        marks.append(min(steps - 1, max(marks[-1] + 1 if marks else 0, round(acc / total * steps))))
+        acc += lengths[k]
+    def border(t):
+        """Point of the polygon's border for square parameter t (0..1)."""
+        t = (t % 1.0) * steps
+        for k in range(n):
+            a = marks[k]
+            b = marks[k + 1] if k + 1 < n else steps
+            if a <= t <= b:
+                f = (t - a) / max(b - a, 1e-6)
+                return poly[k].lerp(poly[(k + 1) % n], f), k
+        return poly[0], 0
+    on_edge = []
+    for k in range(n):
+        p, q = poly[k], poly[(k + 1) % n]
+        on_edge.append(any(abs(p[a] - side) < 1e-4 and abs(q[a] - side) < 1e-4 for a in (0, 1) for side in (-0.5, 0.5)))
+    out = []
+    for p in layout:
+        r = 2.0 * max(abs(p.x), abs(p.y))
+        if r < 1e-6:
+            xy = c
+            k = 0
+        else:
+            q = Vector((p.x, p.y)) / r
+            point, k = border(square_param(q.x, q.y))
+            xy = c.lerp(point, min(r, 1.0))
+        face = abs(abs(p.z) - 0.5) < 1e-6 and r < 1.0 - 1e-6
+        outer = 1.0 if (face or abs(abs(p.z) - 0.5) < 1e-6 or on_edge[k]) else 0.0
+        out.append((Vector((xy.x, xy.y, p.z)), outer))
+    lo = Vector((min(v.x for v in poly), min(v.y for v in poly), -0.5))
+    hi = Vector((max(v.x for v in poly), max(v.y for v in poly), 0.5))
+    mid = (lo + hi) * 0.5
+    corners = [Vector((v.x, v.y, z)) - mid for v in poly for z in (-0.5, 0.5)]
+    return {
+        "verts": [(loc - mid, outer) for loc, outer in out],
+        "center": [round(x, 4) for x in mid],
+        "size": [round(x, 4) for x in hi - lo],
+        "hull": [round(x, 4) for v in farthest_points(corners, MAX_HULL) for x in v],
+        "volume": round(abs(area2) * 0.5, 6),
+    }
+
+
 # --- Sampling onto the shared layout ---------------------------------------------
 
 
@@ -540,7 +618,7 @@ def main():
         for c_k, count in enumerate(WALL_COUNTS):
             pattern = {"aspect": aspect, "count": count, "shards": []}
             for k, (bm, links) in enumerate(wall_cells(aspect, count, rng)):
-                s = sample(bm, layout, "wall", 0.0)
+                s = sample_prism(bm, layout)
                 s["id"] = len(rows)
                 rows.append(s.pop("verts"))
                 s["links"] = [[j, round(area, 5), round(nx, 4), round(ny, 4)] for j, area, nx, ny in links]

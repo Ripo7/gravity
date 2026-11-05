@@ -48,6 +48,7 @@ varying float damage;
 varying vec3 hit_at;  // metres in block space; x > 90 when never hit
 varying float world_y;
 varying float outer;  // 0 on fresh fracture faces
+varying float static_cell;  // 1 for a standing cell of a cracked wall (WallCells)
 
 float hash(vec3 p) {
 	p = fract(p * 0.3183099 + 0.1);
@@ -219,6 +220,7 @@ void vertex() {
 	finish = floor(packed / 5.0 + 0.001);
 	seed = COLOR.b;
 	outer = 1.0;
+	static_cell = 0.0;
 	vec3 shard_offset = vec3(0.0);
 	if (chunky) {
 		// Debris: a shard shape from the library (one texture row per
@@ -228,10 +230,11 @@ void vertex() {
 			vec4 t = texelFetch(shard_shapes, ivec2(VERTEX_ID, shard), 0);
 			vec3 v = t.xyz;
 			vec3 c = texelFetch(shard_centers, ivec2(shard, 0), 0).xyz;
-			// A wall cell is drawn in its wall's own axes: its pattern (cut
-			// with the thickness along z) turned to the wall (INSTANCE_CUSTOM.b:
-			// 1 = thickness along x).
-			if (INSTANCE_CUSTOM.b > 0.5) {
+			// A standing wall cell (INSTANCE_CUSTOM.b = 1 + turn) is drawn in
+			// its wall's own axes: its pattern (cut with the thickness along
+			// z) turned to the wall (turn 1: thickness along x).
+			static_cell = INSTANCE_CUSTOM.b > 0.5 ? 1.0 : 0.0;
+			if (INSTANCE_CUSTOM.b > 1.5) {
 				v = vec3(v.z, v.y, -v.x);
 				c = vec3(c.z, c.y, -c.x);
 			}
@@ -312,6 +315,14 @@ void fragment() {
 	vec3 albedo;
 	vec3 lit_window = vec3(0.0);
 	vec3 face = abs(local_normal);
+	vec3 up_normal = local_normal;
+	bool solid = !chunky || static_cell > 0.5;  // standing: world-space patterns
+	if (static_cell > 0.5) {
+		// The cell's vertices keep the layout's normals: use the real face,
+		// in the world (the wall's patterns are in world space).
+		up_normal = normalize((INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz);
+		face = abs(up_normal);
+	}
 	float rough = 0.9;
 	float metallic = 0.0;
 	// A finish (stone, plaster, tiles...) paints the whole surface: the bare
@@ -384,7 +395,7 @@ void fragment() {
 	// Finishes (Materials.Finish): what the printers copied. Static blocks
 	// use world space so courses and joints run on across blocks; debris
 	// uses its own space so the pattern stays on the piece.
-	vec3 q = chunky ? local_pos + seed * 7.0 : world_p;
+	vec3 q = solid ? world_p : local_pos + seed * 7.0;
 	vec2 fuv = face.y > 0.5 ? q.xz : vec2(face.x > 0.5 ? q.z : q.x, q.y);
 	float around = 0.0;
 	if (is_round > 0.5 && face.y < 0.5) {
@@ -448,8 +459,8 @@ void fragment() {
 	// - grime streaks run down vertical faces from their top edge;
 	// - each block is darker near its bottom and on its underside, which
 	//   reads as ambient occlusion wherever blocks meet slabs and floors.
-	if (material_id < 2.5 && !chunky) {
-		vec3 n = local_normal;
+	if (material_id < 2.5 && solid) {
+		vec3 n = up_normal;
 		if (n.y > 0.5) {
 			float patches = smoothstep(0.35, 0.75, fbm(p * 0.9));
 			albedo = mix(albedo, vec3(0.86, 0.83, 0.77), patches * 0.35);
@@ -474,7 +485,7 @@ void fragment() {
 	if (is_round > 0.5) {
 		edge_dist = d.y;  // only the top and bottom rims
 	}
-	float edge = chunky ? 0.0 : 1.0 - smoothstep(0.0, 0.05, edge_dist);
+	float edge = solid && static_cell < 0.5 ? 1.0 - smoothstep(0.0, 0.05, edge_dist) : 0.0;
 	albedo *= 1.0 - edge * 0.22;
 
 	// Cracks: they start where the block was hit and spread out across it

@@ -202,7 +202,7 @@ func write(i: int, xf: Transform3D, damage: float) -> void:
 	_buffer[o + 15] = 0.0
 	_buffer[o + 16] = Materials.custom(_set._kind[i], damage, _set._seed[i])
 	_buffer[o + 17] = float((info[1] as Dictionary)["id"]) + 1.0
-	_buffer[o + 18] = float(info[3])
+	_buffer[o + 18] = float(info[3]) + 1.0  # standing cell, and its turn
 	_buffer[o + 19] = 0.0
 	_dirty = true
 
