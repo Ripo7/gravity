@@ -202,9 +202,11 @@ func add_structure(origin: Transform3D, segments: Array[Dictionary], scored := t
 	_link(members)
 	# Calibrate capacities on the intact structure so it always stands.
 	_compute_loads(members)
-	for i in members:
+	for k in members.size():
+		var i := members[k]
 		var floor_cap := _mass[i] * 3.0
-		_capacity[i] = maxf(_load[i] * SAFETY[_kind[i]], floor_cap)
+		var robust: float = segments[k].get("robust", 1.0)
+		_capacity[i] = maxf(_load[i] * SAFETY[_kind[i]] * robust, floor_cap)
 	_rebuild_multimesh()
 	return group_id
 
@@ -500,7 +502,8 @@ func _remove(i: int) -> void:
 		_dirty_groups[_group[i]] = true
 		# Rubble frozen on or against it must be free to fall.
 		if debris:
-			debris.thaw_near(_xform[i].origin, _size[i].length() * 0.5 + 0.5)
+			var r := _size[i] * 0.5 + Vector3.ONE * 0.2
+			debris.thaw_box(AABB(_xform[i].origin - r, r * 2.0), 0.3)
 		_unanchor(i)
 	_state[i] = State.GONE
 	var o := i * FLOATS_PER_INSTANCE
@@ -857,7 +860,7 @@ func _update_clusters(delta: float) -> void:
 			if c.crush_tick <= -0.05:
 				c.crush_tick = 0.0
 				debris.thaw_box(
-					_cluster_bounds(c, xf).grow(0.4).merge(_cluster_bounds(c, xf.translated(v * 0.15)))
+					_cluster_bounds(c, xf).grow(0.4).merge(_cluster_bounds(c, xf.translated(v * 0.15))), 0.4
 				)
 		# A heavy block resting on loose rubble grinds it down and sinks.
 		if c.members.size() >= PANCAKE_MIN and v.length() < 1.0 and c.age > 0.3:

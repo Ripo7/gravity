@@ -172,7 +172,7 @@ func test_glass_bursts_into_shards_without_bodies() -> void:
 func test_broken_concrete_leaves_rebar_and_cracks_start_at_the_hit() -> void:
 	await _load_world()
 	var s := world.structures
-	# A ground column of a building: its neighbours are concrete slabs.
+	# A first-floor pier of a building: its neighbours are concrete too.
 	var col := -1
 	for i in s.segment_count():
 		var p := s.transform_of(i).origin
@@ -181,13 +181,15 @@ func test_broken_concrete_leaves_rebar_and_cracks_start_at_the_hit() -> void:
 		if (
 			s.is_alive(i)
 			and concrete
-			and absf(p.y - 4.675) < 0.05
-			and absf(sz.y - 2.95) < 0.01
-			and sz.x < 0.5
+			and p.y > 3.5
+			and p.y < 6.0
+			and sz.y > 2.0
+			and minf(sz.x, sz.z) < 0.5
+			and maxf(sz.x, sz.z) < 1.6
 		):
 			col = i
 			break
-	check(col >= 0, "found a first-floor column")
+	check(col >= 0, "found a first-floor pier")
 	var at := s.transform_of(col).origin + Vector3(0, 1.0, 0)
 	s._damage(col, 0.1, at)
 	check(s._hit[col] != Vector3.ZERO, "the hit point is kept for the cracks")
