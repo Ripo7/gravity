@@ -852,6 +852,14 @@ func _update_clusters(delta: float) -> void:
 			_impact(c, xf, peak)
 			continue
 		_check_lean(c, xf, delta)
+		# Push through rubble rather than stopping dead on frozen pieces.
+		if debris and debris.frozen_count > 0 and v.length() > 1.0:
+			c.crush_tick -= delta
+			if c.crush_tick <= -0.05:
+				c.crush_tick = 0.0
+				debris.thaw_box(
+					_cluster_bounds(c, xf).grow(0.4).merge(_cluster_bounds(c, xf.translated(v * 0.15)))
+				)
 		# A heavy block resting on loose rubble grinds it down and sinks.
 		if c.members.size() >= PANCAKE_MIN and v.length() < 1.0 and c.age > 0.3:
 			c.crush_tick -= delta
@@ -911,6 +919,13 @@ func _pancake(c: Cluster, xf: Transform3D, speed: float) -> bool:
 	c.prev_velocity = v * PANCAKE_KEEP
 	c.age = 0.05
 	return true
+
+
+func _cluster_bounds(c: Cluster, xf: Transform3D) -> AABB:
+	var box := AABB((xf * c.offsets[0]).origin, Vector3.ZERO)
+	for off in c.offsets:
+		box = box.expand((xf * off).origin)
+	return box.grow(1.0)
 
 
 ## Loose pieces under a heavy resting block are ground into gravel so it

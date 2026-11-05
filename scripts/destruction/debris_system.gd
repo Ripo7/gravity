@@ -10,10 +10,19 @@ extends Node3D
 
 ## A piece slower than this (m/s, rad/s) at two sweeps in a row is frozen;
 ## see _settle_still_pieces.
+## A big piece broke up on a hard landing.
+signal piece_broke(at: Vector3, size: Vector3, kind: int, speed: float)
+
 const QUIET_SPEED := 0.35
 const QUIET_SPIN := 0.7
 const QUIET_SWEEP := 0.35
 const FREEZE_CELL := 2.0  ## metres, grid for finding frozen pieces
+## A piece moving at least this fast that suddenly loses most of its speed
+## (a hard landing) breaks up; at most this many per frame.
+const BREAK_SPEED := 7.0
+const MAX_BREAKS_PER_FRAME := 6
+## Faster than this, frozen rubble just ahead is thawed.
+const THAW_AHEAD_SPEED := 2.0
 const LAYER_WORLD := 1
 const LAYER_STRUCTURES := 2
 const LAYER_DEBRIS := 4
@@ -49,6 +58,8 @@ var recycled_total := 0
 var fading_count := 0
 
 var _bodies: Array[RID] = []
+var _speed := PackedFloat32Array()  ## last frame's speed, for hard landings
+var _breaks_left := 0
 var _shapes: Array[RID] = []
 var _rid_to_index := {}
 var _active := PackedByteArray()
@@ -111,6 +122,8 @@ func _build_pool() -> void:
 	_storm.fill(0)
 	_quiet.resize(capacity)
 	_quiet.fill(0)
+	_speed.resize(capacity)
+	_speed.fill(0.0)
 	_frozen.resize(capacity)
 	_frozen.fill(0)
 	_shade.resize(capacity)
@@ -182,6 +195,7 @@ func spawn(
 		frozen_count -= 1
 		PhysicsServer3D.body_set_mode(body, PhysicsServer3D.BODY_MODE_RIGID)
 	_quiet[i] = 0
+	_speed[i] = velocity.length()
 	PhysicsServer3D.shape_set_data(_shapes[i], size * 0.5)
 	var mass := maxf(size.x * size.y * size.z * Materials.prop(kind, "density"), 0.5)
 	PhysicsServer3D.body_set_param(body, PhysicsServer3D.BODY_PARAM_MASS, mass)
@@ -428,7 +442,10 @@ func _physics_process(delta: float) -> void:
 			continue
 		_pos[i] = xform.origin
 		_write_instance(i, xform)
+		if not asleep and _storm[i] == 0:
+			_check_landing(i, xform.origin)
 	awake_count = awake
+	_breaks_left = MAX_BREAKS_PER_FRAME
 	_sweep += delta
 	if _sweep >= QUIET_SWEEP:
 		_sweep = 0.0
@@ -437,6 +454,27 @@ func _physics_process(delta: float) -> void:
 	if _buffer_dirty:
 		_multimesh.buffer = _buffer
 		_buffer_dirty = false
+
+
+## A big piece that slams into something breaks up instead of bouncing
+## whole; anything moving fast frees the frozen rubble just ahead of it so
+## it pushes the pile around instead of stopping dead on it.
+func _check_landing(i: int, at: Vector3) -> void:
+	var v := velocity_of(i)
+	var speed := v.length()
+	var before := _speed[i]
+	_speed[i] = speed
+	if frozen_count > 0 and speed > THAW_AHEAD_SPEED:
+		thaw_near(at + v * 0.1, _size[i][_size[i].max_axis_index()] * 0.6 + 0.3)
+	if before < BREAK_SPEED or speed > before * 0.45 or _clock - _born[i] < 0.15:
+		return
+	if _breaks_left <= 0 or _size[i].x * _size[i].y * _size[i].z < 0.02:
+		return
+	_breaks_left -= 1
+	var size := _size[i]
+	var kind := _kind[i]
+	if not fracture(i).is_empty():
+		piece_broke.emit(at, size, kind, before)
 
 
 ## Rubble piles form one big island that the engine only puts to sleep when

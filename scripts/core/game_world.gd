@@ -99,6 +99,14 @@ func _connect_juice() -> void:
 				dust.chips_box(at, size, kind, clampi(int(8 + vol * 30.0), 8, 40), 3.0 + r * 2.0)
 			Sfx.play_break(kind, at, r)
 	)
+	debris.piece_broke.connect(
+		func(at: Vector3, size: Vector3, kind: int, speed: float) -> void:
+			var r := size.length() * 0.5
+			if dust:
+				dust.puff(at, r, kind, int(6 + r * 6))
+				dust.chips_box(at, size, kind, clampi(int(6 + speed), 6, 24), 2.5)
+			Sfx.play_break(kind, at, r)
+	)
 	structures.about_to_fail.connect(
 		func(at: Vector3, count: int) -> void:
 			# It creaks, sheds a little dust and gravel, and holds a moment.

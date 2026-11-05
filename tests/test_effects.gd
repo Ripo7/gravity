@@ -197,3 +197,39 @@ func test_broken_concrete_leaves_rebar_and_cracks_start_at_the_hit() -> void:
 	var rebar := s.rebar
 	check(rebar != null and rebar.count() > 0, "steel rods stick out where it broke")
 	await _unload()
+
+
+func test_a_big_piece_breaks_on_a_hard_landing() -> void:
+	await _load_world()
+	var d := world.debris
+	var broke := [0]
+	d.piece_broke.connect(func(_a: Vector3, _s: Vector3, _k: int, _v: float) -> void: broke[0] += 1)
+	d.spawn(Transform3D(Basis(), SPOT + Vector3(0, 8, 0)), Vector3(1.2, 0.5, 0.6), Vector3(0, -6, 0))
+	await get_tree().create_timer(1.2).timeout
+	check(broke[0] >= 1, "it broke up instead of bouncing whole")
+	check(d.active_count > 1, "into pieces (%d)" % d.active_count)
+	await _unload()
+
+
+func test_falling_pieces_push_frozen_rubble() -> void:
+	await _load_world()
+	var d := world.debris
+	var pile: Array[int] = []
+	for k in 6:
+		pile.append(
+			d.spawn(Transform3D(Basis(), SPOT + Vector3(k * 0.45 - 1.1, 0.2, 0)), Vector3(0.4, 0.4, 0.4))
+		)
+	await get_tree().create_timer(2.0).timeout
+	var frozen := 0
+	for i in pile:
+		frozen += 1 if d.is_frozen(i) else 0
+	check(frozen >= 5, "the pile froze (%d)" % frozen)
+	# A slab slides in fast along the ground into the pile.
+	d.spawn(Transform3D(Basis(), SPOT + Vector3(-5, 0.35, 0)), Vector3(1.0, 0.3, 0.6), Vector3(12, 0, 0))
+	await get_tree().create_timer(0.6).timeout
+	var moved := 0
+	for i in pile:
+		if not d.is_frozen(i):
+			moved += 1
+	check(moved >= 2, "it ploughs into the pile instead of stopping dead (%d freed)" % moved)
+	await _unload()
