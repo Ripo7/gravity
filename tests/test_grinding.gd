@@ -111,3 +111,35 @@ func _matter_near(at: Vector3) -> float:
 		if d.is_active(i) and d.position_of(i).distance_to(at) < PowerDefs.VORTEX_RADIUS:
 			total += d.volume_of(i)
 	return total
+
+
+func test_a_wall_hit_cracks_open_in_place() -> void:
+	await _load_world()
+	var s := world.structures
+	var wall := -1
+	for i in s.segment_count():
+		var sz := s.size_of(i)
+		if s.is_alive(i) and s.walls.can_crack(i) and sz.y > 3.0 and maxf(sz.x, sz.z) > 2.5:
+			wall = i
+			break
+	check(wall >= 0, "the palace has wall panels that can crack")
+	var xf := s.transform_of(wall)
+	var size := s.size_of(wall)
+	var mass_before := s.standing_fraction()
+	var blocks := s.segment_count()
+	var pieces := world.debris.active_count
+	var at := xf.origin + xf.basis.z.normalized() * (size.z * 0.5 + 0.3)
+	s._damage(wall, s._max_health[wall] + 0.5, at)
+	check(not s.is_alive(wall), "the panel itself is gone")
+	var cells := 0
+	for i in range(blocks, s.segment_count()):
+		if s.is_alive(i):
+			cells += 1
+			check(s.walls.is_cell(i), "what stands in its place are its cells")
+	check(cells >= 3, "most of the wall still stands, as cells (%d)" % cells)
+	check(world.debris.active_count > pieces, "the cells round the hit broke out")
+	check(s.standing_fraction() < mass_before, "and they are no longer counted as standing")
+	await frames(3)
+	var fell := s.settle()
+	check(fell < cells, "the rest holds together")
+	await _unload()

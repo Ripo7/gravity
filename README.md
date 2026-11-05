@@ -90,7 +90,8 @@ cost as little of it as possible:
 | Black hole / black ice shield | `scripts/powers/vortex.gd`, `ice_shield.gd` |
 | Health and what hurts | `scripts/player/player.gd`, `scripts/powers/hazards.gd` |
 | Menu (live attract-mode backdrop) | `scenes/menu.tscn`, `scripts/ui/main_menu.gd` |
-| Structural physics: loads and shear, toppling (also above a cut course), creak-and-hold, floor-by-floor pancake collapses | `scripts/destruction/structure_set.gd`, `falling_cluster.gd`, `sphere_grid.gd` |
+| Structural physics: loads and shear, toppling (also above a cut course), creak-and-hold, floor-by-floor pancake collapses | `scripts/destruction/structure_set.gd`, `falling_cluster.gd`, `sphere_grid.gd`, `structure_mesh.gd` |
+| Walls that crack open in place (cells cut in Blender) | `scripts/destruction/wall_cells.gd` |
 | Loose pieces: pooled server bodies + one MultiMesh; resting rubble freezes into static bodies until disturbed | `scripts/destruction/debris_system.gd` |
 | Shard library: how concrete, wood and metal break (cut in Blender) | `tools/make_shards.py`, `assets/shards/shards.json`, `scripts/destruction/shard_library.gd` |
 | Box patterns (fallback, and materials without shards) | `scripts/destruction/fracture.gd` |
@@ -155,6 +156,14 @@ After anything changes, each structure is re-checked:
    harder), so towers can be toppled into each other.
 5. **Coming loose.** A block bigger than 0.4 m³ (1 m³ on phones) cracks into
    shards as it comes away: a wall panel never tumbles off whole.
+6. **Walls crack open in place.** A wall panel that breaks is replaced by the
+   cells of a wall pattern cut in Blender (prisms through its thickness,
+   seeded by a Geometry Nodes Poisson disk): the cells round the hit break
+   out, the others stay up as blocks of their own, linked along the faces
+   they share (areas from Blender) and to what the panel touched. Holes get
+   ragged edges across the stone joints, and the wall can go on failing a
+   cell at a time. The cells are drawn in the wall's own space, so plaster
+   and courses run on across them (`scripts/destruction/wall_cells.gd`).
 
 Blocks keep their damage between blasts (shown as cracks), which lowers
 their capacity.
@@ -169,8 +178,8 @@ their capacity.
   one MultiMesh per kind).
 - Showcase (`--mode=showcase --prof --seed=1`, native build on a 4-core
   Linux VM), physics ms per step while things are moving: phone
-  settings 2.8–2.9 mean (worst second 4.3–4.6), browser settings 4.1–4.7
-  (7.4–8.4), desktop 7.4 (12.7–12.9).
+  settings 3.1 mean (worst second 5.1–5.2), browser settings 4.5–4.7
+  (7.4–8.9), desktop 7.6–7.7 (12.8–17.9).
 - CI fails if the browser-settings showcase averages more than 12 ms per
   busy step (`tools/perf_gate.py`). `godot -- --mode=bench` still measures
   raw body counts by hand.
