@@ -48,6 +48,23 @@ raises the shield, arrow to jump, II to pause.
   and download the `gravity-*` artifacts from the run summary.
   The macOS build is ad-hoc signed; right-click → Open the first time.
 
+## Making it look good on phones
+
+Physics, not drawing, is what limits the game, so the effects are built to
+cost as little of it as possible:
+
+- Only big pieces are physics bodies. Gravel, splinters and glass shards are
+  chips with no collision (an arc, one bounce on the surface below, rest).
+- Pieces look like irregular chunks but collide as boxes.
+- Resting rubble is frozen into static bodies (piles used to stay awake
+  forever), and thawed when anything disturbs it.
+- Every kind of thing is one draw call: blocks, debris, chips, dust, rebar.
+- Dust is a few large clouds drawn from one noise texture (overdraw is what
+  hurts phones), lit and eroded in the shader.
+- Phones get a lighter tier (render scale, shadow range, fewer pieces), and
+  the adaptive quality steps down further if frames run long.
+- Measure with `godot --headless --path . -- --mode=showcase --prof`.
+
 ## How it works
 
 | Piece | File |
@@ -58,11 +75,15 @@ raises the shield, arrow to jump, II to pause.
 | Black hole / black ice shield | `scripts/powers/vortex.gd`, `ice_shield.gd` |
 | Health and what hurts | `scripts/player/player.gd`, `scripts/powers/hazards.gd` |
 | Menu (live attract-mode backdrop) | `scenes/menu.tscn`, `scripts/ui/main_menu.gd` |
-| Structural physics: health, loads, toppling, falling pieces | `scripts/destruction/structure_set.gd` |
-| Loose pieces: pooled server bodies + one MultiMesh | `scripts/destruction/debris_system.gd` |
+| Structural physics: health, loads, toppling, creak-and-hold, floor-by-floor pancake collapses, roof structures tied to what they stand on | `scripts/destruction/structure_set.gd` |
+| Loose pieces: pooled server bodies + one MultiMesh; resting rubble freezes into static bodies until disturbed | `scripts/destruction/debris_system.gd` |
 | Pre-fractured patterns | `scripts/destruction/fracture.gd` |
-| Concrete / wood / metal: look, weight, strength, breakage | `scripts/destruction/materials.gd`, `shaders/block.gdshader` |
-| Sparks, dust, chips, shake | `scripts/fx/*`, `shaders/*`, `scripts/core/game_world.gd` |
+| Concrete / wood / metal / glass: look, weight, strength, breakage; irregular chunks cut in the vertex shader; cracks from the hit point; weathering | `scripts/destruction/materials.gd`, `shaders/block.gdshader` |
+| Gravel and glass shards without physics (one bounce, rest, fade) | `scripts/fx/chip_system.gd` |
+| Dust clouds, rolling dust walls, haze, trails (one noise texture, one draw call) | `scripts/fx/dust_system.gd`, `shaders/dust.gdshader` |
+| Rebar left in broken concrete | `scripts/fx/rebar_system.gd` |
+| Quality tiers and adaptive quality (render scale, shadows, pieces kept) | `scripts/core/quality.gd`, `scripts/core/adaptive_quality.gd` |
+| Shake, slow motion on big collapses | `scripts/fx/*`, `scripts/core/game_world.gd` |
 | Sound effects (synthesised, regenerate with `python3 tools/make_sounds.py`) | `audio/*.wav`, `scripts/core/sfx.gd` |
 
 ### Why pre-fractured box pieces (not runtime Voronoi)

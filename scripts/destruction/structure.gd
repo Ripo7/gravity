@@ -45,6 +45,11 @@ const SLAB := 0.3
 @export var seed_value := 0
 ## Counts toward the level's destruction score.
 @export var scored := true
+## BRIDGE: how far the deck reaches past the end columns.
+@export var end_overhang := 0.0:
+	set(v):
+		end_overhang = v
+		_refresh_preview()
 ## APARTMENT: extra open bays, each (side, bay, storey); sides are
 ## 0 = -z, 1 = +z, 2 = -x, 3 = +x.
 @export var doors := PackedVector3Array():
@@ -265,6 +270,24 @@ func _build_apartment(out: Array[Dictionary], rng: RandomNumberGenerator) -> voi
 				else:
 					c.y = base + sill * 0.5
 					_seg(out, c, size_of.call(sill), 0.5, true)
+					# Most windows are glazed. The pane stops short of the slab
+					# above so it never carries any load.
+					if roll < 0.62:
+						var pane_h := col_h - sill - 0.06
+						var g := Vector3(c.x, base + sill + pane_h * 0.5, c.z)
+						var pane := size_of.call(pane_h) as Vector3
+						pane = Vector3(pane.x, pane.y, 0.03) if along_x else Vector3(0.03, pane.y, pane.z)
+						(
+							out
+							. append(
+								{
+									"local": Transform3D(Basis(), g),
+									"size": pane,
+									"strength": strength * 0.3,
+									"material": Materials.Kind.GLASS,
+								}
+							)
+						)
 		if roof:
 			break
 		for ix in nx:
@@ -320,11 +343,13 @@ func _build_bridge(out: Array[Dictionary]) -> void:
 	for j in spans:
 		var a := x0 + j * span
 		var b := a + span
-		# The end pieces overhang a little to meet whatever they lead to.
+		# The ends reach past the last columns to just short of whatever
+		# they lead to: overlapping a building would fling both apart the
+		# moment either one falls.
 		if j == 0:
-			a -= 0.45
+			a -= end_overhang
 		if j == spans - 1:
-			b += 0.45
+			b += end_overhang
 		var piece_len := b - a
 		var cx := (a + b) * 0.5
 		_seg(out, Vector3(cx, top + SLAB * 0.5, 0), Vector3(piece_len, SLAB, w))

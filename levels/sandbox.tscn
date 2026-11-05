@@ -40,31 +40,34 @@ transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 0.0, 0, -14.0)
 script = ExtResource("2_structure")
 kind = 6
 counts = Vector3i(4, 4, 1)
-block = Vector3(3.0, 1.525, 2.6)
+block = Vector3(2.725, 1.525, 2.6)
 strength = 2.5
 accent_material = 1
 seed_value = 3
+end_overhang = 0.43000000000000005
 
 [node name="PasserelleSud" type="Node3D" parent="."]
 transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, 0.0, 0, 14.0)
 script = ExtResource("2_structure")
 kind = 6
 counts = Vector3i(4, 7, 1)
-block = Vector3(3.0, 1.3286, 2.6)
+block = Vector3(2.725, 1.3286, 2.6)
 strength = 2.5
 accent_material = 1
 seed_value = 4
+end_overhang = 0.43000000000000005
 
 [node name="PasserelleHaute" type="Node3D" parent="."]
 transform = Transform3D(0.0, 0, 1.0, 0, 1, 0, -1.0, 0, 0.0, 12.0, 0, 0.0)
 script = ExtResource("2_structure")
 kind = 6
 counts = Vector3i(5, 9, 1)
-block = Vector3(3.2, 1.3889, 2.6)
+block = Vector3(2.98, 1.3889, 2.6)
 strength = 2.5
 material = 2
 accent_material = 2
 seed_value = 5
+end_overhang = 0.43000000000000005
 
 [node name="Immeuble_NO_int" type="Node3D" parent="."]
 transform = Transform3D(1.0, 0, 0.0, 0, 1, 0, -0.0, 0, 1.0, -12, 0, -14)

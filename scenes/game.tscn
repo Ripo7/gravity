@@ -1,4 +1,4 @@
-[gd_scene load_steps=15 format=3]
+[gd_scene load_steps=16 format=3]
 
 [ext_resource type="Script" path="res://scripts/core/game_world.gd" id="1_world"]
 [ext_resource type="Environment" path="res://materials/environment.tres" id="2_env"]
@@ -6,6 +6,7 @@
 [ext_resource type="Script" path="res://scripts/destruction/structure_set.gd" id="4_sset"]
 [ext_resource type="Script" path="res://scripts/destruction/debris_system.gd" id="5_debris"]
 [ext_resource type="Material" path="res://materials/block.tres" id="6_block"]
+[ext_resource type="Material" path="res://materials/debris.tres" id="6_debris"]
 [ext_resource type="Script" path="res://scripts/fx/dust_system.gd" id="7_dust"]
 [ext_resource type="Script" path="res://scripts/game/level_run.gd" id="10_run"]
 [ext_resource type="Shader" path="res://shaders/vignette.gdshader" id="11_vignette"]
@@ -34,8 +35,8 @@ environment = ExtResource("2_env")
 
 [node name="Sun" type="DirectionalLight3D" parent="."]
 transform = Transform3D(0.4229, 0.5015, -0.7547, -0.0000, 0.8329, 0.5535, 0.9062, -0.2341, 0.3522, 0, 30, 0)
-light_color = Color(1, 0.99, 0.97, 1)
-light_energy = 0.85
+light_color = Color(1, 0.96, 0.9, 1)
+light_energy = 0.95
 shadow_enabled = true
 shadow_opacity = 0.85
 shadow_blur = 1.5
@@ -55,7 +56,7 @@ surface_material_override/0 = ExtResource("3_floor")
 
 [node name="DebrisSystem" type="Node3D" parent="."]
 script = ExtResource("5_debris")
-material = ExtResource("6_block")
+material = ExtResource("6_debris")
 
 [node name="StructureSet" type="Node3D" parent="." node_paths=PackedStringArray("debris")]
 script = ExtResource("4_sset")

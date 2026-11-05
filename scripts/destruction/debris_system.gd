@@ -8,6 +8,21 @@ extends Node3D
 ## oldest settled pieces shrink away over a second, so the pool rarely runs
 ## dry and nothing pops out of existence in front of the player.
 
+## A piece slower than this (m/s, rad/s) at two sweeps in a row is frozen;
+## see _settle_still_pieces.
+## A big piece broke up on a hard landing.
+signal piece_broke(at: Vector3, size: Vector3, kind: int, speed: float)
+
+const QUIET_SPEED := 0.35
+const QUIET_SPIN := 0.7
+const QUIET_SWEEP := 0.35
+const FREEZE_CELL := 2.0  ## metres, grid for finding frozen pieces
+## A piece moving at least this fast that suddenly loses most of its speed
+## (a hard landing) breaks up; at most this many per frame.
+const BREAK_SPEED := 7.0
+const MAX_BREAKS_PER_FRAME := 6
+## Faster than this, frozen rubble just ahead is thawed.
+const THAW_AHEAD_SPEED := 2.0
 const LAYER_WORLD := 1
 const LAYER_STRUCTURES := 2
 const LAYER_DEBRIS := 4
@@ -15,7 +30,6 @@ const LAYER_PLAYER := 8
 const KILL_Y := -40.0
 const FLOATS_PER_INSTANCE := 20  # 12 transform + 4 colour + 4 custom
 const TINT_DECAY := 0.6  # violet glow fades per second
-const SOFT_BUDGET := 0.8  ## fraction of capacity kept before retiring pieces
 const FADE_TIME := 1.2  ## seconds a retired piece takes to shrink away
 const RETIRE_PER_FRAME := 4
 
@@ -35,11 +49,17 @@ static var capacity_override := 0
 var capacity := 0
 var lifetime := 0.0
 var active_count := 0
+var frozen_count := 0
+## Fraction of capacity kept before the oldest pieces start shrinking away;
+## lowered by the adaptive quality when the frame rate drops.
+var soft_budget := 0.8
 var awake_count := 0
 var recycled_total := 0
 var fading_count := 0
 
 var _bodies: Array[RID] = []
+var _speed := PackedFloat32Array()  ## last frame's speed, for hard landings
+var _breaks_left := 0
 var _shapes: Array[RID] = []
 var _rid_to_index := {}
 var _active := PackedByteArray()
@@ -50,6 +70,10 @@ var _mass := PackedFloat32Array()
 var _born := PackedFloat64Array()
 var _tint := PackedFloat32Array()
 var _storm := PackedByteArray()  ## 1 while spun by a black hole
+var _quiet := PackedByteArray()  ## 1 if a piece was still at the last sweep
+var _sweep := 0.0
+var _frozen := PackedByteArray()  ## 1 while a resting piece is a static body
+var _frozen_grid := {}  ## Vector3i -> PackedInt32Array (may hold stale entries)
 var _shade := PackedFloat32Array()
 var _kind := PackedByteArray()
 var _seed := PackedFloat32Array()
@@ -96,6 +120,12 @@ func _build_pool() -> void:
 	_tint.resize(capacity)
 	_storm.resize(capacity)
 	_storm.fill(0)
+	_quiet.resize(capacity)
+	_quiet.fill(0)
+	_speed.resize(capacity)
+	_speed.fill(0.0)
+	_frozen.resize(capacity)
+	_frozen.fill(0)
 	_shade.resize(capacity)
 	_kind.resize(capacity)
 	_seed.resize(capacity)
@@ -124,6 +154,10 @@ func _build_pool() -> void:
 		_free.append(capacity - 1 - i)  # pop() hands out low indices first
 	var box := BoxMesh.new()
 	box.size = Vector3.ONE
+	# Subdivided once so the shader can cut it into an irregular chunk.
+	box.subdivide_width = 1
+	box.subdivide_height = 1
+	box.subdivide_depth = 1
 	_multimesh = MultiMesh.new()
 	_multimesh.transform_format = MultiMesh.TRANSFORM_3D
 	_multimesh.use_colors = true
@@ -156,6 +190,12 @@ func spawn(
 		return -1
 	set_storm(i, false)
 	var body := _bodies[i]
+	if _frozen[i]:
+		_frozen[i] = 0
+		frozen_count -= 1
+		PhysicsServer3D.body_set_mode(body, PhysicsServer3D.BODY_MODE_RIGID)
+	_quiet[i] = 0
+	_speed[i] = velocity.length()
 	PhysicsServer3D.shape_set_data(_shapes[i], size * 0.5)
 	var mass := maxf(size.x * size.y * size.z * Materials.prop(kind, "density"), 0.5)
 	PhysicsServer3D.body_set_param(body, PhysicsServer3D.BODY_PARAM_MASS, mass)
@@ -191,6 +231,9 @@ func despawn(i: int) -> void:
 	PhysicsServer3D.body_set_space(_bodies[i], RID())
 	_active[i] = 0
 	active_count -= 1
+	# What rested on it must be free to fall now.
+	if frozen_count > 0:
+		thaw_near(_pos[i], _size[i].length() * 0.5 + 0.4)
 	if _fade[i] > 0.0:
 		fading_count -= 1
 		_fade[i] = 0.0
@@ -275,6 +318,7 @@ func velocity_of(i: int) -> Vector3:
 
 
 func set_velocity(i: int, v: Vector3) -> void:
+	thaw(i)
 	var body := _bodies[i]
 	PhysicsServer3D.body_set_state(body, PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY, v)
 	if _sleeping[i]:
@@ -283,6 +327,7 @@ func set_velocity(i: int, v: Vector3) -> void:
 
 
 func add_spin(i: int, w: Vector3) -> void:
+	thaw(i)
 	var body := _bodies[i]
 	var cur: Vector3 = PhysicsServer3D.body_get_state(body, PhysicsServer3D.BODY_STATE_ANGULAR_VELOCITY)
 	PhysicsServer3D.body_set_state(body, PhysicsServer3D.BODY_STATE_ANGULAR_VELOCITY, cur + w)
@@ -348,7 +393,7 @@ func _take_slot() -> int:
 
 ## Above the soft budget, retire a few of the oldest settled pieces per frame.
 func _enforce_budget() -> void:
-	var excess := active_count - fading_count - int(capacity * SOFT_BUDGET)
+	var excess := active_count - fading_count - int(capacity * soft_budget)
 	if excess <= 0:
 		return
 	var candidates: Array[Vector2] = []  # (score, index)
@@ -372,7 +417,9 @@ func _physics_process(delta: float) -> void:
 		if not _active[i]:
 			continue
 		var body := _bodies[i]
-		var asleep: bool = PhysicsServer3D.body_get_state(body, PhysicsServer3D.BODY_STATE_SLEEPING)
+		var asleep: bool = (
+			_frozen[i] == 1 or PhysicsServer3D.body_get_state(body, PhysicsServer3D.BODY_STATE_SLEEPING)
+		)
 		_sleeping[i] = 1 if asleep else 0
 		var tinted := _tint[i] > 0.0
 		if tinted:
@@ -395,11 +442,140 @@ func _physics_process(delta: float) -> void:
 			continue
 		_pos[i] = xform.origin
 		_write_instance(i, xform)
+		if not asleep and _storm[i] == 0:
+			_check_landing(i, xform.origin)
 	awake_count = awake
+	_breaks_left = MAX_BREAKS_PER_FRAME
+	_sweep += delta
+	if _sweep >= QUIET_SWEEP:
+		_sweep = 0.0
+		_settle_still_pieces()
 	_enforce_budget()
 	if _buffer_dirty:
 		_multimesh.buffer = _buffer
 		_buffer_dirty = false
+
+
+## A big piece that slams into something breaks up instead of bouncing
+## whole; anything moving fast frees the frozen rubble just ahead of it so
+## it pushes the pile around instead of stopping dead on it.
+func _check_landing(i: int, at: Vector3) -> void:
+	var v := velocity_of(i)
+	var speed := v.length()
+	var before := _speed[i]
+	_speed[i] = speed
+	if frozen_count > 0 and speed > THAW_AHEAD_SPEED:
+		thaw_near(at + v * 0.1, _size[i][_size[i].max_axis_index()] * 0.6 + 0.3)
+	if before < BREAK_SPEED or speed > before * 0.45 or _clock - _born[i] < 0.15:
+		return
+	if _breaks_left <= 0 or _size[i].x * _size[i].y * _size[i].z < 0.02:
+		return
+	_breaks_left -= 1
+	var size := _size[i]
+	var kind := _kind[i]
+	if not fracture(i).is_empty():
+		piece_broke.emit(at, size, kind, before)
+
+
+## Rubble piles form one big island that the engine only puts to sleep when
+## every piece in it is still, so a single jittering piece keeps hundreds of
+## resting ones awake and costing time (putting them to sleep does not
+## help: awake neighbours wake them right back). Every sweep, the pieces
+## that were still at this sweep and the previous one are frozen instead.
+func _settle_still_pieces() -> void:
+	var still := PackedInt32Array()
+	for i in capacity:
+		if not _active[i] or _frozen[i] or _storm[i] or _fade[i] > 0.0:
+			_quiet[i] = 0
+			continue
+		var body := _bodies[i]
+		var lin: Vector3 = PhysicsServer3D.body_get_state(body, PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY)
+		var ang: Vector3 = PhysicsServer3D.body_get_state(body, PhysicsServer3D.BODY_STATE_ANGULAR_VELOCITY)
+		var quiet := (
+			lin.length_squared() < QUIET_SPEED * QUIET_SPEED
+			and ang.length_squared() < QUIET_SPIN * QUIET_SPIN
+		)
+		if quiet and _quiet[i]:
+			still.append(i)
+		_quiet[i] = 1 if quiet else 0
+	for i in still:
+		_freeze(i)
+
+
+## Resting piece `i` becomes a static body: it costs (almost) nothing and
+## cannot be woken by a jittering neighbour. Anything that should move it
+## (powers, the player, what it rests on breaking) thaws it first.
+func _freeze(i: int) -> void:
+	if _frozen[i]:
+		return
+	_frozen[i] = 1
+	frozen_count += 1
+	_sleeping[i] = 1
+	_quiet[i] = 0
+	PhysicsServer3D.body_set_mode(_bodies[i], PhysicsServer3D.BODY_MODE_STATIC)
+	var key := Vector3i((_pos[i] / FREEZE_CELL).floor())
+	if not _frozen_grid.has(key):
+		_frozen_grid[key] = PackedInt32Array()
+	_frozen_grid[key].append(i)
+
+
+## Makes piece `i` a normal falling body again.
+func thaw(i: int) -> void:
+	if not _frozen[i]:
+		return
+	_frozen[i] = 0
+	frozen_count -= 1
+	var body := _bodies[i]
+	PhysicsServer3D.body_set_mode(body, PhysicsServer3D.BODY_MODE_RIGID)
+	PhysicsServer3D.body_set_param(body, PhysicsServer3D.BODY_PARAM_MASS, _mass[i])
+	PhysicsServer3D.body_set_state(body, PhysicsServer3D.BODY_STATE_SLEEPING, false)
+	_sleeping[i] = 0
+
+
+## Active pieces whose centre is inside `box`.
+func pieces_in(box: AABB) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	for i in capacity:
+		if _active[i] and box.has_point(_pos[i]):
+			out.append(i)
+	return out
+
+
+func is_frozen(i: int) -> bool:
+	return _frozen[i] == 1
+
+
+## Thaws every frozen piece within `radius` of `p`.
+func thaw_near(p: Vector3, radius: float) -> void:
+	thaw_box(AABB(p - Vector3.ONE * radius, Vector3.ONE * radius * 2.0))
+
+
+## Thaws every frozen piece whose centre is inside `box` (grown by a metre).
+func thaw_box(box: AABB) -> void:
+	if frozen_count == 0:
+		return
+	var grown := box.grow(1.0)
+	var lo := Vector3i((grown.position / FREEZE_CELL).floor())
+	var hi := Vector3i((grown.end / FREEZE_CELL).floor())
+	for x in range(lo.x, hi.x + 1):
+		for y in range(lo.y, hi.y + 1):
+			for z in range(lo.z, hi.z + 1):
+				var key := Vector3i(x, y, z)
+				var cell: Variant = _frozen_grid.get(key)
+				if cell == null:
+					continue
+				var keep := PackedInt32Array()
+				for i: int in cell:
+					if not _active[i] or not _frozen[i]:
+						continue  # stale entry
+					if grown.has_point(_pos[i]):
+						thaw(i)
+					else:
+						keep.append(i)
+				if keep.is_empty():
+					_frozen_grid.erase(key)
+				else:
+					_frozen_grid[key] = keep
 
 
 func _write_instance(i: int, xform: Transform3D) -> void:
@@ -425,4 +601,5 @@ func _write_instance(i: int, xform: Transform3D) -> void:
 	_buffer[o + 13] = Materials.encode(_kind[i])
 	_buffer[o + 14] = _seed[i]
 	_buffer[o + 15] = _tint[i]
+	_buffer[o + 16] = Materials.custom(_kind[i], 0.0)
 	_buffer_dirty = true
