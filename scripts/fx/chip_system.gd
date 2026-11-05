@@ -103,7 +103,7 @@ func burst(at: Vector3, size: Vector3, kind: int, count: int, speed := 4.0, kick
 		_buffer[o + 13] = Materials.encode(kind)
 		_buffer[o + 14] = randf()
 		_buffer[o + 15] = 0.0
-		_buffer[o + 16] = 0.0
+		_buffer[o + 16] = Materials.custom(kind, 0.0)
 		_write(i, 1.0)
 
 
@@ -116,6 +116,8 @@ func _chip_size(kind: int) -> Vector3:
 			return Vector3(e, e * 0.2, e * 1.3)  # bent plates
 		Materials.Kind.ICE:
 			return Vector3(e * 0.6, e * 1.4, e * 0.4)  # shards
+		Materials.Kind.GLASS:
+			return Vector3(e * 0.9, e * 1.3, 0.012)  # flat glass shards
 	return Vector3(e, e * randf_range(0.5, 1.0), e * randf_range(0.7, 1.2))
 
 

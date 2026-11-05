@@ -561,4 +561,5 @@ func _write_instance(i: int, xform: Transform3D) -> void:
 	_buffer[o + 13] = Materials.encode(_kind[i])
 	_buffer[o + 14] = _seed[i]
 	_buffer[o + 15] = _tint[i]
+	_buffer[o + 16] = Materials.custom(_kind[i], 0.0)
 	_buffer_dirty = true

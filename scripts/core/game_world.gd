@@ -79,10 +79,17 @@ func _connect_juice() -> void:
 	if dust:
 		dust.structures = structures
 		structures.dust = dust
+	var rebar := RebarSystem.new()
+	add_child(rebar)
+	structures.rebar = rebar
 	structures.shattered.connect(
 		func(at: Vector3, size: Vector3, kind: int) -> void:
 			var r := size.length() * 0.5
-			if dust:
+			if dust and kind == Materials.Kind.GLASS:
+				# A pane bursts into glittering shards.
+				var area := size.x * size.y + size.y * size.z + size.x * size.z
+				dust.chips_box(at, size, kind, clampi(int(area * 10.0), 10, 40), 3.5)
+			elif dust:
 				dust.puff(at, r, kind, int(6 + r * 8))
 				# Gravel scales with the volume that broke.
 				var vol := size.x * size.y * size.z

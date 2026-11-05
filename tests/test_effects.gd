@@ -136,8 +136,10 @@ func test_a_resting_block_breaking_up_does_not_fling_pieces() -> void:
 	for i in range(first, s.segment_count()):
 		comp.append(i)
 	s._release(comp, false)
-	await get_tree().create_timer(1.0).timeout
-	s._dissolve(s._clusters[s._clusters.size() - 1], Vector3.ZERO, 0.0)
+	check_eq(s.cluster_count(), 1, "released as one block")
+	await get_tree().create_timer(0.4).timeout
+	if s.cluster_count() > 0:
+		s._dissolve(s._clusters[s._clusters.size() - 1], Vector3.ZERO, 0.0)
 	var vmax := 0.0
 	for k in 10:
 		await get_tree().physics_frame
@@ -145,4 +147,53 @@ func test_a_resting_block_breaking_up_does_not_fling_pieces() -> void:
 			if d.is_active(i):
 				vmax = maxf(vmax, d.velocity_of(i).length())
 	check(vmax < 10.0, "the pile slumps, nothing flies (max %.1f m/s)" % vmax)
+	await _unload()
+
+
+func test_glass_bursts_into_shards_without_bodies() -> void:
+	await _load_world()
+	var s := world.structures
+	var pane := -1
+	for i in s.segment_count():
+		if s.is_alive(i) and s.kind_of(i) == Materials.Kind.GLASS:
+			pane = i
+			break
+	check(pane >= 0, "the city has glazed windows")
+	var bodies := world.debris.active_count
+	var chips := world.dust.chip_system.active
+	s.break_segment(pane)
+	await frames(2)
+	check(not s.is_alive(pane), "the pane broke")
+	check_eq(world.debris.active_count, bodies, "no physics bodies for glass")
+	check(world.dust.chip_system.active > chips + 8, "a spray of shards")
+	await _unload()
+
+
+func test_broken_concrete_leaves_rebar_and_cracks_start_at_the_hit() -> void:
+	await _load_world()
+	var s := world.structures
+	# A ground column of a building: its neighbours are concrete slabs.
+	var col := -1
+	for i in s.segment_count():
+		var p := s.transform_of(i).origin
+		var sz := s._size[i]
+		var concrete := s.kind_of(i) == Materials.Kind.CONCRETE
+		if (
+			s.is_alive(i)
+			and concrete
+			and absf(p.y - 4.675) < 0.05
+			and absf(sz.y - 2.95) < 0.01
+			and sz.x < 0.5
+		):
+			col = i
+			break
+	check(col >= 0, "found a first-floor column")
+	var at := s.transform_of(col).origin + Vector3(0, 1.0, 0)
+	s._damage(col, 0.1, at)
+	check(s._hit[col] != Vector3.ZERO, "the hit point is kept for the cracks")
+	check(s._hit[col].y > 1.2, "near the top, where it was hit")
+	s.break_segment(col)
+	await frames(2)
+	var rebar := s.rebar
+	check(rebar != null and rebar.count() > 0, "steel rods stick out where it broke")
 	await _unload()

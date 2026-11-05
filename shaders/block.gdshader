@@ -1,8 +1,9 @@
 shader_type spatial;
 // Every block and piece of debris, all materials, in one draw call.
-// Per-instance COLOR: r = shade, g = material kind / 3 (see materials.gd),
+// Per-instance COLOR: r = shade, g = unused,
 // b = random seed, a = violet glow from the power.
-// INSTANCE_CUSTOM.r = damage (0..1), drawn as cracks.
+// INSTANCE_CUSTOM.r = material kind + damage * 0.9 (cracks); .gba = where it was
+// hit, in the block's unit space + 1 (0 = never hit): cracks spread from there.
 // Patterns are procedural in the block's own space (scaled to metres), so
 // they stay put on moving debris and need no textures.
 
@@ -14,10 +15,12 @@ uniform float glow_strength = 0.9;
 uniform bool chunky = false;
 
 uniform vec3 concrete : source_color = vec3(0.78, 0.76, 0.72);
-uniform vec3 wood : source_color = vec3(0.78, 0.58, 0.38);
-uniform vec3 wood_dark : source_color = vec3(0.55, 0.36, 0.2);
+uniform vec3 wood : source_color = vec3(0.84, 0.75, 0.62);
+uniform vec3 wood_dark : source_color = vec3(0.68, 0.56, 0.43);
 uniform vec3 metal : source_color = vec3(0.62, 0.66, 0.72);
 uniform vec3 ice : source_color = vec3(0.035, 0.03, 0.06);
+uniform vec3 glass : source_color = vec3(0.16, 0.2, 0.26);
+uniform vec3 glass_sky : source_color = vec3(0.78, 0.85, 0.95);
 
 varying vec3 local_pos;   // metres, centred on the block
 varying vec3 half_size;   // metres
@@ -27,6 +30,7 @@ varying float material_id;
 varying float seed;
 varying float tint;
 varying float damage;
+varying vec3 hit_at;  // metres in block space; x > 90 when never hit
 varying float world_y;
 
 float hash(vec3 p) {
@@ -80,10 +84,14 @@ void vertex() {
 	local_normal = NORMAL;
 	shade = COLOR.r;
 	// Undo the sRGB->linear conversion applied to instance colours.
-	material_id = floor(pow(max(COLOR.g, 0.0), 1.0 / 2.2) * 3.0 + 0.5);
+	// Material in the integer part of the first custom float, damage in
+	// its fraction (see Materials.custom).
+	material_id = floor(INSTANCE_CUSTOM.r + 0.001);
 	seed = COLOR.b;
 	tint = COLOR.a;
-	damage = INSTANCE_CUSTOM.r;
+	damage = clamp(fract(INSTANCE_CUSTOM.r + 0.001) / 0.9, 0.0, 1.0);
+	vec3 h = INSTANCE_CUSTOM.gba;
+	hit_at = (h.x + h.y + h.z) > 0.0 ? (h - 1.0) * scale : vec3(99.0);
 	world_y = (MODEL_MATRIX * vec4(VERTEX, 1.0)).y;
 }
 
@@ -159,6 +167,14 @@ void fragment() {
 		float streak = noise(vec3(q.x * 0.8, q.y * 40.0, q.z * 40.0));
 		albedo = mix(wood, wood_dark, rings * 0.55 + streak * 0.2);
 		rough = 0.75;
+	} else if (material_id > 3.5) {
+		// Window glass: dark, smooth, the sky reflected at grazing angles
+		// and a soft vertical sheen. Opaque, so it costs nothing extra.
+		float fres = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 2.0);
+		float sheen = smoothstep(0.2, 0.9, fract(local_pos.y * 0.35 + local_pos.x * 0.12 + seed));
+		albedo = mix(glass, glass_sky, clamp(fres * 0.85 + sheen * 0.12, 0.0, 1.0));
+		rough = 0.04;
+		metallic = 0.1;
 	} else if (material_id > 2.5) {
 		// Black ice: glassy near-black with faint violet veins inside.
 		vec2 e = voronoi_edge((face.x > 0.5 ? local_pos.yz : (face.y > 0.5 ? local_pos.xz : local_pos.xy)) * 1.6 + seed * 7.0);
@@ -186,14 +202,26 @@ void fragment() {
 	float edge = 1.0 - smoothstep(0.0, 0.05, edge_dist);
 	albedo *= 1.0 - edge * 0.22;
 
-	// Cracks: more and wider with damage, on the face's own plane.
+	// Cracks: they start where the block was hit and spread out across it
+	// as damage grows; the surface around the hit is chipped and darker.
 	if (damage > 0.02) {
 		vec2 uv = face.x > 0.5 ? local_pos.yz : (face.y > 0.5 ? local_pos.xz : local_pos.xy);
 		vec2 e = voronoi_edge(uv * 3.2 + seed * 11.0);
-		float shown = step(e.y, damage * 1.3);
-		float w = 0.015 + 0.05 * damage;
+		float shown;
+		float near = 0.0;
+		if (hit_at.x < 90.0) {
+			float d = distance(local_pos, hit_at);
+			float reach = damage * (0.6 + 2.2 * length(half_size)) * (0.75 + 0.5 * noise(local_pos * 3.0 + seed));
+			// Not every cell edge cracks: a few long lines, more with damage.
+			shown = (1.0 - smoothstep(reach * 0.85, reach, d)) * step(e.y, 0.25 + 0.75 * damage);
+			near = (1.0 - smoothstep(0.0, 0.25 + damage * 0.5, d)) * damage;
+		} else {
+			shown = step(e.y, damage * 1.3);
+		}
+		float w = 0.01 + 0.035 * damage;
 		float crack = (1.0 - smoothstep(w * 0.5, w, e.x)) * shown;
-		albedo *= 1.0 - crack * 0.65;
+		albedo *= 1.0 - crack * 0.7;
+		albedo *= 1.0 - near * (0.25 + 0.2 * noise(local_pos * 18.0));
 	}
 
 	// Cheap contact shadow where blocks meet the ground.

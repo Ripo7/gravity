@@ -270,6 +270,24 @@ func _build_apartment(out: Array[Dictionary], rng: RandomNumberGenerator) -> voi
 				else:
 					c.y = base + sill * 0.5
 					_seg(out, c, size_of.call(sill), 0.5, true)
+					# Most windows are glazed. The pane stops short of the slab
+					# above so it never carries any load.
+					if roll < 0.62:
+						var pane_h := col_h - sill - 0.06
+						var g := Vector3(c.x, base + sill + pane_h * 0.5, c.z)
+						var pane := size_of.call(pane_h) as Vector3
+						pane = Vector3(pane.x, pane.y, 0.03) if along_x else Vector3(0.03, pane.y, pane.z)
+						(
+							out
+							. append(
+								{
+									"local": Transform3D(Basis(), g),
+									"size": pane,
+									"strength": strength * 0.3,
+									"material": Materials.Kind.GLASS,
+								}
+							)
+						)
 		if roof:
 			break
 		for ix in nx:

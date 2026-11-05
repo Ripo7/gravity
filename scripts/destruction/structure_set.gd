@@ -36,12 +36,16 @@ const SAFETY := {
 	Materials.Kind.CONCRETE: 2.4,
 	Materials.Kind.WOOD: 2.0,
 	Materials.Kind.METAL: 3.0,
+	Materials.Kind.ICE: 2.0,
+	Materials.Kind.GLASS: 2.0,
 }
 ## A block held only from the side carries at most this many times its weight.
 const SHEAR_WEIGHTS := {
 	Materials.Kind.CONCRETE: 5.0,
 	Materials.Kind.WOOD: 7.0,
 	Materials.Kind.METAL: 14.0,
+	Materials.Kind.ICE: 5.0,
+	Materials.Kind.GLASS: 2.0,
 }
 const MAX_CRUSH_PER_FRAME := 8
 const MAX_CLUSTERS := 12
@@ -68,6 +72,7 @@ const LEAN_SPEED := 2.0  ## leaning counts like an impact at this speed
 @export var material: Material
 
 var dust: DustSystem  ## optional: gravel and dust when rubble is crushed
+var rebar: RebarSystem  ## optional: steel rods left in broken concrete
 var alive_count := 0
 var scored_total := 0.0
 var scored_destroyed := 0.0
@@ -104,6 +109,7 @@ var _pending: Array[Dictionary] = []  # {comp, toppled, time, group}
 ## block -> blocks of other structures it rests on, and the reverse.
 var _anchors := {}
 var _power_tint := 0.0  ## violet glow for pieces broken right now
+var _hit := PackedVector3Array()  ## where each block was hit (unit space + 1)
 var _anchored_by := {}
 var _multimesh: MultiMesh
 var _buffer := PackedFloat32Array()
@@ -164,6 +170,7 @@ func add_structure(origin: Transform3D, segments: Array[Dictionary], scored := t
 		_kind.append(kind)
 		_seed.append(seg.get("seed", randf()))
 		_shade.append(seg.get("shade", 1.0))
+		_hit.append(Vector3.ZERO)
 		var hp: float = seg.get("strength", 3.0) * Materials.prop(kind, "strength")
 		_health.append(hp)
 		_max_health.append(hp)
@@ -227,9 +234,45 @@ func link_anchors() -> void:
 			_anchors[i] = under
 
 
+## Block `i` broke away: the concrete blocks it was joined to keep bent
+## steel rods sticking out where it was.
+func _leave_rebar(i: int) -> void:
+	if rebar == null:
+		return
+	var origin := _group_origin[_group[i]]
+	var mine := _local[i].grow(CONTACT_EPS)
+	for n in _neighbors[i]:
+		if _state[n] != State.STATIC or _kind[n] != Materials.Kind.CONCRETE:
+			continue
+		var touch := mine.intersection(_local[n].grow(CONTACT_EPS))
+		if not touch.has_volume():
+			continue
+		var thin := touch.size.min_axis_index()
+		var normal := Vector3.ZERO
+		normal[thin] = signf(_local[i].get_center()[thin] - _local[n].get_center()[thin])
+		var a := Vector3.ZERO
+		var b := Vector3.ZERO
+		a[(thin + 1) % 3] = touch.size[(thin + 1) % 3] * 0.45
+		b[(thin + 2) % 3] = touch.size[(thin + 2) % 3] * 0.45
+		var area := touch.size[(thin + 1) % 3] * touch.size[(thin + 2) % 3]
+		if area < 0.05:
+			continue
+		var count := clampi(int(area * 2.5), 1, 4)
+		rebar.sprout(
+			n,
+			origin * touch.get_center(),
+			origin.basis * a,
+			origin.basis * b,
+			(origin.basis * normal).normalized(),
+			count
+		)
+
+
 ## Block `i` no longer stands: whatever stood on it from another structure
 ## loses its footing if nothing else holds it.
 func _unanchor(i: int) -> void:
+	if rebar:
+		rebar.drop_owner(i)
 	for b: int in _anchored_by.get(i, []):
 		if not _grounded[b]:
 			continue
@@ -390,6 +433,11 @@ func break_segment(i: int) -> void:
 func _damage(i: int, dmg: float, from: Vector3) -> void:
 	if _state[i] != State.STATIC:
 		return
+	if _hit[i] == Vector3.ZERO:
+		# Cracks will spread from where it was first hit.
+		var local := _xform[i].affine_inverse() * from
+		var unit := (local / _size[i]).clamp(-Vector3.ONE * 0.5, Vector3.ONE * 0.5)
+		_hit[i] = unit + Vector3.ONE
 	_health[i] -= dmg
 	if _health[i] <= 0.0:
 		_shatter(i, from, dmg)
@@ -416,7 +464,10 @@ func _shatter(i: int, from: Vector3, dmg: float, inherit := Vector3.ZERO) -> voi
 	var kind := _kind[i]
 	_remove(i)
 	shattered.emit(xf.origin, size, kind)
-	if debris == null:
+	if kind == Materials.Kind.CONCRETE:
+		_leave_rebar(i)
+	# Glass bursts into shards (chips, see the shattered signal): no bodies.
+	if debris == null or kind == Materials.Kind.GLASS:
 		return
 	var count := Fracture.piece_count_for(size, Materials.prop(kind, "pieces"))
 	var grain := Fracture.grain_for(kind, size)
@@ -429,6 +480,9 @@ func _shatter(i: int, from: Vector3, dmg: float, inherit := Vector3.ZERO) -> voi
 
 
 func _dislodge(i: int, velocity: Vector3, spin := Vector3.ZERO, tint := 0.5) -> void:
+	if _kind[i] == Materials.Kind.GLASS:
+		_shatter(i, _xform[i].origin + velocity, 0.0)
+		return
 	var xf := _current_transform(i)
 	_remove(i)
 	if debris:
@@ -1111,10 +1165,10 @@ func _write_instance(i: int, xf: Transform3D) -> void:
 	_buffer[o + 13] = Materials.encode(_kind[i])
 	_buffer[o + 14] = _seed[i]
 	_buffer[o + 15] = 0.0
-	_buffer[o + 16] = 1.0 - clampf(_health[i] / _max_health[i], 0.0, 1.0)  # cracks
-	_buffer[o + 17] = 0.0
-	_buffer[o + 18] = 0.0
-	_buffer[o + 19] = 0.0
+	_buffer[o + 16] = Materials.custom(_kind[i], 1.0 - clampf(_health[i] / _max_health[i], 0.0, 1.0))
+	_buffer[o + 17] = _hit[i].x
+	_buffer[o + 18] = _hit[i].y
+	_buffer[o + 19] = _hit[i].z
 	_buffer_dirty = true
 
 
