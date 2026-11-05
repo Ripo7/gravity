@@ -159,7 +159,7 @@ func _on_destruction(fraction: float) -> void:
 
 func _on_released(_at: Vector3, count: int, toppled: bool) -> void:
 	if count >= 12:
-		hud.popup("BASCULE !" if toppled else "EFFONDREMENT !", UiTheme.INK, 44)
+		hud.popup("BASCULE !" if toppled else "EFFONDREMENT !", UiTheme.INK, 44, Vector2.ZERO, "callout")
 		_bump_chain()
 
 
@@ -172,7 +172,7 @@ func _bump_chain() -> void:
 	_chain = _chain + 1 if _chain_timer > 0.0 else 1
 	_chain_timer = CHAIN_WINDOW
 	if _chain >= 2:
-		hud.popup("CHAÎNE ×%d" % _chain, UiTheme.VIOLET, 36 + _chain * 3, Vector2(0, 60))
+		hud.popup("CHAÎNE ×%d" % _chain, UiTheme.VIOLET, 36 + _chain * 3, Vector2(0, 60), "chain")
 		Sfx.ui("chain", -8.0, 0.9 + _chain * 0.1)
 
 
@@ -187,7 +187,9 @@ func _process(delta: float) -> void:
 	if _gain_timer > 0.0:
 		_gain_timer -= real
 		if _gain_timer <= 0.0 and _gain >= 0.01:
-			hud.popup("+%d%%" % maxi(roundi(_gain * 100.0), 1), UiTheme.VIOLET, 30, Vector2(220, -150))
+			hud.popup(
+				"+%d%%" % maxi(roundi(_gain * 100.0), 1), UiTheme.VIOLET, 30, Vector2(220, -150), "gain"
+			)
 		if _gain_timer <= 0.0:
 			_gain = 0.0
 	if Input.is_action_just_pressed("reset_arena") and state != State.PAUSED:

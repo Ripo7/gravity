@@ -1,20 +1,26 @@
 shader_type spatial;
 // Every block and piece of debris, all materials, in one draw call.
-// Per-instance COLOR: r = shade, g = material kind / 3 (see materials.gd),
+// Per-instance COLOR: r = shade, g = unused,
 // b = random seed, a = violet glow from the power.
-// INSTANCE_CUSTOM.r = damage (0..1), drawn as cracks.
+// INSTANCE_CUSTOM.r = material kind + damage * 0.9 (cracks); .gba = where it was
+// hit, in the block's unit space + 1 (0 = never hit): cracks spread from there.
 // Patterns are procedural in the block's own space (scaled to metres), so
 // they stay put on moving debris and need no textures.
 
 uniform vec3 violet : source_color = vec3(0.55, 0.24, 1.0);
 uniform vec3 violet_deep : source_color = vec3(0.32, 0.08, 0.78);
 uniform float glow_strength = 0.9;
+// Debris and chips: the unit box (subdivided once) is cut into an
+// irregular faceted chunk, different for every piece.
+uniform bool chunky = false;
 
 uniform vec3 concrete : source_color = vec3(0.78, 0.76, 0.72);
-uniform vec3 wood : source_color = vec3(0.78, 0.58, 0.38);
-uniform vec3 wood_dark : source_color = vec3(0.55, 0.36, 0.2);
+uniform vec3 wood : source_color = vec3(0.84, 0.75, 0.62);
+uniform vec3 wood_dark : source_color = vec3(0.68, 0.56, 0.43);
 uniform vec3 metal : source_color = vec3(0.62, 0.66, 0.72);
 uniform vec3 ice : source_color = vec3(0.035, 0.03, 0.06);
+uniform vec3 glass : source_color = vec3(0.16, 0.2, 0.26);
+uniform vec3 glass_sky : source_color = vec3(0.78, 0.85, 0.95);
 
 varying vec3 local_pos;   // metres, centred on the block
 varying vec3 half_size;   // metres
@@ -24,6 +30,7 @@ varying float material_id;
 varying float seed;
 varying float tint;
 varying float damage;
+varying vec3 hit_at;  // metres in block space; x > 90 when never hit
 varying float world_y;
 
 float hash(vec3 p) {
@@ -53,17 +60,38 @@ float fbm(vec3 p) {
 	return v;
 }
 
+// Cuts the corners and bends the edges of the unit box inward, by amounts
+// that depend on the vertex position and the piece's seed. Shared corners
+// move together, so the chunk stays closed; nothing grows past the box, so
+// it never pokes through what it rests on.
+vec3 chunk(vec3 v, float s) {
+	vec3 a = abs(v) * 2.0;
+	float k = a.x + a.y + a.z;  // 3 corner, 2 edge middle, 1 face centre
+	vec3 h = vec3(hash(v * 7.13 + s * 31.7), hash(v * 3.71 + s * 17.3 + 5.0), hash(v * 5.27 + s * 11.9 + 9.0));
+	float pull = k > 2.5 ? 0.16 + 0.34 * h.x : (k > 1.5 ? 0.03 + 0.17 * h.y : 0.02 * h.z);
+	vec3 o = v * (1.0 - pull);
+	o += (h - 0.5) * 0.1 * step(1.5, k);
+	return clamp(o, vec3(-0.5), vec3(0.5));
+}
+
 void vertex() {
+	if (chunky) {
+		VERTEX = chunk(VERTEX, COLOR.b);
+	}
 	vec3 scale = vec3(length(MODEL_MATRIX[0].xyz), length(MODEL_MATRIX[1].xyz), length(MODEL_MATRIX[2].xyz));
 	local_pos = VERTEX * scale;
 	half_size = scale * 0.5;
 	local_normal = NORMAL;
 	shade = COLOR.r;
 	// Undo the sRGB->linear conversion applied to instance colours.
-	material_id = floor(pow(max(COLOR.g, 0.0), 1.0 / 2.2) * 3.0 + 0.5);
+	// Material in the integer part of the first custom float, damage in
+	// its fraction (see Materials.custom).
+	material_id = floor(INSTANCE_CUSTOM.r + 0.001);
 	seed = COLOR.b;
 	tint = COLOR.a;
-	damage = INSTANCE_CUSTOM.r;
+	damage = clamp(fract(INSTANCE_CUSTOM.r + 0.001) / 0.9, 0.0, 1.0);
+	vec3 h = INSTANCE_CUSTOM.gba;
+	hit_at = (h.x + h.y + h.z) > 0.0 ? (h - 1.0) * scale : vec3(99.0);
 	world_y = (MODEL_MATRIX * vec4(VERTEX, 1.0)).y;
 }
 
@@ -107,6 +135,11 @@ vec2 voronoi_edge(vec2 x) {
 }
 
 void fragment() {
+	if (chunky) {
+		// Flat facets: the face normal from screen-space derivatives.
+		vec3 n = normalize(cross(dFdx(VERTEX), dFdy(VERTEX)));
+		NORMAL = dot(n, VIEW) < 0.0 ? -n : n;
+	}
 	vec3 p = local_pos + seed * 37.0;
 	vec3 albedo;
 	vec3 face = abs(local_normal);
@@ -134,6 +167,14 @@ void fragment() {
 		float streak = noise(vec3(q.x * 0.8, q.y * 40.0, q.z * 40.0));
 		albedo = mix(wood, wood_dark, rings * 0.55 + streak * 0.2);
 		rough = 0.75;
+	} else if (material_id > 3.5) {
+		// Window glass: dark, smooth, the sky reflected at grazing angles
+		// and a soft vertical sheen. Opaque, so it costs nothing extra.
+		float fres = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 2.0);
+		float sheen = smoothstep(0.2, 0.9, fract(local_pos.y * 0.35 + local_pos.x * 0.12 + seed));
+		albedo = mix(glass, glass_sky, clamp(fres * 0.85 + sheen * 0.12, 0.0, 1.0));
+		rough = 0.04;
+		metallic = 0.1;
 	} else if (material_id > 2.5) {
 		// Black ice: glassy near-black with faint violet veins inside.
 		vec2 e = voronoi_edge((face.x > 0.5 ? local_pos.yz : (face.y > 0.5 ? local_pos.xz : local_pos.xy)) * 1.6 + seed * 7.0);
@@ -152,6 +193,28 @@ void fragment() {
 		metallic = 0.65;
 	}
 
+	// Weathering, all procedural (no textures, no extra passes):
+	// - dust settles on upward faces, lighter and warmer, patchy;
+	// - grime streaks run down vertical faces from their top edge;
+	// - each block is darker near its bottom and on its underside, which
+	//   reads as ambient occlusion wherever blocks meet slabs and floors.
+	if (material_id < 2.5 && !chunky) {
+		vec3 n = local_normal;
+		if (n.y > 0.5) {
+			float patches = smoothstep(0.35, 0.75, fbm(p * 0.9));
+			albedo = mix(albedo, vec3(0.86, 0.83, 0.77), patches * 0.35);
+		} else if (abs(n.y) < 0.5) {
+			float from_top = half_size.y - local_pos.y;
+			float streak = noise(vec3((local_pos.x + local_pos.z) * 7.0, local_pos.y * 0.35, seed * 9.0));
+			float grime = smoothstep(0.55, 0.9, streak) * (1.0 - smoothstep(0.0, 1.6, from_top));
+			albedo *= 1.0 - grime * 0.18;
+			float from_bottom = local_pos.y + half_size.y;
+			albedo *= mix(0.8, 1.0, smoothstep(0.0, 0.45, from_bottom));
+		} else {
+			albedo *= 0.8;  // undersides (ceilings) catch less light
+		}
+	}
+
 	// Soft darkening near block edges: reads as a bevel / contact shadow.
 	vec3 d = half_size - abs(local_pos);
 	float edge_dist = 10.0;
@@ -161,14 +224,26 @@ void fragment() {
 	float edge = 1.0 - smoothstep(0.0, 0.05, edge_dist);
 	albedo *= 1.0 - edge * 0.22;
 
-	// Cracks: more and wider with damage, on the face's own plane.
+	// Cracks: they start where the block was hit and spread out across it
+	// as damage grows; the surface around the hit is chipped and darker.
 	if (damage > 0.02) {
 		vec2 uv = face.x > 0.5 ? local_pos.yz : (face.y > 0.5 ? local_pos.xz : local_pos.xy);
 		vec2 e = voronoi_edge(uv * 3.2 + seed * 11.0);
-		float shown = step(e.y, damage * 1.3);
-		float w = 0.015 + 0.05 * damage;
+		float shown;
+		float near = 0.0;
+		if (hit_at.x < 90.0) {
+			float d = distance(local_pos, hit_at);
+			float reach = damage * (0.6 + 2.2 * length(half_size)) * (0.75 + 0.5 * noise(local_pos * 3.0 + seed));
+			// Not every cell edge cracks: a few long lines, more with damage.
+			shown = (1.0 - smoothstep(reach * 0.85, reach, d)) * step(e.y, 0.25 + 0.75 * damage);
+			near = (1.0 - smoothstep(0.0, 0.25 + damage * 0.5, d)) * damage;
+		} else {
+			shown = step(e.y, damage * 1.3);
+		}
+		float w = 0.01 + 0.035 * damage;
 		float crack = (1.0 - smoothstep(w * 0.5, w, e.x)) * shown;
-		albedo *= 1.0 - crack * 0.65;
+		albedo *= 1.0 - crack * 0.7;
+		albedo *= 1.0 - near * (0.25 + 0.2 * noise(local_pos * 18.0));
 	}
 
 	// Cheap contact shadow where blocks meet the ground.

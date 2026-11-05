@@ -5,6 +5,10 @@ extends Node3D
 
 signal vortex_opened(vortex: Vortex)
 
+## Collapses this big (pieces) can trigger a beat of slow motion.
+const SLOWMO_MIN_PIECES := 40
+const SLOWMO_COOLDOWN := 6.0  ## real seconds
+
 @export var structures: StructureSet
 @export var debris: DebrisSystem
 @export var player: Player
@@ -19,6 +23,9 @@ var level: Level
 ## Path of the level scene that was loaded.
 var level_file := ""
 var blasts_total := 0
+## Slow motion and other camera drama; off for the menu backdrop.
+var cinematic := true
+var _last_slowmo := -100.0
 
 
 static func of(node: Node) -> GameWorld:
@@ -64,17 +71,45 @@ func build_structures() -> void:
 	for st in level.structures():
 		structures.add_structure(st.global_transform, st.build_segments(), st.scored)
 		st.visible = false
+	structures.link_anchors()
 
 
 ## Dust, chips, camera shake and sound for breaks and collapses.
 func _connect_juice() -> void:
+	if dust:
+		dust.structures = structures
+		structures.dust = dust
+	var rebar := RebarSystem.new()
+	add_child(rebar)
+	structures.rebar = rebar
+	var aq := AdaptiveQuality.new()
+	aq.world = self
+	add_child(aq)
 	structures.shattered.connect(
 		func(at: Vector3, size: Vector3, kind: int) -> void:
 			var r := size.length() * 0.5
-			if dust:
+			if dust and kind == Materials.Kind.GLASS:
+				# A pane bursts into glittering shards.
+				var area := size.x * size.y + size.y * size.z + size.x * size.z
+				dust.chips_box(at, size, kind, clampi(int(area * 10.0), 10, 40), 3.5)
+			elif dust:
 				dust.puff(at, r, kind, int(6 + r * 8))
-				dust.chips(at, r, kind, 4.0 + r * 2.0, int(6 + r * 10))
+				# Gravel scales with the volume that broke.
+				var vol := size.x * size.y * size.z
+				dust.chips_box(at, size, kind, clampi(int(8 + vol * 30.0), 8, 40), 3.0 + r * 2.0)
 			Sfx.play_break(kind, at, r)
+	)
+	structures.about_to_fail.connect(
+		func(at: Vector3, count: int) -> void:
+			# It creaks, sheds a little dust and gravel, and holds a moment.
+			Sfx.play("creak", at, -2.0 + minf(count, 120) * 0.05, 0.8)
+			if dust:
+				dust.puff(at, 1.5, Materials.Kind.CONCRETE, 8)
+				dust.chips(at, 2.0, Materials.Kind.CONCRETE, 1.0, 14)
+			var cam := get_viewport().get_camera_3d() as CameraShake
+			if cam:
+				var d := cam.global_position.distance_to(at)
+				cam.add_trauma(0.12 * clampf(1.0 - d / 40.0, 0.0, 1.0))
 	)
 	structures.cluster_released.connect(
 		func(at: Vector3, count: int, toppled: bool) -> void:
@@ -85,13 +120,12 @@ func _connect_juice() -> void:
 		func(at: Vector3, mass: float, speed: float, count: int) -> void:
 			var r := clampf(1.0 + count * 0.04, 1.0, 5.0)
 			if dust:
-				dust.puff(at, r, Materials.Kind.CONCRETE, int(12 + count * 0.5))
-				dust.puff(
-					at + Vector3(randf_range(-1, 1), 0, randf_range(-1, 1)) * r,
-					r * 0.7,
-					Materials.Kind.CONCRETE,
-					10
-				)
+				# Big pieces of building landing raise a rolling wall of dust
+				# and leave a veil over the rubble.
+				var strength := clampf(mass / 20000.0, 0.2, 1.0)
+				dust.roll(at, r * 1.2, strength)
+				if count > 12:
+					dust.haze(at, r * 1.5)
 				dust.chips(at, r, Materials.Kind.CONCRETE, 3.0 + speed * 0.5, int(10 + count * 0.3))
 			Sfx.play("collapse", at, -10.0 + minf(mass / 400.0, 12.0))
 			var cam := get_viewport().get_camera_3d() as CameraShake
@@ -99,7 +133,29 @@ func _connect_juice() -> void:
 				var d := cam.global_position.distance_to(at)
 				var near := clampf(1.0 - d / 45.0, 0.0, 1.0)
 				cam.add_trauma(clampf(mass / 4000.0, 0.1, 0.6) * near)
+				# The big ones get a beat of slow motion when you are close.
+				if count >= SLOWMO_MIN_PIECES and near > 0.2:
+					slow_motion()
 	)
+
+
+## A short beat of slow motion (big collapses). Not in headless runs
+## (tests), and not again for a few seconds.
+func slow_motion(scale := 0.35, hold := 0.35, back := 0.5) -> void:
+	if DisplayServer.get_name() == "headless" or not cinematic:
+		return
+	var now := Time.get_ticks_msec() / 1000.0
+	if now - _last_slowmo < SLOWMO_COOLDOWN:
+		return
+	_last_slowmo = now
+	Engine.time_scale = scale
+	var tw := create_tween().set_ignore_time_scale(true)
+	tw.tween_interval(hold)
+	tw.tween_property(Engine, "time_scale", 1.0, back).set_ease(Tween.EASE_IN_OUT)
+
+
+func _exit_tree() -> void:
+	Engine.time_scale = 1.0
 
 
 # --- Powers --------------------------------------------------------------------
@@ -131,6 +187,7 @@ func cast_shield(base: Transform3D) -> IceShield:
 
 
 func _start_attract() -> void:
+	cinematic = false
 	player.input_enabled = false
 	player.invulnerable = true
 	player.power.auto_input = true

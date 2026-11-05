@@ -1,162 +1,247 @@
 class_name DustSystem
 extends Node3D
-## Pooled dust clouds and flying chips for breaks and impacts.
-## CPU particles behave the same on desktop and WebGL; a fixed pool and a
-## per-second budget keep big collapses from flooding the screen.
+## Dust and smoke: big soft clouds drawn as camera-facing puffs in one draw
+## call, simulated here (a few dozen to a couple hundred puffs, cheap).
+## - puff: a burst where a block breaks
+## - roll: a wall of dust rolling out along the ground after a collapse
+## - haze: a low veil that lingers over fresh rubble
+## - trails behind pieces of building that are falling
+## Owns the chip system too (gravel and splinters without physics).
 
-const POOL := 20
-const CHIP_POOL := 16
-const MAX_PER_SECOND := 30
-
+const FLOATS := 20  # transform 12, colour 4, custom 4
 const DUST_COLORS := {
-	Materials.Kind.CONCRETE: Color(0.82, 0.8, 0.76, 0.55),
-	Materials.Kind.WOOD: Color(0.8, 0.68, 0.52, 0.45),
-	Materials.Kind.METAL: Color(0.7, 0.72, 0.76, 0.35),
-}
-const CHIP_COLORS := {
-	Materials.Kind.CONCRETE: Color(0.7, 0.68, 0.64),
-	Materials.Kind.WOOD: Color(0.72, 0.52, 0.32),
-	Materials.Kind.METAL: Color(0.62, 0.66, 0.72),
+	Materials.Kind.CONCRETE: Color(0.78, 0.75, 0.7, 0.75),
+	Materials.Kind.WOOD: Color(0.74, 0.64, 0.5, 0.6),
+	Materials.Kind.METAL: Color(0.7, 0.71, 0.74, 0.5),
+	Materials.Kind.ICE: Color(0.22, 0.18, 0.3, 0.45),
 }
 
-var _dust: Array[CPUParticles3D] = []
-var _chips: Array[CPUParticles3D] = []
-var _next_dust := 0
-var _next_chip := 0
-var _spent := 0.0  # budget used, drains every second
+var chip_system: ChipSystem
+var structures: StructureSet
+var capacity := 0
+var active := 0
+var _pos := PackedVector3Array()
+var _vel := PackedVector3Array()
+var _size := PackedFloat32Array()
+var _grow := PackedFloat32Array()  # metres per second
+var _life := PackedFloat32Array()
+var _max_life := PackedFloat32Array()
+var _ground := PackedFloat32Array()  # hugs the ground at this height, or -INF
+var _drag := PackedFloat32Array()
+var _next := 0
+var _buffer := PackedFloat32Array()
+var _multimesh: MultiMesh
+var _budget := 40.0  # puffs that can still go out right now
+var _trail_tick := 0.0
 
 
 func _ready() -> void:
-	var dust_mesh := _dust_mesh()
-	var chip_mesh := _chip_mesh()
-	for i in POOL:
-		var p := CPUParticles3D.new()
-		p.mesh = dust_mesh
-		p.one_shot = true
-		p.emitting = false
-		p.explosiveness = 0.85
-		p.lifetime = 2.2
-		p.local_coords = false
-		p.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-		p.direction = Vector3.UP
-		p.spread = 70.0
-		p.gravity = Vector3(0, 0.25, 0)
-		p.damping_min = 2.0
-		p.damping_max = 3.5
-		p.angular_velocity_min = -40.0
-		p.angular_velocity_max = 40.0
-		p.scale_amount_curve = _grow_curve()
-		p.color_ramp = _fade_ramp()
-		_dust.append(p)
-		add_child(p)
-	for i in CHIP_POOL:
-		var c := CPUParticles3D.new()
-		c.mesh = chip_mesh
-		c.one_shot = true
-		c.emitting = false
-		c.explosiveness = 1.0
-		c.lifetime = 0.9
-		c.local_coords = false
-		c.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-		c.direction = Vector3.UP
-		c.spread = 160.0
-		c.gravity = Vector3(0, -18, 0)
-		c.angular_velocity_min = -720.0
-		c.angular_velocity_max = 720.0
-		c.particle_flag_rotate_y = true
-		c.scale_amount_min = 0.5
-		c.scale_amount_max = 1.4
-		_chips.append(c)
-		add_child(c)
+	capacity = Quality.pick(70, 140, 220)
+	_pos.resize(capacity)
+	_vel.resize(capacity)
+	_size.resize(capacity)
+	_grow.resize(capacity)
+	_life.resize(capacity)
+	_life.fill(0.0)
+	_max_life.resize(capacity)
+	_ground.resize(capacity)
+	_drag.resize(capacity)
+	_buffer.resize(capacity * FLOATS)
+	_buffer.fill(0.0)
+	var quad := QuadMesh.new()
+	_multimesh = MultiMesh.new()
+	_multimesh.transform_format = MultiMesh.TRANSFORM_3D
+	_multimesh.use_colors = true
+	_multimesh.use_custom_data = true
+	_multimesh.mesh = quad
+	_multimesh.instance_count = capacity
+	_multimesh.buffer = _buffer
+	_multimesh.custom_aabb = AABB(Vector3(-200, -50, -200), Vector3(400, 250, 400))
+	var mat := ShaderMaterial.new()
+	mat.shader = preload("res://shaders/dust.gdshader")
+	mat.set_shader_parameter("noise_tex", _noise_texture())
+	mat.render_priority = 1
+	var mmi := MultiMeshInstance3D.new()
+	mmi.multimesh = _multimesh
+	mmi.material_override = mat
+	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(mmi)
+	chip_system = ChipSystem.new()
+	add_child(chip_system)
+
+
+static func _noise_texture() -> ImageTexture:
+	var n := FastNoiseLite.new()
+	n.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	n.frequency = 0.035
+	n.fractal_octaves = 3
+	var img := n.get_seamless_image(128, 128)
+	img.generate_mipmaps()
+	return ImageTexture.create_from_image(img)
+
+
+func _spawn(
+	at: Vector3, vel: Vector3, size: float, grow: float, life: float, col: Color, ground := -INF, drag := 1.5
+) -> void:
+	if _budget <= 0.0:
+		return
+	_budget -= 1.0
+	var i := _next
+	_next = (_next + 1) % capacity
+	if _life[i] <= 0.0:
+		active += 1
+	_pos[i] = at
+	_vel[i] = vel
+	_size[i] = size
+	_grow[i] = grow
+	_life[i] = life
+	_max_life[i] = life
+	_ground[i] = ground
+	_drag[i] = drag
+	var o := i * FLOATS
+	var shade := randf_range(0.92, 1.04)
+	_buffer[o + 12] = col.r * shade
+	_buffer[o + 13] = col.g * shade
+	_buffer[o + 14] = col.b * shade
+	_buffer[o + 15] = col.a
+	_buffer[o + 17] = randf()
+	_buffer[o + 18] = randf() * TAU
 
 
 func _process(delta: float) -> void:
-	_spent = maxf(_spent - MAX_PER_SECOND * delta, 0.0)
-
-
-## A dust cloud of roughly `radius` metres.
-func puff(at: Vector3, radius: float, kind: int, amount := 10) -> void:
-	if _spent > MAX_PER_SECOND:
+	_budget = minf(_budget + delta * float(Quality.pick(40, 80, 120)), float(Quality.pick(20, 40, 60)))
+	_trail_tick += delta
+	if _trail_tick > 0.12 and structures:
+		_trail_tick = 0.0
+		for p in structures.falling_cluster_positions(5.0):
+			_spawn(
+				p,
+				Vector3(0, 0.4, 0),
+				1.6,
+				1.8,
+				2.2,
+				DUST_COLORS[Materials.Kind.CONCRETE] * Color(1, 1, 1, 0.55)
+			)
+	if active == 0:
 		return
-	_spent += 1.0
-	var p := _dust[_next_dust]
-	_next_dust = (_next_dust + 1) % POOL
-	p.global_position = at
-	p.amount = clampi(amount, 4, 40)
-	p.emission_sphere_radius = maxf(radius * 0.5, 0.1)
-	p.initial_velocity_min = 0.3 + radius * 0.4
-	p.initial_velocity_max = 0.8 + radius * 1.2
-	p.scale_amount_min = 0.6 + radius * 0.5
-	p.scale_amount_max = 1.2 + radius * 1.1
-	p.lifetime = 1.6 + minf(radius, 3.0) * 0.5
-	p.color = DUST_COLORS.get(kind, DUST_COLORS[Materials.Kind.CONCRETE])
-	p.restart()
+	for i in capacity:
+		if _life[i] <= 0.0:
+			continue
+		_life[i] -= delta
+		var o := i * FLOATS
+		if _life[i] <= 0.0:
+			active -= 1
+			_buffer[o + 0] = 0.0
+			_buffer[o + 5] = 0.0
+			_buffer[o + 10] = 0.0
+			continue
+		var v := _vel[i] * exp(-_drag[i] * delta)
+		v.y += 0.15 * delta  # warm dust drifts up a little
+		_vel[i] = v
+		var p := _pos[i] + v * delta
+		_size[i] += _grow[i] * delta
+		var s := _size[i]
+		if _ground[i] > -INF:
+			p.y = maxf(p.y, _ground[i] + s * 0.32)
+		_pos[i] = p
+		var age := 1.0 - _life[i] / _max_life[i]
+		_buffer[o + 0] = s
+		_buffer[o + 1] = 0.0
+		_buffer[o + 2] = 0.0
+		_buffer[o + 3] = p.x
+		_buffer[o + 4] = 0.0
+		_buffer[o + 5] = s
+		_buffer[o + 6] = 0.0
+		_buffer[o + 7] = p.y
+		_buffer[o + 8] = 0.0
+		_buffer[o + 9] = 0.0
+		_buffer[o + 10] = s
+		_buffer[o + 11] = p.z
+		_buffer[o + 16] = age  # the shader erodes it as it ages
+	_multimesh.buffer = _buffer
+
+
+## A dust cloud of roughly `radius` metres where something broke.
+func puff(at: Vector3, radius: float, kind: int, amount := 10) -> void:
+	var col: Color = DUST_COLORS.get(kind, DUST_COLORS[Materials.Kind.CONCRETE])
+	var n := clampi(int(amount / 5.0), 1, 4)
+	for k in n:
+		var dir := Vector3(randf_range(-1, 1), randf_range(0.0, 0.8), randf_range(-1, 1))
+		var size := maxf(radius, 0.5) * randf_range(1.6, 2.6)
+		_spawn(
+			at + dir * radius * 0.4, dir * (0.6 + radius * 0.6), size, size * 0.5, randf_range(1.8, 3.0), col
+		)
+
+
+## A wall of dust rolling out along the ground from a collapse at `at`.
+## `radius` sets how big; `strength` (0..1) how thick.
+func roll(at: Vector3, radius: float, strength := 1.0) -> void:
+	var col: Color = DUST_COLORS[Materials.Kind.CONCRETE]
+	col.a *= clampf(0.55 + strength * 0.45, 0.3, 1.0)
+	var ground := _ground_below(at)
+	var n := int(Quality.pick(6, 10, 14) * clampf(strength, 0.4, 1.0))
+	for k in n:
+		var a := TAU * (k + randf() * 0.6) / n
+		var out := Vector3(cos(a), 0, sin(a))
+		var size := radius * randf_range(0.7, 1.1)
+		var speed := randf_range(4.0, 8.0) * (0.6 + strength * 0.4)
+		_spawn(
+			at + out * radius * 0.3,
+			out * speed + Vector3.UP * 0.6,
+			size,
+			size * 0.35,
+			randf_range(5.0, 7.5),
+			col,
+			ground,
+			0.9
+		)
+	# A taller column at the centre.
+	for k in 2:
+		var size := radius * 1.3
+		_spawn(
+			at + Vector3.UP * size * 0.4,
+			Vector3(0, randf_range(1.0, 2.0), 0),
+			size,
+			size * 0.25,
+			6.0,
+			col,
+			ground,
+			0.6
+		)
+
+
+## A thin veil that lingers low over fresh rubble.
+func haze(at: Vector3, radius: float) -> void:
+	var col: Color = DUST_COLORS[Materials.Kind.CONCRETE] * Color(1, 1, 1, 0.45)
+	var ground := _ground_below(at)
+	for k in 3:
+		var off := Vector3(randf_range(-1, 1), 0, randf_range(-1, 1)) * radius
+		_spawn(
+			at + off,
+			off.normalized() * 0.4,
+			radius * 1.4,
+			radius * 0.08,
+			randf_range(8.0, 11.0),
+			col,
+			ground,
+			0.4
+		)
 
 
 ## Small flying fragments that are not simulated as bodies.
 func chips(at: Vector3, radius: float, kind: int, speed := 5.0, amount := 12) -> void:
-	if _spent > MAX_PER_SECOND:
-		return
-	_spent += 0.5
-	var c := _chips[_next_chip]
-	_next_chip = (_next_chip + 1) % CHIP_POOL
-	c.global_position = at
-	c.amount = clampi(amount, 4, 32)
-	c.emission_sphere_radius = maxf(radius * 0.4, 0.05)
-	c.initial_velocity_min = speed * 0.4
-	c.initial_velocity_max = speed
-	c.color = CHIP_COLORS.get(kind, CHIP_COLORS[Materials.Kind.CONCRETE])
-	c.restart()
+	chip_system.burst(at, Vector3.ONE * radius, kind, amount, speed)
 
 
-func _dust_mesh() -> Mesh:
-	var tex := GradientTexture2D.new()
-	tex.width = 64
-	tex.height = 64
-	tex.fill = GradientTexture2D.FILL_RADIAL
-	tex.fill_from = Vector2(0.5, 0.5)
-	tex.fill_to = Vector2(1.0, 0.5)
-	var g := Gradient.new()
-	g.set_color(0, Color(1, 1, 1, 1))
-	g.set_color(1, Color(1, 1, 1, 0))
-	g.add_point(0.45, Color(1, 1, 1, 0.55))
-	tex.gradient = g
-	var mat := StandardMaterial3D.new()
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.vertex_color_use_as_albedo = true
-	mat.albedo_texture = tex
-	mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	mat.billboard_keep_scale = true
-	mat.disable_receive_shadows = true
-	var quad := QuadMesh.new()
-	quad.size = Vector2(1, 1)
-	quad.material = mat
-	return quad
+## Gravel and splinters spraying out of a broken block of `size`.
+func chips_box(
+	at: Vector3, size: Vector3, kind: int, amount: int, speed := 4.0, kick := Vector3.ZERO
+) -> void:
+	chip_system.burst(at, size, kind, amount, speed, kick)
 
 
-func _chip_mesh() -> Mesh:
-	var mat := StandardMaterial3D.new()
-	mat.vertex_color_use_as_albedo = true
-	mat.roughness = 0.9
-	var box := BoxMesh.new()
-	box.size = Vector3(0.07, 0.05, 0.06)
-	box.material = mat
-	return box
-
-
-static func _grow_curve() -> Curve:
-	var c := Curve.new()
-	c.add_point(Vector2(0, 0.35))
-	c.add_point(Vector2(0.3, 0.85))
-	c.add_point(Vector2(1, 1.0))
-	return c
-
-
-static func _fade_ramp() -> Gradient:
-	var g := Gradient.new()
-	g.set_color(0, Color(1, 1, 1, 0.0))
-	g.set_color(1, Color(1, 1, 1, 0.0))
-	g.add_point(0.08, Color(1, 1, 1, 1.0))
-	g.add_point(0.5, Color(1, 1, 1, 0.6))
-	return g
+func _ground_below(at: Vector3) -> float:
+	var q := PhysicsRayQueryParameters3D.create(at + Vector3.UP * 0.5, at + Vector3.DOWN * 60.0)
+	q.collision_mask = DebrisSystem.LAYER_WORLD | DebrisSystem.LAYER_STRUCTURES
+	var hit := get_world_3d().direct_space_state.intersect_ray(q)
+	return (hit["position"] as Vector3).y if not hit.is_empty() else 0.0

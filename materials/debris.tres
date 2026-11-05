@@ -1,0 +1,14 @@
+[gd_resource type="ShaderMaterial" load_steps=2 format=3]
+
+[ext_resource type="Shader" path="res://shaders/block.gdshader" id="1_block"]
+
+[resource]
+shader = ExtResource("1_block")
+shader_parameter/violet = Color(0.55, 0.24, 1, 1)
+shader_parameter/violet_deep = Color(0.32, 0.08, 0.78, 1)
+shader_parameter/glow_strength = 0.9
+shader_parameter/chunky = true
+shader_parameter/concrete = Color(0.78, 0.76, 0.72, 1)
+shader_parameter/wood = Color(0.84, 0.75, 0.62, 1)
+shader_parameter/wood_dark = Color(0.68, 0.56, 0.43, 1)
+shader_parameter/metal = Color(0.62, 0.66, 0.72, 1)

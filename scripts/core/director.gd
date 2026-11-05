@@ -29,6 +29,8 @@ func _ready() -> void:
 		return
 	player.input_enabled = false
 	player.power.auto_input = true
+	if options.has("prof"):
+		_profile()
 	match options.get("mode", ""):
 		"showcase":
 			_showcase()
@@ -212,6 +214,20 @@ func _still() -> void:
 	if options.has("vortex"):
 		await _wait(0.2)
 		world.cast_vortex(t)
+	if options.has("dust"):
+		await _wait(0.1)
+		world.dust.roll(_vec(options["dust"]), 4.0, 1.0)
+		world.dust.puff(_vec(options["dust"]) + Vector3(-6, 2, 0), 1.0, Materials.Kind.CONCRETE, 20)
+	if options.has("collapse"):
+		# Knock out the ground floor of the building at --collapse=x,z.
+		var at := _vec(options["collapse"] + ",0")
+		at = Vector3(at.x, 0, at.y)
+		var s := world.structures
+		for i in s.segment_count():
+			var bp := s.transform_of(i).origin
+			var h := float(options.get("collapse_h", "2.9"))
+			if s.is_alive(i) and bp.y < h and absf(bp.x - at.x) < 6.5 and absf(bp.z - at.z) < 6.5:
+				s.break_segment(i)
 	if options.has("shieldat"):
 		# A shield seen from outside: --shieldat=x,y,z --shieldyaw=deg
 		var yaw := deg_to_rad(float(options.get("shieldyaw", "0")))
@@ -303,6 +319,45 @@ func _measure(seconds: float) -> Vector2:
 		await get_tree().physics_frame
 		total += Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0
 	return Vector2(total / maxf(frames, 1), Engine.get_frames_per_second())
+
+
+## --prof: once a second, average frame costs and live piece counts.
+func _profile() -> void:
+	var proc := 0.0
+	var phys := 0.0
+	var worst := 0.0
+	var n := 0
+	var t := 0.0
+	while is_inside_tree():
+		await get_tree().process_frame
+		var p := Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0
+		var f := Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0
+		proc += p
+		phys += f
+		worst = maxf(worst, p + f)
+		n += 1
+		t += get_process_delta_time()
+		if t >= 1.0:
+			var chips := world.dust.chip_system.active if world.dust else 0
+			print(
+				(
+					"PROF process %.1f  physics %.1f  worst %.1f ms  debris %d (awake %d, frozen %d)  chips %d"
+					% [
+						proc / n,
+						phys / n,
+						worst,
+						world.debris.active_count,
+						world.debris.awake_count,
+						world.debris.frozen_count,
+						chips,
+					]
+				)
+			)
+			proc = 0.0
+			phys = 0.0
+			worst = 0.0
+			n = 0
+			t = 0.0
 
 
 func _report(text: String) -> void:

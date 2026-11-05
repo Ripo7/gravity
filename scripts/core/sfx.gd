@@ -36,6 +36,7 @@ const BREAKS := {
 	Materials.Kind.WOOD: "break_wood",
 	Materials.Kind.METAL: "break_metal",
 	Materials.Kind.ICE: "ice_hit",
+	Materials.Kind.GLASS: "ice_break",
 }
 
 var _players: Array[AudioStreamPlayer3D] = []

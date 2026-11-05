@@ -180,7 +180,7 @@ func test_soft_budget_shrinks_pieces_away_gradually() -> void:
 	check(d.fading_count > 0, "retiring started")
 	check_eq(d.active_count, n, "nothing vanished instantly")
 	await frames(int(DebrisSystem.FADE_TIME * 60.0) + 90)
-	var target := int(d.capacity * DebrisSystem.SOFT_BUDGET)
+	var target := int(d.capacity * d.soft_budget)
 	check(d.active_count <= target + d.fading_count, "back under soft budget (%d)" % d.active_count)
 	check(d.active_count >= target - DebrisSystem.RETIRE_PER_FRAME, "did not over-retire")
 	await _unload()
