@@ -22,7 +22,11 @@ const VORTEX_RADIUS := 5.0
 const VORTEX_BAND := 2.0
 const VORTEX_CORE := 0.9
 const VORTEX_SPINUP := 0.5  ## seconds before it starts pulling
-const VORTEX_DURATION := 7.0
+const VORTEX_DURATION := 3.5
+## When it closes, what it held is flung outward at this speed (m/s),
+## a little upward, faster near the core.
+const VORTEX_BURST_SPEED := Vector2(16.0, 10.0)
+const VORTEX_BURST_LIFT := 4.0
 ## Orbit angular speed (rad/s) at the core and at the radius.
 const VORTEX_SPIN := Vector2(9.0, 4.5)
 const VORTEX_MAX_SPEED := 22.0
