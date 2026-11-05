@@ -17,10 +17,18 @@ var _bindings := {
 	"look_right": [_axis(JOY_AXIS_RIGHT_X, 1.0)],
 	"jump": [_key(KEY_SPACE), _button(JOY_BUTTON_A)],
 	"sprint": [_key(KEY_SHIFT), _button(JOY_BUTTON_LEFT_STICK)],
-	"charge":
-	[_mouse(MOUSE_BUTTON_LEFT), _axis(JOY_AXIS_TRIGGER_RIGHT, 1.0), _button(JOY_BUTTON_RIGHT_SHOULDER)],
+	"cast": [_mouse(MOUSE_BUTTON_LEFT), _axis(JOY_AXIS_TRIGGER_RIGHT, 1.0)],
+	"shield":
+	[
+		_mouse(MOUSE_BUTTON_RIGHT),
+		_key(KEY_E),
+		_key(KEY_2),
+		_axis(JOY_AXIS_TRIGGER_LEFT, 1.0),
+		_button(JOY_BUTTON_LEFT_SHOULDER),
+		_button(JOY_BUTTON_RIGHT_SHOULDER),
+	],
 	"reset_arena": [_key(KEY_R), _button(JOY_BUTTON_BACK)],
-	"toggle_debug": [_key(KEY_F3), _button(JOY_BUTTON_LEFT_SHOULDER)],
+	"toggle_debug": [_key(KEY_F3)],
 	"release_mouse": [_key(KEY_ESCAPE), _button(JOY_BUTTON_START)],
 }
 

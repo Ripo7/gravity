@@ -4,7 +4,7 @@ extends RefCounted
 ## The id is written into each instance's colour so one shader (one draw
 ## call) renders every material.
 
-enum Kind { CONCRETE, WOOD, METAL }
+enum Kind { CONCRETE, WOOD, METAL, ICE }
 
 ## Per material: strength multiplier, density (kg/m^3), fracture piece
 ## multiplier, fraction of strength that knocks a block loose, how strongly
@@ -40,6 +40,17 @@ const PROPS := {
 		"friction": 0.5,
 		"bounce": 0.2,
 	},
+	# Black ice from the shield power: hard, slippery, shatters into shards.
+	Kind.ICE:
+	{
+		"strength": 1.6,
+		"density": 300.0,
+		"pieces": 1.2,
+		"dislodge": 0.2,
+		"blast_response": 1.1,
+		"friction": 0.15,
+		"bounce": 0.1,
+	},
 }
 
 
@@ -47,8 +58,8 @@ static func prop(kind: int, key: String) -> float:
 	return PROPS[kind][key]
 
 
-## Value stored in the instance colour's green channel. Kept far apart
-## (0, 0.5, 1) because the Compatibility renderer converts instance colours
-## from sRGB to linear (0.5 arrives as ~0.21); the shader uses thresholds.
+## Value stored in the instance colour's green channel: kind / 3. The
+## Compatibility renderer converts instance colours from sRGB to linear, so
+## the shader converts back before rounding.
 static func encode(kind: int) -> float:
-	return float(kind) * 0.5
+	return float(kind) / 3.0

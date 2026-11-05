@@ -39,7 +39,12 @@ jobs:
       - name: Import project
         run: $GODOT --headless --path . --import
       - name: Run tests
-        run: $GODOT --headless --path . res://tests/test_runner.tscn
+        shell: bash
+        run: |
+          set -o pipefail
+          $GODOT --headless --path . res://tests/test_runner.tscn 2>&1 | tee tests.log
+          # Script errors mean something broke even if the checks passed.
+          if grep -q "SCRIPT ERROR" tests.log; then echo "::error::script errors during tests"; exit 1; fi
 
   export:
     name: Export builds

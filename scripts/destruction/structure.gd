@@ -5,7 +5,10 @@ extends Node3D
 ## StructureSet owns the physics bodies and rendering at runtime.
 ## Move, rotate and tweak these nodes in the editor to lay out an arena.
 
-enum Kind { WALL, TOWER, STACK, PILLARS, BUILDING }
+enum Kind { WALL, TOWER, STACK, PILLARS, BUILDING, RAMP, BRIDGE, APARTMENT }
+
+const LANDING_DEPTH := 2.0
+const SLAB := 0.3
 
 @export var kind := Kind.WALL:
 	set(v):
@@ -15,6 +18,15 @@ enum Kind { WALL, TOWER, STACK, PILLARS, BUILDING }
 ## STACK: (base x, -, base z). PILLARS: (pillars, drums per pillar, -).
 ## BUILDING: (bays along x, storeys, bays along z); block = (bay width,
 ## storey height, column width).
+## RAMP: (-, flights, -); block = (lane width, rise per flight, run). A
+## switchback ramp tower whose origin is its corner: lanes along +x, flights
+## along +z, landings every `rise` metres (match a building's storeys).
+## BRIDGE: (spans, column drums, -); block = (span length, drum height,
+## deck width). A walkway along x on columns, deck top at drums * height + 0.3.
+## APARTMENT: (bays along x, storeys, bays along z); block = (bay width,
+## storey height, column width). A closed city building: ribbon windows
+## above a sill band, some solid bays, open shop fronts on the ground floor,
+## a floor slab per storey and a roof parapet. `doors` opens more bays.
 @export var counts := Vector3i(8, 6, 1):
 	set(v):
 		counts = v
@@ -33,6 +45,12 @@ enum Kind { WALL, TOWER, STACK, PILLARS, BUILDING }
 @export var seed_value := 0
 ## Counts toward the level's destruction score.
 @export var scored := true
+## APARTMENT: extra open bays, each (side, bay, storey); sides are
+## 0 = -z, 1 = +z, 2 = -x, 3 = +x.
+@export var doors := PackedVector3Array():
+	set(v):
+		doors = v
+		_refresh_preview()
 
 var _preview: MultiMeshInstance3D
 
@@ -58,6 +76,12 @@ func build_segments() -> Array[Dictionary]:
 			_build_pillars(out)
 		Kind.BUILDING:
 			_build_building(out)
+		Kind.RAMP:
+			_build_ramp(out)
+		Kind.BRIDGE:
+			_build_bridge(out)
+		Kind.APARTMENT:
+			_build_apartment(out, rng)
 	for seg in out:
 		seg["strength"] = seg.get("strength", strength)
 		seg["material"] = seg.get("material", material)
@@ -66,8 +90,15 @@ func build_segments() -> Array[Dictionary]:
 	return out
 
 
-func _seg(out: Array[Dictionary], center: Vector3, size: Vector3, mult := 1.0, accent := false) -> void:
-	var seg := {"local": Transform3D(Basis(), center), "size": size, "strength": strength * mult}
+func _seg(
+	out: Array[Dictionary],
+	center: Vector3,
+	size: Vector3,
+	mult := 1.0,
+	accent := false,
+	basis := Basis(),
+) -> void:
+	var seg := {"local": Transform3D(basis, center), "size": size, "strength": strength * mult}
 	if accent:
 		seg["material"] = accent_material
 	out.append(seg)
@@ -185,6 +216,126 @@ func _build_building(out: Array[Dictionary]) -> void:
 			for iz in nz:
 				var c := Vector3(x0 + (ix + 0.5) * bay, base + col_h + slab_t * 0.5, z0 + (iz + 0.5) * bay)
 				_seg(out, c, Vector3(bay, slab_t, bay), 0.9)
+
+
+func _build_apartment(out: Array[Dictionary], rng: RandomNumberGenerator) -> void:
+	var bay := block.x
+	var storey := block.y
+	var cw := block.z
+	var slab_t := 0.25
+	var wall_t := 0.22
+	var sill := 1.05
+	var nx := maxi(counts.x, 1)
+	var nz := maxi(counts.z, 1)
+	var x0 := -nx * bay * 0.5
+	var z0 := -nz * bay * 0.5
+	var col_h := storey - slab_t
+	var open := {}
+	for d in doors:
+		open[Vector3i(d)] = true
+	for s in counts.y + 1:
+		var base := s * storey
+		var roof := s == counts.y
+		if not roof:
+			for ix in nx + 1:
+				for iz in nz + 1:
+					var c := Vector3(x0 + ix * bay, base + col_h * 0.5, z0 + iz * bay)
+					_seg(out, c, Vector3(cw, col_h, cw), 1.2)
+		for side in 4:
+			var along_x := side < 2
+			var n := nx if along_x else nz
+			for b in n:
+				var t := (b + 0.5) * bay
+				var c := Vector3(x0 + t, 0, z0 if side == 0 else -z0)
+				if not along_x:
+					c = Vector3(x0 if side == 2 else -x0, 0, z0 + t)
+				var w := bay - cw
+				var size_of := func(h: float) -> Vector3:
+					return Vector3(w, h, wall_t) if along_x else Vector3(wall_t, h, w)
+				var roll := rng.randf()
+				if open.has(Vector3i(side, b, s)) or (s == 0 and roll < 0.45):
+					continue
+				if roof:
+					c.y = base + 0.45
+					_seg(out, c, size_of.call(0.9), 0.5, true)
+					continue
+				if roll > 0.8:
+					c.y = base + col_h * 0.5
+					_seg(out, c, size_of.call(col_h), 0.6, true)
+				else:
+					c.y = base + sill * 0.5
+					_seg(out, c, size_of.call(sill), 0.5, true)
+		if roof:
+			break
+		for ix in nx:
+			for iz in nz:
+				var c := Vector3(x0 + (ix + 0.5) * bay, base + col_h + slab_t * 0.5, z0 + (iz + 0.5) * bay)
+				_seg(out, c, Vector3(bay, slab_t, bay), 0.9)
+
+
+func _build_ramp(out: Array[Dictionary]) -> void:
+	var w := block.x
+	var rise := block.y
+	var run := block.z
+	var d := LANDING_DEPTH
+	var a := atan2(rise, run)
+	var length := sqrt(rise * rise + run * run)
+	var flights := maxi(counts.y, 1)
+	for k in flights:
+		var lane := float(k % 2)
+		var x := (lane + 0.5) * w
+		var up_z := k % 2 == 0  # even flights climb toward +z
+		var z0 := d if up_z else d + run
+		var z1 := d + run if up_z else d
+		var top_mid := Vector3(x, (k + 0.5) * rise, (z0 + z1) * 0.5)
+		var basis := Basis(Vector3.RIGHT, -a if up_z else a)
+		var center := top_mid - basis.y * SLAB * 0.5
+		_seg(out, center, Vector3(w - 0.05, SLAB, length), 1.0, false, basis)
+	for j in range(1, flights + 1):
+		var at_far := j % 2 == 1
+		var zc := d + run + d * 0.5 if at_far else d * 0.5
+		var top := j * rise
+		_seg(out, Vector3(w, top - SLAB * 0.5, zc), Vector3(w * 2.0, SLAB, d), 1.0, true)
+		# Columns under the outer corners, standing on the landing two
+		# levels down (or the ground).
+		var base := maxf(top - 2.0 * rise, 0.0)
+		var h := top - SLAB - base
+		var zo := zc + (d * 0.5 - 0.25) * (1.0 if at_far else -1.0)
+		for xo: float in [0.25, w * 2.0 - 0.25]:
+			_seg(out, Vector3(xo, base + h * 0.5, zo), Vector3(0.5, h, 0.5), 1.4)
+
+
+func _build_bridge(out: Array[Dictionary]) -> void:
+	var spans := maxi(counts.x, 1)
+	var span := block.x
+	var drum := block.y
+	var w := block.z
+	var top := counts.y * drum
+	var x0 := -spans * span * 0.5
+	for j in spans + 1:
+		var x := x0 + j * span
+		for zs: float in [-1.0, 1.0]:
+			for k in counts.y:
+				_seg(out, Vector3(x, (k + 0.5) * drum, zs * (w * 0.5 - 0.35)), Vector3(0.7, drum, 0.7), 1.3)
+	for j in spans:
+		var a := x0 + j * span
+		var b := a + span
+		# The end pieces overhang a little to meet whatever they lead to.
+		if j == 0:
+			a -= 0.45
+		if j == spans - 1:
+			b += 0.45
+		var piece_len := b - a
+		var cx := (a + b) * 0.5
+		_seg(out, Vector3(cx, top + SLAB * 0.5, 0), Vector3(piece_len, SLAB, w))
+		for zs: float in [-1.0, 1.0]:
+			_seg(
+				out,
+				Vector3(cx, top + SLAB + 0.25, zs * (w * 0.5 - 0.06)),
+				Vector3(piece_len, 0.5, 0.12),
+				0.6,
+				true
+			)
 
 
 ## Editor-only preview so the layout is visible while editing scenes.

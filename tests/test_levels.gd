@@ -1,80 +1,42 @@
 extends TestCase
-## Level content and game flow.
+## The sandbox level and its flow.
 
 const GAME := preload("res://scenes/game.tscn")
 
 
-func test_every_level_loads_and_stands() -> void:
-	for path in GameState.LEVELS + [GameState.SANDBOX]:
-		var world: GameWorld = GAME.instantiate()
-		world.level_path = path
-		add_child(world)
-		await frames(2)
-		var lv := world.level
-		check(lv != null, "%s loads" % path)
-		if lv == null:
-			world.queue_free()
-			continue
-		check(lv.get_node_or_null("PlayerStart") != null, "%s has a PlayerStart" % path)
-		check(world.structures.segment_count() > 20, "%s has structures" % path)
-		var t := lv.star_thresholds
-		check(t.x < t.y and t.y < t.z and t.z <= 1.0, "%s thresholds ascend" % path)
-		# Intact level must not fall down on its own.
-		await frames(60)
-		check_eq(world.structures.alive_count, world.structures.segment_count(), "%s stands" % path)
-		check_eq(world.structures.cluster_count(), 0, "%s nothing falling" % path)
-		world.queue_free()
-		await frames(2)
-
-
-func test_stars_for_destruction() -> void:
-	var lv := Level.new()
-	lv.star_thresholds = Vector3(0.4, 0.65, 0.85)
-	check_eq(lv.stars_for(0.2), 0, "below one star")
-	check_eq(lv.stars_for(0.4), 1, "exactly one star")
-	check_eq(lv.stars_for(0.7), 2, "two stars")
-	check_eq(lv.stars_for(1.0), 3, "three stars")
-	lv.free()
-
-
-func test_progress_unlocks_next_level() -> void:
-	GameState.reset_progress()
-	var first := GameState.LEVELS[0]
-	var second := GameState.LEVELS[1]
-	check(GameState.is_unlocked(first), "first level open")
-	check(not GameState.is_unlocked(second), "second locked")
-	check(GameState.record(first, 0, 200, 0.2), "first record is a best")
-	check(not GameState.is_unlocked(second), "no star, still locked")
-	GameState.record(first, 2, 700, 0.7)
-	check(GameState.is_unlocked(second), "a star unlocks the next")
-	check(not GameState.record(first, 1, 500, 0.5), "worse score is not a best")
-	check_eq(GameState.stars(first), 2, "keeps the best stars")
-	check_eq(GameState.continue_level(), second, "continue goes to the next unfinished level")
-	GameState.reset_progress()
-
-
-func test_running_out_of_charges_ends_the_level() -> void:
+func _start() -> GameWorld:
 	var world: GameWorld = GAME.instantiate()
-	world.level_path = GameState.LEVELS[0]
+	world.level_path = GameState.SANDBOX
 	add_child(world)
 	await frames(3)
-	var run := world.get_node("Run") as LevelRun
-	run._begin_play()
-	var charges := run.charges_left
-	check(charges > 0, "level has charges")
-	for k in charges:
-		world.player.power.thrown.emit(BlastParams.from_charge(0.5))
-	check_eq(run.charges_left, 0, "all charges used")
-	check(not world.player.power.enabled, "power disabled")
-	var done := [false]
-	run.finished.connect(func(_s: int, _sc: int) -> void: done[0] = true)
-	for k in 60:
-		await get_tree().create_timer(0.25).timeout
-		if done[0]:
-			break
-	check(done[0], "results shown once things settle")
-	check_eq(run.state, LevelRun.State.RESULT, "in result state")
-	get_tree().paused = false
+	(world.get_node("Run") as LevelRun)._begin_play()
+	return world
+
+
+func test_sandbox_loads_and_stands() -> void:
+	var world := await _start()
+	check(world.level != null, "loads")
+	check(world.level.get_node_or_null("PlayerStart") != null, "has a PlayerStart")
+	check(world.structures.segment_count() > 1200, "rich (%d blocks)" % world.structures.segment_count())
+	await frames(90)
+	check_eq(world.structures.alive_count, world.structures.segment_count(), "nothing collapses on its own")
+	check_eq(world.structures.cluster_count(), 0, "nothing falling")
 	world.queue_free()
 	await frames(2)
-	GameState.reset_progress()
+
+
+func test_crushed_player_comes_back() -> void:
+	var world := await _start()
+	var run := world.get_node("Run") as LevelRun
+	var p := world.player
+	p.global_position = Vector3(50, 0.05, 50)
+	p.hurt(500.0, p.global_position)
+	check(p.dead, "player down")
+	check_eq(run.state, LevelRun.State.DOWN, "K.O.")
+	check_eq(run.deaths, 1, "counted")
+	await get_tree().create_timer(LevelRun.RESPAWN_DELAY + 0.3).timeout
+	check(not p.dead and p.health == Player.MAX_HEALTH, "back on its feet")
+	check(p.global_position.distance_to(world.level.player_start().origin) < 1.0, "at the start")
+	check_eq(run.state, LevelRun.State.PLAY, "playing again")
+	world.queue_free()
+	await frames(2)

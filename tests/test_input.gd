@@ -2,7 +2,9 @@ extends TestCase
 
 const LaunchScript := preload("res://scripts/core/launch.gd")
 
-const REQUIRED := ["move_forward", "move_back", "move_left", "move_right", "jump", "charge", "reset_arena"]
+const REQUIRED := [
+	"move_forward", "move_back", "move_left", "move_right", "jump", "cast", "shield", "reset_arena"
+]
 
 
 func test_actions_have_keyboard_and_gamepad() -> void:

@@ -30,37 +30,44 @@ func test_arena_builds_structures() -> void:
 func test_unsupported_blocks_fall() -> void:
 	await _load_world()
 	var s := world.structures
-	# Break every grounded block of the first structure (the front wall).
+	# Knock out the ground floor of one building: the floors above have
+	# nothing left to stand on.
+	var at := Vector3(-29, 0, -31)
 	var broke := 0
 	for i in s.segment_count():
-		var y := s.transform_of(i).origin.y
-		if s.is_alive(i) and y < 0.3 and absf(s.transform_of(i).origin.z - 2.0) < 0.1:
+		var p := s.transform_of(i).origin
+		if s.is_alive(i) and p.y < 2.9 and absf(p.x - at.x) < 6.5 and absf(p.z - at.z) < 6.5:
 			s.break_segment(i)
 			broke += 1
 	var fell := s.settle()
-	check(broke > 5, "broke the wall's base row")
-	check(fell > 50, "rest of the wall lost support (%d fell)" % fell)
+	check(broke > 15, "broke the ground floor (%d)" % broke)
+	check(fell > 60, "the storeys above lost support (%d fell)" % fell)
 	await _unload()
 
 
-func test_blast_breaks_pulls_and_throws() -> void:
+func test_ramps_and_walkway_stand_and_lead_up() -> void:
 	await _load_world()
-	var target := Vector3(0, 1.5, 2.6)  # just in front of the front wall
-	var params := BlastParams.from_charge(1.0)
-	var standing := world.structures.alive_count
-	var blast := world.detonate(target, params)
-	await frames(1)
-	check(world.structures.alive_count < standing - 20, "blocks broke")
-	check(world.debris.active_count > 50, "debris spawned (%d)" % world.debris.active_count)
-	# Mid-pull: pieces should be closer to the core than where they started.
-	var before := _mean_distance(target)
-	await frames(int(params.pull_time * 60.0 * 0.8))
-	var during := _mean_distance(target)
-	check(during < before, "pull draws pieces in (%.2f -> %.2f)" % [before, during])
-	await blast.burst
-	await frames(20)
-	var after := _mean_distance(target)
-	check(after > during + 1.0, "burst throws pieces out (%.2f -> %.2f)" % [during, after])
+	await frames(60)
+	check_eq(world.structures.cluster_count(), 0, "nothing falls on its own")
+	# The walkway over the avenue is walkable at the 2nd floor (6.4 m).
+	var q := PhysicsRayQueryParameters3D.create(Vector3(0, 12, -14), Vector3(0, 0, -14))
+	var hit := world.get_world_3d().direct_space_state.intersect_ray(q)
+	check(not hit.is_empty(), "something under the walkway centre")
+	if not hit.is_empty():
+		check_near(hit["position"].y, 6.4, 0.05, "walkway deck at 6.4 m")
+	# Walk the player up the south-east alley ramp's first flight (it climbs
+	# toward +z to the first floor, 3.2 m).
+	var p := world.player
+	p.input_enabled = true
+	p.global_position = Vector3(19.4, 0.1, 8.8)
+	p.rotation.y = PI
+	p.touch_move = Vector2(0, -1)
+	var top := 0.0
+	for k in 120:
+		await get_tree().physics_frame
+		top = maxf(top, p.global_position.y)
+	p.touch_move = Vector2.ZERO
+	check(top > 2.9, "climbed the ramp (reached y %.2f)" % top)
 	await _unload()
 
 
@@ -75,18 +82,7 @@ func test_debris_budget_recycles_oldest() -> void:
 	await _unload()
 
 
-func _mean_distance(c: Vector3) -> float:
-	var d := world.debris
-	var total := 0.0
-	var n := 0
-	for i in d.capacity:
-		if d.is_active(i):
-			total += d.position_of(i).distance_to(c)
-			n += 1
-	return total / maxf(n, 1)
-
-
-func test_touch_controls_move_look_and_charge() -> void:
+func test_touch_controls_move_look_and_cast() -> void:
 	await _load_world()
 	var p := world.player
 	p.input_enabled = true
@@ -107,16 +103,24 @@ func test_touch_controls_move_look_and_charge() -> void:
 	tc._on_touch(_touch(1, Vector2(1100, 400), true))
 	tc._on_drag(_drag(1, Vector2(1000, 400), Vector2(-100, 0)))
 	check(p.rotation.y > yaw, "drag left turns left")
-	# Hold the charge button, release to throw.
-	var thrown := [false]
-	p.power.thrown.connect(func(_params: BlastParams) -> void: thrown[0] = true)
+	# The violet button opens a black hole; the shield slot raises the
+	# shield at once.
+	var casts: Array[int] = []
+	p.power.cast.connect(func(pw: int) -> void: casts.append(pw))
 	tc._on_touch(_touch(2, tc.charge_center(), true))
-	await get_tree().create_timer(0.5).timeout
-	check(p.power.charging and p.power.charge > 0.1, "charging while held")
+	await get_tree().process_frame
+	await get_tree().process_frame
 	tc._on_touch(_touch(2, tc.charge_center(), false))
-	await get_tree().process_frame
-	await get_tree().process_frame
-	check(thrown[0], "released ball")
+	check_eq(casts, [PowerDefs.Power.VORTEX] as Array[int], "the violet button opens a black hole")
+	var shield_slot := Hud.power_slot_rect(PowerDefs.Power.SHIELD, tc.size, true).get_center()
+	tc._on_touch(_touch(3, shield_slot, true))
+	tc._on_touch(_touch(3, shield_slot, false))
+	check_eq(casts.size(), 2, "tapping the shield slot raises it")
+	check_eq(casts[-1], PowerDefs.Power.SHIELD, "the shield")
+	# The slots sit right next to the cast button.
+	for k in 2:
+		var d := Hud.power_slot_rect(k, tc.size, true).get_center().distance_to(tc.charge_center())
+		check(d < tc.size.y * 0.25, "slot %d next to the cast button" % k)
 	# Releasing the stick stops movement input.
 	tc._on_touch(_touch(0, Vector2(300, 560), false))
 	check_eq(p.touch_move, Vector2.ZERO, "stick released")

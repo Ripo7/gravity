@@ -3,8 +3,8 @@ extends Control
 ## On-screen controls for phones and tablets.
 ##   Left half: a floating stick (appears where the thumb lands) to move.
 ##   Right half: drag to look.
-##   Bottom-right: hold the violet button to charge, release to throw.
-##   Above it: jump.
+##   Bottom-right: hold the violet button to grow the power, release to cast.
+##   Left of it: tap a power slot to pick the power. Above it: jump.
 ## Multi-touch is tracked per finger so you can move, look and charge at once.
 
 @export var player: Player
@@ -43,7 +43,11 @@ func stick_radius() -> float:
 
 
 func charge_center() -> Vector2:
-	return Vector2(size.x - size.y * 0.2, size.y * 0.76)
+	return charge_center_for(size)
+
+
+static func charge_center_for(view: Vector2) -> Vector2:
+	return Vector2(view.x - view.y * 0.2, view.y * 0.76)
 
 
 func charge_radius() -> float:
@@ -51,7 +55,7 @@ func charge_radius() -> float:
 
 
 func jump_center() -> Vector2:
-	return Vector2(size.x - size.y * 0.44, size.y * 0.86)
+	return Vector2(size.x - size.y * 0.2, size.y * 0.5)
 
 
 func jump_radius() -> float:
@@ -89,6 +93,11 @@ func _release_all() -> void:
 func _on_touch(e: InputEventScreenTouch) -> void:
 	if e.pressed:
 		_last[e.index] = e.position
+		for k in 2:
+			if Hud.power_slot_rect(k, size, true).grow(6).has_point(e.position):
+				player.power.select(k)
+				queue_redraw()
+				return
 		if e.position.distance_to(charge_center()) < charge_radius() * 1.3 and _charge_finger < 0:
 			_charge_finger = e.index
 			player.power.touch_held = true

@@ -1,31 +1,44 @@
 # Gravity
 
-First-person demolition game in Godot 4.7 (GDScript, Jolt physics).
-Charge a violet power ball, throw it, and the impact opens a short-lived
-black hole: it pulls the world in, then bursts outward. Buildings obey
-real support rules: cut the base and they topple, overload the columns and
-the floors pancake, and what falls breaks whatever it lands on.
+First-person destruction game in Godot 4.7 (GDScript, Jolt physics).
+You have overpowered powers. Flatten each map as fast as you can, without
+getting crushed by what you bring down.
 
-**Game:** 10 demolition levels with limited charges and 1 to 3 stars for the
-share destroyed (unused charges add score), plus an unlimited sandbox.
-Progress is saved locally.
+One sandbox map: a dense city district you stand inside. Streets and alleys
+between closed multi-storey buildings you can walk into, switchback ramps in
+the alleys, walkways across the avenue and over the boulevard, water towers
+on the roofs; the rest of the city fades into the haze around it.
+
+**Powers** (each with its own cooldown):
+
+1. **Black hole** – a black ball opens where you aim. Everything inside its
+   radius is torn loose and orbits it fast; there is no explosion. The band
+   just outside the radius (red ring) is not pulled but takes damage –
+   including you.
+2. **Shield** – not aimed: pressing its button makes a tall, curved shell of
+   black ice (close to a half dome, but lumpy) burst out of the ground around
+   your front. It stops debris and falling pieces until it breaks; its shards
+   never hurt you.
+
+**Rules:** you are fragile. Anything heavy that hits you (debris, stones,
+collapsing floors), the black hole's band and hard landings hurt; health
+comes back after a few seconds without being hit. When you go down you
+respawn at the start; the HUD counts destruction and K.O.s.
 
 ## Controls
 
 | Action | Mouse + keyboard | Gamepad |
 | --- | --- | --- |
-| Move | WASD / arrows (physical keys, works on AZERTY) | Left stick |
+| Move | WASD / arrows (physical keys: ZQSD on AZERTY) | Left stick |
 | Look | Mouse | Right stick |
-| Jump | Space | A / Cross |
-| Sprint | Shift | L3 |
-| Charge, release to throw | Hold left mouse | Hold RT or RB |
-| Restart level | R | Back / Select |
-| Pause | Esc | Start |
-| Stats overlay | F3 | LB |
+| Jump / sprint | Space / Shift | A / L3 |
+| Black hole | Left mouse | RT |
+| Shield | Right mouse, E, 2 | LT, LB, RB |
+| Restart · pause · stats | R · Esc · F3 | Back · Start |
 
-**Phones and tablets** (landscape): drag the left half to move (the stick appears
-under your thumb), drag the right half to look, hold the violet button to charge
-and release to throw, tap the arrow to jump, II to pause.
+**Phones and tablets** (landscape): left thumb moves, drag on the right to
+aim, the violet button opens a black hole, the shield button next to it
+raises the shield, arrow to jump, II to pause.
 
 ## Play builds
 
@@ -39,16 +52,17 @@ and release to throw, tap the arrow to jump, II to pause.
 
 | Piece | File |
 | --- | --- |
-| Levels (open in the editor; structures preview) | `levels/*.tscn`, `scripts/game/level.gd`, `scripts/destruction/structure.gd` |
-| Level flow, stars, score, callouts | `scripts/game/level_run.gd`, `scripts/game/game_state.gd` |
+| Sandbox map (open in the editor; structures preview) | `levels/sandbox.tscn`, `scripts/game/level.gd`, `scripts/destruction/structure.gd` |
+| Sandbox flow, K.O. and respawn, callouts | `scripts/game/level_run.gd`, `scripts/game/game_state.gd` |
+| Powers: tuning, cooldowns, aiming | `scripts/powers/power_defs.gd`, `scripts/powers/power_caster.gd` |
+| Black hole / black ice shield | `scripts/powers/vortex.gd`, `ice_shield.gd` |
+| Health and what hurts | `scripts/player/player.gd`, `scripts/powers/hazards.gd` |
 | Menu (live attract-mode backdrop) | `scenes/menu.tscn`, `scripts/ui/main_menu.gd` |
 | Structural physics: health, loads, toppling, falling pieces | `scripts/destruction/structure_set.gd` |
 | Loose pieces: pooled server bodies + one MultiMesh | `scripts/destruction/debris_system.gd` |
 | Pre-fractured patterns | `scripts/destruction/fracture.gd` |
 | Concrete / wood / metal: look, weight, strength, breakage | `scripts/destruction/materials.gd`, `shaders/block.gdshader` |
-| Charge → blast tuning in one place | `scripts/power/blast_params.gd` |
-| Pull then burst | `scripts/power/gravity_blast.gd` |
-| Lens, sparks, dust, chips, shake, slow motion | `scripts/fx/*`, `shaders/*`, `scripts/core/game_world.gd` |
+| Sparks, dust, chips, shake | `scripts/fx/*`, `shaders/*`, `scripts/core/game_world.gd` |
 | Sound effects (synthesised, regenerate with `python3 tools/make_sounds.py`) | `audio/*.wav`, `scripts/core/sfx.gd` |
 
 ### Why pre-fractured box pieces (not runtime Voronoi)

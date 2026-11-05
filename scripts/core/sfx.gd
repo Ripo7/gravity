@@ -9,7 +9,6 @@ const MIN_GAP := 0.05  ## seconds between two starts of the same sound
 const MAX_ALIVE := 4  ## same sound playing at once
 
 const SOUNDS := {
-	"throw": preload("res://audio/throw.wav"),
 	"implode": preload("res://audio/implode.wav"),
 	"burst": preload("res://audio/burst.wav"),
 	"break_concrete": preload("res://audio/break_concrete.wav"),
@@ -21,11 +20,22 @@ const SOUNDS := {
 	"star": preload("res://audio/star.wav"),
 	"fanfare": preload("res://audio/fanfare.wav"),
 	"chain": preload("res://audio/chain.wav"),
+	"orb": preload("res://audio/orb.wav"),
+	"ice_rise": preload("res://audio/ice_rise.wav"),
+	"ice_hit": preload("res://audio/ice_hit.wav"),
+	"ice_break": preload("res://audio/ice_break.wav"),
+	"hurt": preload("res://audio/hurt.wav"),
+	"death": preload("res://audio/death.wav"),
+	"denied": preload("res://audio/denied.wav"),
+	"select": preload("res://audio/select.wav"),
+	"tier": preload("res://audio/tier.wav"),
+	"ready": preload("res://audio/ready.wav"),
 }
 const BREAKS := {
 	Materials.Kind.CONCRETE: "break_concrete",
 	Materials.Kind.WOOD: "break_wood",
 	Materials.Kind.METAL: "break_metal",
+	Materials.Kind.ICE: "ice_hit",
 }
 
 var _players: Array[AudioStreamPlayer3D] = []

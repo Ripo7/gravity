@@ -3,9 +3,8 @@ extends Node
 ##   --mode=showcase [--shots=DIR]  scripted blasts, optional screenshots
 ##   --mode=bench [--max=N]         body-count benchmark, prints BENCH lines
 ##   --mode=shot [--wait=S]         one screenshot of whatever is on screen
-##   --mode=play --level=PATH --throws="x,y,z@charge;..." [--from=x,y,z]
-##        plays a level with scripted throws (waits for each to settle),
-##        prints the result: used to tune star thresholds.
+##   --mode=play --steps="v@x,y,z;w1;s" [--from=x,y,z] [--god]
+##        plays with scripted casts and prints destruction, health, deaths.
 
 var options := {}
 var world: GameWorld
@@ -85,49 +84,56 @@ func _yaw_pitch(target: Vector3) -> Vector2:
 	return Vector2(yaw, pitch)
 
 
-## Charge for `seconds`, release, and return after the burst settles a bit.
-func _throw(seconds: float, shot_prefix := "") -> void:
-	var hand := player.power
-	hand.begin_charge()
-	await _wait(seconds * 0.75)
-	if shot_prefix != "":
-		await _shot(shot_prefix + "_charging")
-	await _wait(seconds * 0.25)
-	hand.release()
-	var args: Array = await world.detonated
-	var params: BlastParams = args[1]
-	if shot_prefix != "":
-		await _wait(params.pull_time * 0.6)
-		await _shot(shot_prefix + "_pull")
-		await _wait(params.pull_time * 0.4 + 0.06)
-		await _shot(shot_prefix + "_burst")
-	else:
-		await _wait(params.pull_time + 0.1)
+## Aims at `target` (not needed for the shield), waits for the cooldown,
+## casts. Optional screenshot right before casting.
+func _cast(power: int, target := Vector3.INF, shot_name := "") -> void:
+	var caster := player.power
+	if target != Vector3.INF:
+		await _aim(target, 0.4)
+	while not caster.is_ready(power):
+		await get_tree().process_frame
+	if shot_name != "":
+		await _shot(shot_name)
+	caster.cast_now(power)
 
 
 func _showcase() -> void:
 	await _wait(0.3)
-	_place(Vector3(-2, 0.05, 14), Vector3(-4, 2.5, 0))
+	_place(Vector3(0, 0.05, 34), Vector3(0, 5, 0))
 	await _wait(0.4)
-	await _shot("01_arena")
-	# 1: big blast into the left tower.
-	await _aim(Vector3(-12.5, 4.5, -8), 0.6)
-	await _throw(1.7, "02_tower")
-	await _wait(2.4)
-	await _shot("02_tower_after")
-	# 2: medium blast into the front wall.
-	await _aim(Vector3(1.5, 1.6, 2), 0.6)
-	await _throw(0.9, "03_wall")
-	await _wait(2.0)
-	await _shot("03_wall_after")
-	# 3: walk through the gap and hit the colonnade.
-	_place(Vector3(2, 0.05, -4), Vector3(0, 2.5, -16))
-	await _wait(0.3)
-	await _throw(1.7, "04_colonnade")
+	await _shot("01_start")
+	# 1: black hole in the south avenue, between the buildings.
+	await _cast(PowerDefs.Power.VORTEX, Vector3(0, 5, 16), "02_aim")
+	await _wait(1.5)
+	await _shot("02_vortex")
 	await _wait(2.5)
-	await _shot("04_colonnade_after")
-	# 4: overview.
-	_place(Vector3(10, 0.05, 16), Vector3(-6, 1.6, -10))
+	await _shot("02_spin")
+	await _wait(4.0)
+	await _shot("02_after")
+	# 2: shield up on the boulevard, then a black hole tears the building
+	# ahead apart.
+	_place(Vector3(2, 0.05, 2), Vector3(10, 4, -12))
+	await _wait(0.3)
+	await _cast(PowerDefs.Power.SHIELD)
+	await _wait(0.5)
+	await _shot("03_shield")
+	await _cast(PowerDefs.Power.VORTEX, Vector3(9, 4, -11))
+	await _wait(2.5)
+	await _shot("03_storm")
+	await _wait(4.0)
+	await _shot("03_after")
+	# 3: on the north walkway, shield, black hole in the far block.
+	_place(Vector3(0, 6.5, -12.5), Vector3(-10, 8, -31))
+	await _wait(0.3)
+	await _shot("04_walkway")
+	await _cast(PowerDefs.Power.SHIELD)
+	await _wait(0.6)
+	await _shot("04_shield")
+	await _cast(PowerDefs.Power.VORTEX, Vector3(-10, 8, -31))
+	await _wait(3.0)
+	await _shot("04_towers")
+	await _wait(5.0)
+	_place(Vector3(0, 0.05, 40), Vector3(0, 6, 0))
 	await _wait(0.5)
 	await _shot("05_overview")
 	print("SHOWCASE_DONE pieces=%d standing=%d" % [world.debris.active_count, world.structures.alive_count])
@@ -154,44 +160,45 @@ func _probe() -> void:
 		)
 
 
-## Plays the current level with scripted throws and reports the outcome.
+## Plays the level with a scripted list of steps and reports what happened.
+## Steps (separated by ";"): v/p/s [+ @x,y,z target], "w<seconds>" to wait,
+## "m<x,y,z>" to teleport there.
 func _play() -> void:
-	var run := world.get_node_or_null("Run") as LevelRun
 	if options.has("from"):
 		player.global_position = _vec(options["from"])
+	if options.has("god"):
+		player.invulnerable = true
+	var run := world.get_node_or_null("Run") as LevelRun
 	await _wait(0.6)
 	await _shot("00_start")
 	var k := 0
-	for spec: String in String(options.get("throws", "")).split(";", false):
+	var codes := {"v": PowerDefs.Power.VORTEX, "s": PowerDefs.Power.SHIELD}
+	for spec: String in String(options.get("steps", "")).split(";", false):
+		var kind := spec.substr(0, 1)
+		if kind == "w":
+			await _wait(float(spec.substr(1)))
+			continue
+		if kind == "m":
+			player.global_position = _vec(spec.substr(1))
+			continue
 		var parts := spec.split("@")
-		var target := _vec(parts[0])
-		var charge := float(parts[1]) if parts.size() > 1 else 1.0
+		var target := _vec(parts[1]) if parts.size() > 1 else Vector3.INF
 		k += 1
-		# Lead the target for the ball's slight drop.
-		var eye := player.global_position + Vector3(0, 1.6, 0)
-		var speed := BlastParams.from_charge(charge).throw_speed
-		var t := eye.distance_to(target) / speed
-		await _aim(target + Vector3.UP * 0.5 * PowerBall.GRAVITY * t * t, 0.5)
-		player.power.begin_charge()
-		await _wait(1.6 * charge)
-		player.power.release()
-		await world.detonated
-		await _wait(0.5)
-		await _shot("%02d_blast" % k)
-		await _wait(2.5)
-		await _shot("%02d_after" % k)
-		print("THROW %d destruction=%.3f" % [k, world.structures.destruction()])
-	if run and not run.level.is_sandbox():
-		if run.state != LevelRun.State.RESULT:
-			await run.finished
-		await _wait(2.0)
-		await _shot("99_result")
+		await _cast(codes[kind], target)
 		print(
 			(
-				"RESULT stars=%d score=%d destruction=%.3f"
-				% [run.result_stars, run.result_score, world.structures.destruction()]
+				"CAST %d %s destruction=%.3f hp=%d deaths=%d"
+				% [k, spec, world.structures.destruction(), player.health, run.deaths if run else 0]
 			)
 		)
+		if k % 2 == 0:
+			await _shot("%02d_cast" % k)
+	print(
+		(
+			"END destruction=%.3f hp=%d deaths=%d"
+			% [world.structures.destruction(), player.health, run.deaths if run else 0]
+		)
+	)
 	get_tree().quit()
 
 
@@ -200,15 +207,15 @@ func _still() -> void:
 	var p := _vec(options.get("pos", "0,0.05,15"))
 	var t := _vec(options.get("at", "0,3,0"))
 	_place(p, t)
-	if options.has("charge"):
-		player.power.begin_charge()
-		player.power.charge = float(options["charge"])
 	if options.has("touchdemo"):
 		_touch_demo()
-	if options.has("blast"):
-		var params := BlastParams.from_charge(float(options["blast"]))
+	if options.has("vortex"):
 		await _wait(0.2)
-		world.detonate(t, params)
+		world.cast_vortex(t)
+	if options.has("shieldat"):
+		# A shield seen from outside: --shieldat=x,y,z --shieldyaw=deg
+		var yaw := deg_to_rad(float(options.get("shieldyaw", "0")))
+		world.cast_shield(Transform3D(Basis(Vector3.UP, yaw), _vec(options["shieldat"])))
 	await _wait(float(options.get("wait", "0.5")))
 	await _shot(options.get("name", "still"))
 	get_tree().quit()
@@ -232,11 +239,11 @@ func _touch_demo() -> void:
 	drag.index = 0
 	drag.position = stick.position + Vector2(c.size.y * 0.04, -c.size.y * 0.1)
 	c._on_drag(drag)
-	var charge := InputEventScreenTouch.new()
-	charge.index = 1
-	charge.pressed = true
-	charge.position = c.charge_center()
-	c._on_touch(charge)
+	var cast := InputEventScreenTouch.new()
+	cast.index = 1
+	cast.pressed = true
+	cast.position = c.charge_center()
+	c._on_touch(cast)
 
 
 static func _vec(s: String) -> Vector3:
@@ -249,7 +256,8 @@ func _bench() -> void:
 	debris.retire_min_age = INF  # measure raw body counts, no soft budget
 	var step := int(options.get("step", "150"))
 	var limit := mini(int(options.get("max", "3000")), debris.capacity)
-	_place(Vector3(0, 0.05, 50), Vector3(0, 1, 30))
+	# A pile in the north avenue, between the buildings.
+	_place(Vector3(0, 0.05, -12), Vector3(0, 1, -30))
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 7
 	var over := 0
@@ -258,9 +266,9 @@ func _bench() -> void:
 	while debris.active_count + step <= limit:
 		for k in step:
 			var n := debris.active_count
-			var x := float(n % 12) * 1.1 - 6.0 + rng.randf_range(-0.2, 0.2)
-			var z := 30.0 + float(floori(n / 12.0) % 12) * 1.1 - 6.0
-			var y := 1.5 + float(floori(n / 144.0)) * 1.2 + rng.randf_range(0.0, 0.5)
+			var x := float(n % 10) * 1.1 - 5.0 + rng.randf_range(-0.2, 0.2)
+			var z := -30.0 + float(floori(n / 10.0) % 12) * 1.1 - 6.0
+			var y := 1.5 + float(floori(n / 120.0)) * 1.2 + rng.randf_range(0.0, 0.5)
 			var s := Vector3(rng.randf_range(0.3, 0.7), rng.randf_range(0.3, 0.7), rng.randf_range(0.3, 0.7))
 			debris.spawn(
 				Transform3D(Basis.from_euler(Vector3(rng.randf(), rng.randf(), 0)), Vector3(x, y, z)), s
@@ -268,13 +276,13 @@ func _bench() -> void:
 		var falling := await _measure(2.0)
 		await _wait(2.0)
 		var settled := await _measure(1.0)
-		world.detonate(Vector3(0, 1.0, 30), BlastParams.from_charge(1.0))
-		await _wait(0.4)
-		var blast := await _measure(1.5)
-		await _wait(1.5)
+		world.cast_vortex(Vector3(0, 1.0, -30))
+		await _wait(PowerDefs.VORTEX_SPINUP + 1.0)
+		var blast := await _measure(2.0)
+		await _wait(PowerDefs.VORTEX_DURATION)
 		_report(
 			(
-				"BENCH bodies=%d  physics ms: falling %.1f  settled %.1f  blast %.1f  |  fps %d"
+				"BENCH bodies=%d  physics ms: falling %.1f  settled %.1f  vortex %.1f  |  fps %d"
 				% [debris.active_count, falling.x, settled.x, blast.x, blast.y]
 			)
 		)

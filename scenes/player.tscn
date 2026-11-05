@@ -1,9 +1,8 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/player/player.gd" id="1_player"]
 [ext_resource type="Script" path="res://scripts/fx/camera_shake.gd" id="2_shake"]
-[ext_resource type="Script" path="res://scripts/player/power_hand.gd" id="3_hand"]
-[ext_resource type="Material" path="res://materials/power.tres" id="4_power"]
+[ext_resource type="Script" path="res://scripts/powers/power_caster.gd" id="3_power"]
 
 [sub_resource type="CapsuleShape3D" id="body_shape"]
 radius = 0.35
@@ -29,7 +28,6 @@ near = 0.05
 far = 400.0
 script = ExtResource("2_shake")
 
-[node name="PowerHand" type="Node3D" parent="Head/Camera3D"]
+[node name="Power" type="Node3D" parent="Head/Camera3D"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.32, -0.26, -0.55)
-script = ExtResource("3_hand")
-ball_material = ExtResource("4_power")
+script = ExtResource("3_power")

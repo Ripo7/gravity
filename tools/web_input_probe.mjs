@@ -57,7 +57,8 @@ async function menuTap(useTouch) {
   await p.goto("http://localhost:8061/index.html");
   await p.waitForFunction(() => !document.getElementById("status"), null, { timeout: 120000 });
   for (let i = 0; i < 60 && !play; i++) await p.waitForTimeout(500);
-  const box = await p.locator("canvas").boundingBox();
+  // The live menu backdrop can keep a software-WebGL runner busy: be patient.
+  const box = await p.locator("canvas").boundingBox({ timeout: 120000 });
   const size = await p.evaluate(() => [document.querySelector("canvas").width, window.devicePixelRatio]);
   const [x, y] = play ?? [260, 330];
   // Godot reports canvas pixels; convert to CSS pixels.
