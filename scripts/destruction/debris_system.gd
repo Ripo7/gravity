@@ -228,6 +228,7 @@ func _build_pool() -> void:
 		_multimesh.mesh = ShardLibrary.mesh
 		if material is ShaderMaterial:
 			(material as ShaderMaterial).set_shader_parameter("shard_shapes", ShardLibrary.shapes)
+			(material as ShaderMaterial).set_shader_parameter("shard_centers", ShardLibrary.centers)
 	else:
 		var box := BoxMesh.new()
 		box.subdivide_width = 1
@@ -530,6 +531,11 @@ func set_storm(i: int, on: bool) -> void:
 	# Sweeping hundreds of fast orbiting pieces every step is the other big
 	# cost; inside the storm a piece may as well cut through a thin panel.
 	PhysicsServer3D.body_set_enable_continuous_collision_detection(_bodies[i], not on)
+
+
+## Pool slots still free (no piece has to be recycled for these).
+func free_slots() -> int:
+	return _free.size()
 
 
 func in_storm(i: int) -> bool:

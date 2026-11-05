@@ -15,6 +15,10 @@ extends RefCounted
 ## Concrete and wood shards also carry their sub-shards (the cascade): the
 ## pieces they split into when they break again, which tile them exactly,
 ## in the same pattern space.
+##
+## Wall patterns are cut for walls that crack open in place (WallCells):
+## prisms through the cube's thickness (z), each listing the cells it
+## touches as [cell, shared face area, normal x, normal y] (unit space).
 
 const PATH := "res://assets/shards/shards.json"
 const KINDS := {
@@ -25,8 +29,12 @@ const KINDS := {
 
 static var mesh: ArrayMesh
 static var shapes: ImageTexture
+## Centre of every shard in its pattern (one texel per shard): the shader
+## places patterns in the whole block's space, so they run on across pieces.
+static var centers: ImageTexture
 static var _patterns := {}  # kind -> Array[Array[Dictionary]]
 static var _by_id := {}  # shard id -> Dictionary (its "children" too)
+static var _walls: Array[Dictionary] = []  # {"aspect", "count", "shards"}
 static var _tried := false
 
 
@@ -52,6 +60,23 @@ static func has(kind: int) -> bool:
 ## The shard with this id (empty if unknown).
 static func shard(id: int) -> Dictionary:
 	return _by_id.get(id, {})
+
+
+static func has_walls() -> bool:
+	return ensure() and not _walls.is_empty()
+
+
+## The wall pattern closest to a face `aspect` wide (width / height) with
+## about `count` cells.
+static func wall_pattern(aspect: float, count: int) -> Array:
+	var best: Dictionary = {}
+	var score := INF
+	for w: Dictionary in _walls:
+		var s := absf(log(aspect / float(w["aspect"]))) * 4.0 + absf(log(float(count) / float(w["count"])))
+		if s < score:
+			score = s
+			best = w
+	return best["shards"]
 
 
 ## The sub-shards a shard splits into (empty when it has none).
@@ -126,6 +151,18 @@ static func _build(d: Dictionary) -> void:
 			list.append(shards)
 		if not list.is_empty():
 			_patterns[kind] = list
+	for w: Dictionary in d.get("walls", []):
+		var cells: Array = []
+		for s: Dictionary in w["shards"]:
+			var entry := _entry(s)
+			entry["links"] = s.get("links", [])
+			cells.append(entry)
+		_walls.append({"aspect": float(w["aspect"]), "count": int(w["count"]), "shards": cells})
+	var c := Image.create(int(d["shard_count"]), 1, false, Image.FORMAT_RGBAH)
+	for id: int in _by_id:
+		var v: Vector3 = _by_id[id]["center"]
+		c.set_pixel(id, 0, Color(v.x, v.y, v.z, 1.0))
+	centers = ImageTexture.create_from_image(c)
 
 
 static func _entry(s: Dictionary) -> Dictionary:

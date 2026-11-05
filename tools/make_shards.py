@@ -12,6 +12,13 @@ tile it exactly (the cascade): when a piece breaks a second time it splits
 along cracks that were already inside it. The fracture seeds come from a
 Geometry Nodes group (Mesh to Volume -> Distribute Points in Volume), so
 they fill any closed shape, not just boxes.
+
+Wall patterns are cut for walls that crack open in place: a unit cube split
+into prisms through its thickness (z), seeded by a Geometry Nodes Poisson
+disk on the face (Distribute Points on Faces with a minimum distance), so
+the cells come out even, like stones. Their cut faces stay flat (a cracked
+wall shows no gaps), and each cell lists the cells it touches and the area
+of the face they share: the game links them into the wall's load paths.
 Each shard is then sampled onto one shared vertex layout (a subdivided cube
 wrapped around the shard) so the game can draw every shard of every
 pattern with a single mesh, one draw call, reading the shape from a
@@ -50,13 +57,16 @@ PATTERNS = {
     "metal": [(2, 3), (3, 3)],
 }
 STATS = {"gn_points": 0, "fallbacks": 0}
+# Wall patterns: face width / height they are cut for, and cell counts.
+WALL_ASPECTS = (0.4, 1.0, 2.5)
+WALL_COUNTS = (8, 16, 28)
 # Materials whose shards are cut again into sub-shards (metal tears, it
 # does not crumble).
 CASCADE = ("concrete", "wood")
 # Grain of the cut for wood (squashed along x before cutting: splinters).
 STRETCH = {"concrete": (1.0, 1.0, 1.0), "wood": (0.25, 1.0, 1.0)}
 # Roughness of the fracture faces (unit-cube units, inward only).
-ROUGH = {"concrete": 0.045, "wood": 0.06, "metal": 0.05}
+ROUGH = {"concrete": 0.045, "wood": 0.06, "metal": 0.05, "wall": 0.0}
 
 
 # --- Shared vertex layout -------------------------------------------------------
@@ -290,6 +300,109 @@ def child_count(volume):
     return 3 if volume < 0.12 else (4 if volume < 0.28 else 5)
 
 
+# --- Wall patterns ------------------------------------------------------------------
+
+
+def poisson_group():
+    """Geometry Nodes: Poisson-disk points on a face (Distribute Points on
+    Faces, minimum distance), as mesh vertices."""
+    ng = bpy.data.node_groups.get("WallSeeds")
+    if ng is not None:
+        return ng
+    ng = bpy.data.node_groups.new("WallSeeds", "GeometryNodeTree")
+    ng.interface.new_socket("Geometry", in_out="INPUT", socket_type="NodeSocketGeometry")
+    ng.interface.new_socket("Geometry", in_out="OUTPUT", socket_type="NodeSocketGeometry")
+    gin = ng.nodes.new("NodeGroupInput")
+    gout = ng.nodes.new("NodeGroupOutput")
+    scatter = ng.nodes.new("GeometryNodeDistributePointsOnFaces")
+    scatter.name = "Scatter"
+    scatter.distribute_method = "POISSON"
+    to_verts = ng.nodes.new("GeometryNodePointsToVertices")
+    ng.links.new(gin.outputs["Geometry"], scatter.inputs["Mesh"])
+    ng.links.new(scatter.outputs["Points"], to_verts.inputs["Points"])
+    ng.links.new(to_verts.outputs["Mesh"], gout.inputs["Geometry"])
+    return ng
+
+
+def wall_seeds(aspect, count, rng):
+    """`count` seeds on a face `aspect` wide and 1 high (z = 0)."""
+    bm = bmesh.new()
+    bmesh.ops.create_grid(bm, x_segments=1, y_segments=1, size=0.5)
+    for v in bm.verts:
+        v.co.x *= aspect
+    mesh = bpy.data.meshes.new("face")
+    bm.to_mesh(mesh)
+    bm.free()
+    obj = bpy.data.objects.new("face", mesh)
+    bpy.context.scene.collection.objects.link(obj)
+    group = poisson_group()
+    scatter = group.nodes["Scatter"]
+    scatter.inputs["Distance Min"].default_value = 0.8 * math.sqrt(aspect / count)
+    scatter.inputs["Density Max"].default_value = 40.0 * count / aspect
+    scatter.inputs["Seed"].default_value = rng.randrange(1 << 20)
+    mod = obj.modifiers.new("seeds", "NODES")
+    mod.node_group = group
+    obj.update_tag()
+    evaluated = obj.evaluated_get(bpy.context.evaluated_depsgraph_get())
+    points = [Vector((v.co.x, v.co.y, 0.0)) for v in evaluated.data.vertices]
+    bpy.data.objects.remove(obj)
+    bpy.data.meshes.remove(mesh)
+    STATS["gn_points"] += len(points)
+    while len(points) < count:
+        STATS["fallbacks"] += 1
+        points.append(Vector((rng.uniform(-0.48, 0.48) * aspect, rng.uniform(-0.48, 0.48), 0.0)))
+    rng.shuffle(points)
+    chosen = [points[0]]
+    while len(chosen) < count:
+        chosen.append(max(points, key=lambda p: min((p - c).length for c in chosen)))
+    return chosen
+
+
+def wall_cells(aspect, count, rng):
+    """Prisms through the thickness of a unit cube, cut around seeds on a
+    face `aspect` wide; returns (bmesh, links) per cell, links being
+    (other cell, shared face area, normal x, normal y) in unit space."""
+    seeds = wall_seeds(aspect, count, rng)
+    stretch = (aspect, 1.0, 1.0)
+    cells = []
+    for i, s in enumerate(seeds):
+        bm = unit_cube(stretch)
+        for j, t in enumerate(seeds):
+            if i != j:
+                cut(bm, (s + t) * 0.5, (t - s).normalized())
+        if len(bm.faces) < 4 or bm.calc_volume() < 1e-6:
+            bm.free()
+            continue
+        # Which face lies on which bisector: that cell is a neighbour.
+        faces = []
+        for f in bm.faces:
+            if f.material_index != 1:
+                continue
+            c = f.calc_center_median()
+            for j, t in enumerate(seeds):
+                if j == i:
+                    continue
+                n = (t - s).normalized()
+                if abs((c - (s + t) * 0.5).dot(n)) < 1e-4 and f.normal.dot(n) > 0.99:
+                    faces.append((j, f))
+                    break
+        for v in bm.verts:
+            v.co.x /= aspect
+        bm.normal_update()
+        links = []
+        for j, f in faces:
+            n = f.normal
+            links.append((j, f.calc_area(), n.x, n.y))
+        cells.append((i, bm, links))
+    # Seed index -> cell index (a seed whose cell vanished has none).
+    index = {seed: k for k, (seed, _, _) in enumerate(cells)}
+    out = []
+    for seed, bm, links in cells:
+        kept = [(index[j], a, nx, ny) for j, a, nx, ny in links if j in index and a > 1e-5]
+        out.append((bm, kept))
+    return out
+
+
 # --- Sampling onto the shared layout ---------------------------------------------
 
 
@@ -422,6 +535,21 @@ def main():
                 library[kind].append(pattern)
                 col += 1
                 print("%s: pattern %d with %d pieces" % (kind, col, pattern["count"]))
+    walls = []
+    for a_k, aspect in enumerate(WALL_ASPECTS):
+        for c_k, count in enumerate(WALL_COUNTS):
+            pattern = {"aspect": aspect, "count": count, "shards": []}
+            for k, (bm, links) in enumerate(wall_cells(aspect, count, rng)):
+                s = sample(bm, layout, "wall", 0.0)
+                s["id"] = len(rows)
+                rows.append(s.pop("verts"))
+                s["links"] = [[j, round(area, 5), round(nx, 4), round(ny, 4)] for j, area, nx, ny in links]
+                pattern["shards"].append(s)
+                at = Vector((c_k * 1.8, -3.0 - a_k * 2.0, 0)) + Vector(s["center"]) * 1.15
+                add_preview(bm, "wall_%d_%d_%d" % (a_k, c_k, k), at, "wall")
+                bm.free()
+            walls.append(pattern)
+            print("wall: aspect %.1f, %d cells" % (aspect, len(pattern["shards"])))
     data = bytearray()
     for row in rows:
         for loc, outer in row:
@@ -437,6 +565,7 @@ def main():
                 "shard_count": len(rows),
                 "shapes_rgba16f_b64": base64.b64encode(bytes(data)).decode(),
                 "materials": library,
+                "walls": walls,
             },
             f,
             separators=(",", ":"),

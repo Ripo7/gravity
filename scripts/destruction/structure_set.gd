@@ -25,7 +25,6 @@ signal floor_crushed(at: Vector3, count: int, speed: float)
 
 enum State { GONE, STATIC, FALLING }
 
-const FLOATS_PER_INSTANCE := 20  # 12 transform + 4 colour + 4 custom
 const CONTACT_EPS := 0.03
 const GROUND_EPS := 0.03
 const GRID_CELL := 2.0
@@ -79,14 +78,14 @@ const LEAN_SPEED := 2.0  ## leaning counts like an impact at this speed
 var dust: DustSystem  ## optional: gravel and dust when rubble is crushed
 var rebar: RebarSystem  ## optional: steel rods left in broken concrete
 var alive_count := 0
+var walls: WallCells  ## walls that crack open in place
 
 var _state := PackedByteArray()
 var _xform: Array[Transform3D] = []  # global rest transform
 var _local: Array[AABB] = []  # in the structure's own space
 var _round := PackedInt32Array()  ## slot in the round (cylinder) MultiMesh, -1 = box
 var _round_count := 0
-var _rbuffer := PackedFloat32Array()
-var _round_mm: MultiMesh
+var _mesh: StructureMesh
 var _size := PackedVector3Array()
 var _kind := PackedByteArray()
 var _seed := PackedFloat32Array()
@@ -110,7 +109,6 @@ var _shape_cache := {}
 var _rid_to_seg := {}
 var _grid := SphereGrid.new(GRID_CELL)
 ## One instance row, reused (no allocation per block per frame).
-var _row := PackedFloat32Array()
 var _dirty_groups := {}
 ## group -> heights (structure space) where blocks went since its last check:
 ## where a tower may now pivot over what is left of a course.
@@ -122,12 +120,11 @@ var _pending: Array[Dictionary] = []  # {comp, toppled, time, group}
 ## block -> blocks of other structures it rests on, and the reverse.
 var _anchors := {}
 var _power_tint := 0.0  ## violet glow for pieces broken right now
+var _alive_mass := 0.0
+var _built_mass := 0.0
 var _whole_max := float(Quality.pick(WHOLE_MAX_VOLUME.x, WHOLE_MAX_VOLUME.y, WHOLE_MAX_VOLUME.z))
 var _hit := PackedVector3Array()  ## where each block was hit (unit space + 1)
 var _anchored_by := {}
-var _multimesh: MultiMesh
-var _buffer := PackedFloat32Array()
-var _buffer_dirty := false
 
 
 func _exit_tree() -> void:
@@ -140,6 +137,8 @@ func _exit_tree() -> void:
 		PhysicsServer3D.free_rid(rid)
 	_bodies.clear()
 	_shape_cache.clear()
+	if walls:
+		walls.free_shapes()
 
 
 # --- Building ----------------------------------------------------------------
@@ -150,54 +149,33 @@ func _exit_tree() -> void:
 func add_structure(origin: Transform3D, segments: Array[Dictionary]) -> int:
 	var group_id := _groups.size()
 	var members := PackedInt32Array()
-	var space := get_world_3d().space
-	for seg in segments:
-		var i := _xform.size()
-		var local: Transform3D = seg["local"]
-		var size: Vector3 = seg["size"]
-		var global := origin * local
-		var kind: int = seg.get("material", Materials.Kind.CONCRETE)
-		var volume := size.x * size.y * size.z
-		_state.append(State.STATIC)
-		_xform.append(global)
-		# Bounds in structure space (segments may be tilted, e.g. ramps).
-		_local.append(local * AABB(-size * 0.5, size))
-		_size.append(size)
-		_kind.append(kind)
-		_seed.append(seg.get("seed", randf()))
-		if seg.get("round", false):
-			_round.append(_round_count)
-			_round_count += 1
-		else:
-			_round.append(-1)
-		_shade.append(seg.get("shade", 1.0))
-		_hit.append(Vector3.ZERO)
-		var hp: float = seg.get("strength", 3.0) * Materials.prop(kind, "strength")
-		_health.append(hp)
-		_max_health.append(hp)
-		_mass.append(volume * Materials.prop(kind, "density"))
-		_capacity.append(0.0)
-		_shear_cap.append(0.0)
-		_load.append(0.0)
-		_group.append(group_id)
-		_grounded.append(1 if _local[i].position.y <= GROUND_EPS else 0)
-		_neighbors.append(PackedInt32Array())
-		_supporters.append(PackedInt32Array())
-		_support_area.append(PackedFloat32Array())
-		var body := PhysicsServer3D.body_create()
-		PhysicsServer3D.body_set_mode(body, PhysicsServer3D.BODY_MODE_STATIC)
-		PhysicsServer3D.body_add_shape(body, _box_shape(size))
-		PhysicsServer3D.body_set_collision_layer(body, DebrisSystem.LAYER_STRUCTURES)
-		PhysicsServer3D.body_set_collision_mask(body, 0)
-		PhysicsServer3D.body_set_state(body, PhysicsServer3D.BODY_STATE_TRANSFORM, global)
-		PhysicsServer3D.body_set_space(body, space)
-		_bodies.append(body)
-		_rid_to_seg[body] = i
-		_grid.insert(i, global.origin, size.length() * 0.5)
-		members.append(i)
-		alive_count += 1
+	var before := _alive_mass
+	if walls == null:
+		walls = WallCells.new(self)
 	_groups.append(members)
 	_group_origin.append(origin)
+	for seg in segments:
+		var local: Transform3D = seg["local"]
+		var size: Vector3 = seg["size"]
+		var kind: int = seg.get("material", Materials.Kind.CONCRETE)
+		var hp: float = seg.get("strength", 3.0) * Materials.prop(kind, "strength")
+		var i := add_block(
+			group_id,
+			origin * local,
+			local * AABB(-size * 0.5, size),  # bounds in structure space (ramps tilt)
+			size,
+			kind,
+			seg.get("seed", randf()),
+			seg.get("shade", 1.0),
+			hp,
+			size.x * size.y * size.z * Materials.prop(kind, "density"),
+			_box_shape(size)
+		)
+		if seg.get("round", false):
+			_round[i] = _round_count
+			_round_count += 1
+	members = _groups[group_id]
+	_built_mass += _alive_mass - before
 	_link(members)
 	# Calibrate capacities on the intact structure so it always stands.
 	# Blocks held from the side (lintels, arch stones) get the same reserve
@@ -212,6 +190,67 @@ func add_structure(origin: Transform3D, segments: Array[Dictionary]) -> int:
 		_shear_cap[i] = maxf(held * SAFETY[_kind[i]] * robust, _mass[i] * SHEAR_WEIGHTS[_kind[i]])
 	_rebuild_multimesh()
 	return group_id
+
+
+## Adds one static block to structure `group` (also used for the cells a
+## wall cracks into, see WallCells). Returns its index.
+func add_block(
+	group: int,
+	global: Transform3D,
+	local: AABB,
+	size: Vector3,
+	kind: int,
+	seed_value: float,
+	shade: float,
+	hp: float,
+	mass: float,
+	shape: RID
+) -> int:
+	var i := _xform.size()
+	_state.append(State.STATIC)
+	_xform.append(global)
+	_local.append(local)
+	_size.append(size)
+	_kind.append(kind)
+	_seed.append(seed_value)
+	_round.append(-1)
+	_shade.append(shade)
+	_hit.append(Vector3.ZERO)
+	_health.append(hp)
+	_max_health.append(hp)
+	_mass.append(mass)
+	_capacity.append(0.0)
+	_shear_cap.append(0.0)
+	_load.append(0.0)
+	_group.append(group)
+	_grounded.append(1 if local.position.y <= GROUND_EPS else 0)
+	_neighbors.append(PackedInt32Array())
+	_supporters.append(PackedInt32Array())
+	_support_area.append(PackedFloat32Array())
+	var body := PhysicsServer3D.body_create()
+	PhysicsServer3D.body_set_mode(body, PhysicsServer3D.BODY_MODE_STATIC)
+	PhysicsServer3D.body_add_shape(body, shape)
+	PhysicsServer3D.body_set_collision_layer(body, DebrisSystem.LAYER_STRUCTURES)
+	PhysicsServer3D.body_set_collision_mask(body, 0)
+	PhysicsServer3D.body_set_state(body, PhysicsServer3D.BODY_STATE_TRANSFORM, global)
+	PhysicsServer3D.body_set_space(body, get_world_3d().space)
+	_bodies.append(body)
+	_rid_to_seg[body] = i
+	_grid.insert(i, global.origin, size.length() * 0.5)
+	_groups[group].append(i)
+	alive_count += 1
+	_alive_mass += mass
+	return i
+
+
+## Links blocks `a` and `b` as touching; `area` > 0 if `b` holds `a` up.
+func link_blocks(a: int, b: int, support_area := 0.0) -> void:
+	if not _neighbors[a].has(b):
+		_neighbors[a].append(b)
+		_neighbors[b].append(a)
+	if support_area > 0.0:
+		_supporters[a].append(b)
+		_support_area[a].append(support_area)
 
 
 ## Call once every structure is in: a structure whose base is not on the
@@ -377,8 +416,10 @@ func cluster_point(rid: RID, p: Vector3) -> Vector3:
 
 
 ## Share of all blocks still standing (1 = intact).
+## Share of what was built that still stands (by mass: cracked walls add
+## blocks, not matter).
 func standing_fraction() -> float:
-	return float(alive_count) / maxf(_xform.size(), 1.0)
+	return clampf(_alive_mass / maxf(_built_mass, 1e-6), 0.0, 1.0)
 
 
 # --- Damage --------------------------------------------------------------------
@@ -460,9 +501,21 @@ func _surface_distance(i: int, p: Vector3) -> float:
 
 
 func _shatter(i: int, from: Vector3, dmg: float, inherit := Vector3.ZERO) -> void:
+	# A wall hit for real cracks open in place (break_segment, dmg 0, takes
+	# the whole block out: tools and tests).
+	if walls and dmg > 0.0 and _state[i] == State.STATIC and walls.can_crack(i):
+		walls.crack(i, from, dmg, _power_tint)
+		return
 	var xf := _current_transform(i)
 	var size := _size[i]
 	var kind := _kind[i]
+	if walls and walls.is_cell(i):
+		# A cell of a cracked wall is knocked out whole (it breaks on landing).
+		var away := (xf.origin - from).normalized() * minf(dmg, 6.0) * 0.4
+		_remove(i)
+		shattered.emit(xf.origin, size, kind)
+		walls.to_debris(i, xf, away + inherit, Vector3.ZERO, _power_tint)
+		return
 	_remove(i)
 	shattered.emit(xf.origin, size, kind)
 	if kind == Materials.Kind.CONCRETE:
@@ -483,6 +536,9 @@ func _dislodge(i: int, velocity: Vector3, spin := Vector3.ZERO, tint := 0.5) -> 
 	_remove(i)
 	if debris == null:
 		return
+	if walls and walls.is_cell(i):
+		walls.to_debris(i, xf, velocity, spin, tint)
+		return
 	var size := _size[i]
 	if size.x * size.y * size.z > _whole_max and ShardLibrary.has(_kind[i]):
 		debris.shatter_box(
@@ -501,6 +557,7 @@ func _remove(i: int) -> void:
 	_state[i] = State.GONE
 	if was_standing:
 		alive_count -= 1
+		_alive_mass -= _mass[i]
 		PhysicsServer3D.body_set_space(_bodies[i], RID())
 		_dirty_groups[_group[i]] = true
 		_note_cut(i)
@@ -510,7 +567,6 @@ func _remove(i: int) -> void:
 			debris.thaw_box((_xform[i] * AABB(-_size[i] * 0.5, _size[i])).grow(0.2), 0.3)
 		_unanchor(i)
 	_clear_instance(i)
-	_buffer_dirty = true
 
 
 # --- Stability -----------------------------------------------------------------
@@ -633,19 +689,23 @@ func _inside_section(com: Vector2, pts: PackedVector2Array) -> bool:
 
 func _components(members: PackedInt32Array) -> Array[PackedInt32Array]:
 	var out: Array[PackedInt32Array] = []
-	var seen := {}
+	# Flags in a packed array: a Dictionary lookup per block per re-check
+	# was most of the cost on a whole palace.
+	var seen := PackedByteArray()
+	seen.resize(_xform.size())
 	for start in members:
-		if _state[start] != State.STATIC or seen.has(start):
+		if _state[start] != State.STATIC or seen[start]:
 			continue
 		var comp := PackedInt32Array()
-		var stack: Array[int] = [start]
-		seen[start] = true
+		var stack := PackedInt32Array([start])
+		seen[start] = 1
 		while not stack.is_empty():
-			var i: int = stack.pop_back()
+			var i := stack[stack.size() - 1]
+			stack.resize(stack.size() - 1)
 			comp.append(i)
 			for n in _neighbors[i]:
-				if _state[n] == State.STATIC and not seen.has(n):
-					seen[n] = true
+				if not seen[n] and _state[n] == State.STATIC:
+					seen[n] = 1
 					stack.append(n)
 		out.append(comp)
 	return out
@@ -654,11 +714,12 @@ func _components(members: PackedInt32Array) -> Array[PackedInt32Array]:
 ## Top-down load flow: each block passes its weight plus everything it holds
 ## to the blocks it rests on, in proportion to the contact area.
 func _compute_loads(comp: PackedInt32Array) -> Dictionary:
-	var supported := {}
+	var supported := PackedByteArray()
+	supported.resize(_xform.size())
 	for i in comp:
 		for s in _supporters[i]:
 			if _state[s] == State.STATIC:
-				supported[i] = true
+				supported[i] = 1
 				break
 	# Highest first; at equal height (to the cm), side-held blocks first so
 	# the load they hand sideways is counted by their neighbours. Sorted as
@@ -669,29 +730,28 @@ func _compute_loads(comp: PackedInt32Array) -> Dictionary:
 	for k in comp.size():
 		var i := comp[k]
 		var y_cm := int(roundf(_local[i].position.y * 100.0))
-		var rank := (100000 - y_cm) * 2 + (1 if supported.has(i) else 0)
+		var rank := (100000 - y_cm) * 2 + supported[i]
 		order[k] = (rank << 20) | i
 	order.sort()
-	var incoming := {}
+	var incoming := PackedFloat32Array()
+	incoming.resize(_xform.size())
 	var shear := {}
 	for key in order:
 		var i := key & 0xFFFFF
-		var total: float = _mass[i] + incoming.get(i, 0.0)
+		var total: float = _mass[i] + incoming[i]
 		_load[i] = total
 		if _grounded[i]:
 			continue
+		var below := _supporters[i]
+		var areas := _support_area[i]
 		var area := 0.0
-		var sup: Array[int] = []
-		var areas: Array[float] = []
-		for k in _supporters[i].size():
-			var s := _supporters[i][k]
-			if _state[s] == State.STATIC:
-				sup.append(s)
-				areas.append(_support_area[i][k])
-				area += _support_area[i][k]
+		for k in below.size():
+			if _state[below[k]] == State.STATIC:
+				area += areas[k]
 		if area > 0.0:
-			for k in sup.size():
-				incoming[sup[k]] = incoming.get(sup[k], 0.0) + total * areas[k] / area
+			for k in below.size():
+				if _state[below[k]] == State.STATIC:
+					incoming[below[k]] += total * areas[k] / area
 			continue
 		# Held only from the side (lintel ends, overhangs): shear.
 		shear[i] = total
@@ -700,7 +760,7 @@ func _compute_loads(comp: PackedInt32Array) -> Dictionary:
 			if _state[n] == State.STATIC and _local[n].position.y <= _local[i].position.y + CONTACT_EPS:
 				side.append(n)
 		for n in side:
-			incoming[n] = incoming.get(n, 0.0) + total / side.size()
+			incoming[n] += total / side.size()
 	return shear
 
 
@@ -824,6 +884,7 @@ func _release(comp: PackedInt32Array, toppled: bool) -> int:
 		_state[i] = State.FALLING
 		_unanchor(i)
 		alive_count -= 1
+		_alive_mass -= _mass[i]
 		PhysicsServer3D.body_set_space(_bodies[i], RID())
 	PhysicsServer3D.body_set_param(c.body, PhysicsServer3D.BODY_PARAM_MASS, c.mass)
 	if comp.size() >= PANCAKE_MIN:
@@ -1168,10 +1229,9 @@ func _physics_process(delta: float) -> void:
 		_dirty_groups.clear()
 		for g: int in groups:
 			_settle_group(g, true)
-	if _buffer_dirty:
-		_multimesh.buffer = _buffer
-		_round_mm.buffer = _rbuffer
-		_buffer_dirty = false
+	_mesh.flush()
+	if walls:
+		walls.flush()
 
 
 ## Static blocks whose bounds may reach within `radius` of `p`.
@@ -1196,99 +1256,29 @@ func _box_shape(size: Vector3) -> RID:
 
 
 func _write_instance(i: int, xf: Transform3D) -> void:
-	# Round blocks (columns) are drawn by the cylinder MultiMesh; their
-	# slot in the box one stays empty.
-	var b := xf.basis
-	var s := _size[i]
-	if _row.size() != FLOATS_PER_INSTANCE:
-		_row.resize(FLOATS_PER_INSTANCE)
-	_row[0] = b.x.x * s.x
-	_row[1] = b.y.x * s.y
-	_row[2] = b.z.x * s.z
-	_row[3] = xf.origin.x
-	_row[4] = b.x.y * s.x
-	_row[5] = b.y.y * s.y
-	_row[6] = b.z.y * s.z
-	_row[7] = xf.origin.y
-	_row[8] = b.x.z * s.x
-	_row[9] = b.y.z * s.y
-	_row[10] = b.z.z * s.z
-	_row[11] = xf.origin.z
-	_row[12] = _shade[i]
-	_row[13] = 1.0 if _round[i] >= 0 else 0.0
-	_row[14] = fposmod(_seed[i], 1.0)
-	_row[15] = 0.0
-	_row[16] = Materials.custom(_kind[i], 1.0 - clampf(_health[i] / _max_health[i], 0.0, 1.0), _seed[i])
-	_row[17] = _hit[i].x
-	_row[18] = _hit[i].y
-	_row[19] = _hit[i].z
-	if _round[i] >= 0:
-		var o := _round[i] * FLOATS_PER_INSTANCE
-		for k in FLOATS_PER_INSTANCE:
-			_rbuffer[o + k] = _row[k]
-	else:
-		var o := i * FLOATS_PER_INSTANCE
-		for k in FLOATS_PER_INSTANCE:
-			_buffer[o + k] = _row[k]
-	_buffer_dirty = true
+	var damage := 1.0 - clampf(_health[i] / _max_health[i], 0.0, 1.0)
+	if walls and walls.is_cell(i):
+		walls.write(i, xf, damage)
+		return
+	var custom := Materials.custom(_kind[i], damage, _seed[i])
+	_mesh.write(i, _round[i], xf, _size[i], _shade[i], _seed[i], custom, _hit[i])
 
 
 func _clear_instance(i: int) -> void:
-	if _round[i] >= 0:
-		var r := _round[i] * FLOATS_PER_INSTANCE
-		for k in FLOATS_PER_INSTANCE:
-			_rbuffer[r + k] = 0.0
-		return
-	var o := i * FLOATS_PER_INSTANCE
-	for k in FLOATS_PER_INSTANCE:
-		_buffer[o + k] = 0.0
+	if walls and walls.is_cell(i):
+		walls.clear(i)
+	else:
+		_mesh.clear(i, _round[i])
 
 
 func _rebuild_multimesh() -> void:
-	if _multimesh == null:
-		var box := BoxMesh.new()
-		box.size = Vector3.ONE
-		_multimesh = _make_multimesh(box, "StructureMesh")
-		# Columns: a unit cylinder, enough sides to read round up close.
-		var cyl := CylinderMesh.new()
-		cyl.top_radius = 0.5
-		cyl.bottom_radius = 0.5
-		cyl.height = 1.0
-		cyl.radial_segments = int(Quality.pick(12, 16, 20))
-		cyl.rings = 1
-		_round_mm = _make_multimesh(cyl, "ColumnMesh")
+	if _mesh == null:
+		_mesh = StructureMesh.new(self, material)
 	var n := _xform.size()
-	_buffer.resize(n * FLOATS_PER_INSTANCE)
-	_rbuffer.resize(maxi(_round_count, 1) * FLOATS_PER_INSTANCE)
-	_rbuffer.fill(0.0)
+	_mesh.resize(n, _round_count)
 	for i in n:
-		if _round[i] >= 0:
-			var o := i * FLOATS_PER_INSTANCE
-			for k in FLOATS_PER_INSTANCE:
-				_buffer[o + k] = 0.0
 		if _state[i] == State.GONE:
 			_clear_instance(i)
 		else:
 			_write_instance(i, _xform[i])
-	_multimesh.instance_count = n
-	_multimesh.buffer = _buffer
-	_round_mm.instance_count = maxi(_round_count, 1)
-	_round_mm.buffer = _rbuffer
-	_buffer_dirty = false
-
-
-func _make_multimesh(mesh: Mesh, label: String) -> MultiMesh:
-	var mm := MultiMesh.new()
-	mm.transform_format = MultiMesh.TRANSFORM_3D
-	mm.use_colors = true
-	mm.use_custom_data = true
-	mm.mesh = mesh
-	# Fixed bounds over the arena: setting the buffer then does not walk
-	# every instance to find them (it is re-sent while pieces fall).
-	mm.custom_aabb = AABB(Vector3(-90, -45, -90), Vector3(180, 140, 180))
-	var mmi := MultiMeshInstance3D.new()
-	mmi.name = label
-	mmi.multimesh = mm
-	mmi.material_override = material
-	add_child(mmi)
-	return mm
+	_mesh.flush()

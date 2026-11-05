@@ -16,6 +16,10 @@ uniform bool chunky = false;
 // Shard shapes from the library: xyz = vertex, w = 1 on the block's outer
 // surface, 0 on a fresh fracture face.
 uniform sampler2D shard_shapes : filter_nearest;
+// Where each shard sits in its pattern (one texel per shard): patterns are
+// drawn in the whole block's space, so they run on from piece to piece (a
+// cracked wall's cells look like the wall).
+uniform sampler2D shard_centers : filter_nearest;
 
 uniform vec3 concrete : source_color = vec3(0.78, 0.76, 0.72);
 uniform vec3 wood : source_color = vec3(0.84, 0.75, 0.62);
@@ -215,13 +219,24 @@ void vertex() {
 	finish = floor(packed / 5.0 + 0.001);
 	seed = COLOR.b;
 	outer = 1.0;
+	vec3 shard_offset = vec3(0.0);
 	if (chunky) {
 		// Debris: a shard shape from the library (one texture row per
 		// shard, one texel per vertex), or a plain chunk cut from the cube.
 		int shard = int(INSTANCE_CUSTOM.g + 0.5) - 1;
 		if (shard >= 0) {
 			vec4 t = texelFetch(shard_shapes, ivec2(VERTEX_ID, shard), 0);
-			VERTEX = t.xyz;
+			vec3 v = t.xyz;
+			vec3 c = texelFetch(shard_centers, ivec2(shard, 0), 0).xyz;
+			// A wall cell is drawn in its wall's own axes: its pattern (cut
+			// with the thickness along z) turned to the wall (INSTANCE_CUSTOM.b:
+			// 1 = thickness along x).
+			if (INSTANCE_CUSTOM.b > 0.5) {
+				v = vec3(v.z, v.y, -v.x);
+				c = vec3(c.z, c.y, -c.x);
+			}
+			VERTEX = v;
+			shard_offset = c;
 			outer = t.w;
 			if (material_id > 1.5 && material_id < 2.5) {
 				// Metal does not shatter, it bends: curve the length of the
@@ -235,7 +250,7 @@ void vertex() {
 			VERTEX = chunk(VERTEX, seed);
 		}
 	}
-	local_pos = VERTEX * scale;
+	local_pos = (VERTEX + shard_offset) * scale;
 	half_size = scale * 0.5;
 	local_normal = NORMAL;
 	is_round = COLOR.g > 0.5 ? 1.0 : 0.0;
@@ -391,14 +406,20 @@ void fragment() {
 		float inner = 1.0 - smoothstep(0.2, 0.8, outer);
 		vec3 fresh = albedo;
 		int fin_in = int(finish + 0.5);
-		if (fin_in == 3 || fin_in == 4 || fin_in == 10) {
-			// Printed stone is not solid: a honeycomb infill of stone walls
-			// around dark composite cells, the future hiding inside.
+		if (fin_in == 10) {
+			// Printed composite is not solid: a honeycomb infill of walls
+			// around dark cells.
 			vec2 uv = (face.x > 0.5 ? local_pos.yz : (face.y > 0.5 ? local_pos.xz : local_pos.xy)) * 9.0;
 			float wall = hex_wall(uv);
-			vec3 stone = fin_in == 4 ? vec3(0.9, 0.88, 0.84) : vec3(0.84, 0.76, 0.62);
-			fresh = mix(vec3(0.07, 0.07, 0.08), stone, wall);
+			fresh = mix(vec3(0.07, 0.07, 0.08), vec3(0.84, 0.76, 0.62), wall);
 			rough = mix(0.5, 0.95, wall);
+		} else if (fin_in == 3 || fin_in == 4) {
+			// Solid stone: travertine cream with its pores, marble white
+			// and sugary.
+			vec3 stone = fin_in == 4 ? vec3(0.9, 0.89, 0.86) : vec3(0.84, 0.77, 0.63);
+			float pores = fin_in == 3 ? step(0.78, noise(p * vec3(30.0, 60.0, 30.0))) * 0.35 : 0.0;
+			fresh = stone * (0.9 + 0.15 * noise(p * 40.0)) * (1.0 - pores);
+			rough = 0.9;
 		} else if (fin_in == 2 || (fin_in >= 5 && fin_in <= 8)) {
 			// Brick (also under the plaster): raw red clay.
 			fresh = vec3(0.62, 0.3, 0.2) * (0.85 + 0.25 * noise(p * 12.0));
