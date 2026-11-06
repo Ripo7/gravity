@@ -4,8 +4,8 @@ shader_type spatial;
 // round the square. Beyond the square, a bare plain of beaten earth that
 // fades into the haze. Joints fade with distance (no shimmer on phones).
 
-uniform vec3 stone : source_color = vec3(0.56, 0.54, 0.5);
-uniform vec3 travertine : source_color = vec3(0.8, 0.74, 0.62);
+uniform vec3 stone : source_color = vec3(0.57, 0.54, 0.49);
+uniform vec3 travertine : source_color = vec3(0.77, 0.71, 0.6);
 uniform vec3 joint : source_color = vec3(0.32, 0.3, 0.28);
 uniform vec3 earth : source_color = vec3(0.56, 0.5, 0.43);
 // Set by GameWorld from the level: the square's half size (Arena.inner),
@@ -15,6 +15,11 @@ uniform float square_half = 1e6;
 uniform vec2 grid_origin = vec2(0.0);
 uniform vec4 plinths[4];
 uniform int plinth_count = 0;
+// Dust settled on the ground round collapses (DustSystem.settle): how
+// dusty, over the rectangle (min x, min z, size x, size z).
+uniform sampler2D ground_dust : hint_default_black, filter_linear;
+uniform vec4 dust_rect = vec4(-64.0, -64.0, 128.0, 128.0);
+uniform vec3 dust : source_color = vec3(0.8, 0.76, 0.7);
 
 varying vec3 world_pos;
 
@@ -58,12 +63,14 @@ void fragment() {
 	// Travertine: bands every 12 m, kerbs round the buildings and the square.
 	vec2 g = abs(fract((p - grid_origin) / 12.0 + 0.5) - 0.5) * 12.0;
 	float trav = near(min(g.x, g.y), 0.28, fw);
+	float wall = 1e6;  // metres to the nearest building, 0 inside one
 	for (int i = 0; i < 4; i++) {
 		if (i >= plinth_count) {
 			break;
 		}
 		vec2 out_of = max(plinths[i].xy - p, p - plinths[i].zw);
 		trav = max(trav, near(max(out_of.x, out_of.y), 1.5, fw));
+		wall = min(wall, length(max(out_of, vec2(0.0))));
 	}
 	float edge = max(abs(p.x), abs(p.y)) - square_half;  // metres outside the square
 	trav = max(trav, 1.0 - smoothstep(-1.4 - fw, -1.4 + fw, -edge));
@@ -79,7 +86,20 @@ void fragment() {
 	dirt *= mix(0.78, 1.0, smoothstep(0.0, 0.8, edge));
 	col = mix(col, dirt, plain);
 
-	ALBEDO = col * (0.93 + 0.1 * big);
+	col *= 0.93 + 0.1 * big;
+	// Settled dust: pale, patchy, filling the joints first (only worked out
+	// where there is some).
+	float dusty = texture(ground_dust, (p - dust_rect.xy) / dust_rect.zw).r;
+	if (dusty > 0.004) {
+		dusty = clamp(dusty * (0.55 + 0.9 * noise2(p * 0.8)) + j * dusty * 0.4, 0.0, 0.9);
+		col = mix(col, dust * (0.92 + 0.12 * noise2(p * 5.3)), dusty);
+	}
+	ALBEDO = col;
+	// The walls shade the ground at their foot from the sky (ambient
+	// occlusion): the buildings sit on the square instead of floating.
+	// Inside a footprint (the courtyard) the walls all round hide some sky.
+	AO = wall > 0.0 ? mix(0.4, 1.0, smoothstep(0.0, 3.0, wall)) : 0.72;
+	AO_LIGHT_AFFECT = 0.0;
 	ROUGHNESS = mix(mix(0.74, 0.62, trav), 0.95, plain);
 	SPECULAR = 0.35;
 }

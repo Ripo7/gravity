@@ -1,13 +1,10 @@
 class_name GameWorld
 extends Node3D
 ## Root of the game scene: loads the current level, wires structures,
-## debris, player, blasts and all the juice (dust, shake, sound, slow-mo).
+## debris, player, blasts and all the juice (dust, shake, sound). No slow
+## motion and no freeze frames: the game always runs at its own pace.
 
 signal vortex_opened(vortex: Vortex)
-
-## Collapses this big (pieces) can trigger a beat of slow motion.
-const SLOWMO_MIN_PIECES := 40
-const SLOWMO_COOLDOWN := 6.0  ## real seconds
 
 @export var structures: StructureSet
 @export var debris: DebrisSystem
@@ -23,11 +20,8 @@ var level: Level
 ## Path of the level scene that was loaded.
 var level_file := ""
 var blasts_total := 0
-## Slow motion and other camera drama; off for the menu backdrop.
-var cinematic := true
 ## True cost of a physics step (HUD stats, benchmarks).
 var physics_clock: PhysicsClock
-var _last_slowmo := -100.0
 
 
 static func of(node: Node) -> GameWorld:
@@ -138,6 +132,11 @@ func _connect_juice() -> void:
 	var aq := AdaptiveQuality.new()
 	aq.world = self
 	add_child(aq)
+	if dust:
+		dust.light_from(get_node_or_null("Sun") as DirectionalLight3D)
+		var floor_mesh := get_node_or_null("Floor/Mesh") as MeshInstance3D
+		if floor_mesh:
+			dust.use_floor(floor_mesh.get_surface_override_material(0) as ShaderMaterial)
 	structures.shattered.connect(
 		func(at: Vector3, size: Vector3, kind: int) -> void:
 			var r := size.length() * 0.5
@@ -172,6 +171,21 @@ func _connect_juice() -> void:
 				var d := cam.global_position.distance_to(at)
 				cam.add_trauma(0.12 * clampf(1.0 - d / 40.0, 0.0, 1.0))
 	)
+	structures.floor_crushed.connect(
+		func(at: Vector3, count: int, speed: float) -> void:
+			# The storey crushed flat pushes its air out sideways, through
+			# the windows: jets of dust all round it.
+			if dust:
+				var r := clampf(sqrt(float(count)) * 0.9, 2.5, 9.0)
+				var jets := int(Quality.pick(4, 6, 8))
+				var turn := randf() * TAU
+				for k in jets:
+					var a := turn + TAU * k / jets
+					var out := Vector3(cos(a), 0.0, sin(a))
+					dust.jet(
+						at + out * r + Vector3.UP * 0.8, out, clampf(r * 0.35, 1.2, 2.6), 6.0 + speed * 0.4
+					)
+	)
 	structures.cluster_released.connect(
 		func(at: Vector3, count: int, toppled: bool) -> void:
 			if toppled or count > 20:
@@ -196,25 +210,7 @@ func _connect_juice() -> void:
 				var d := cam.global_position.distance_to(at)
 				var near := clampf(1.0 - d / 45.0, 0.0, 1.0)
 				cam.add_trauma(clampf(mass / 4000.0, 0.1, 0.6) * near)
-				# The big ones get a beat of slow motion when you are close.
-				if count >= SLOWMO_MIN_PIECES and near > 0.2:
-					slow_motion()
 	)
-
-
-## A short beat of slow motion (big collapses). Not in headless runs
-## (tests), and not again for a few seconds.
-func slow_motion(scale := 0.35, hold := 0.35, back := 0.5) -> void:
-	if DisplayServer.get_name() == "headless" or not cinematic:
-		return
-	var now := Time.get_ticks_msec() / 1000.0
-	if now - _last_slowmo < SLOWMO_COOLDOWN:
-		return
-	_last_slowmo = now
-	Engine.time_scale = scale
-	var tw := create_tween().set_ignore_time_scale(true)
-	tw.tween_interval(hold)
-	tw.tween_property(Engine, "time_scale", 1.0, back).set_ease(Tween.EASE_IN_OUT)
 
 
 func _exit_tree() -> void:
@@ -250,7 +246,6 @@ func cast_shield(base: Transform3D) -> IceShield:
 
 
 func _start_attract() -> void:
-	cinematic = false
 	player.input_enabled = false
 	player.invulnerable = true
 	player.power.auto_input = true

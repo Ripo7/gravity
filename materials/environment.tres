@@ -1,13 +1,12 @@
-[gd_resource type="Environment" load_steps=3 format=3]
+[gd_resource type="Environment" load_steps=5 format=3]
 
-[sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
-sky_top_color = Color(0.3, 0.42, 0.66, 1)
-sky_horizon_color = Color(0.98, 0.74, 0.55, 1)
-sky_curve = 0.12
-ground_bottom_color = Color(0.36, 0.33, 0.36, 1)
-ground_horizon_color = Color(0.94, 0.72, 0.56, 1)
-sun_angle_max = 14.0
-sun_curve = 0.12
+[ext_resource type="Shader" path="res://shaders/sky.gdshader" id="1_sky"]
+[ext_resource type="Texture2D" path="res://assets/textures/sky_clouds.png" id="2_clouds"]
+
+[sub_resource type="ShaderMaterial" id="sky_mat"]
+shader = ExtResource("1_sky")
+shader_parameter/clouds = ExtResource("2_clouds")
+shader_parameter/use_clouds = true
 
 [sub_resource type="Sky" id="sky"]
 sky_material = SubResource("sky_mat")
@@ -16,24 +15,24 @@ sky_material = SubResource("sky_mat")
 background_mode = 2
 sky = SubResource("sky")
 ambient_light_source = 3
-ambient_light_color = Color(0.74, 0.74, 0.86, 1)
-ambient_light_sky_contribution = 0.3
-ambient_light_energy = 0.6
-tonemap_mode = 2
-tonemap_exposure = 1.05
-tonemap_white = 3.0
+ambient_light_color = Color(0.62, 0.7, 0.88, 1)
+ambient_light_sky_contribution = 0.6
+ambient_light_energy = 0.55
+tonemap_mode = 4
+tonemap_exposure = 1.1
 glow_enabled = true
-glow_intensity = 0.55
-glow_bloom = 0.04
-glow_hdr_threshold = 1.0
+glow_intensity = 0.5
+glow_bloom = 0.05
+glow_hdr_threshold = 1.1
 fog_enabled = true
-fog_light_color = Color(0.92, 0.72, 0.58, 1)
-fog_sun_scatter = 0.35
+fog_light_color = Color(0.72, 0.79, 0.88, 1)
+fog_sun_scatter = 0.25
 fog_mode = 1
 fog_density = 1.0
-fog_depth_begin = 0.0
-fog_depth_end = 380.0
-fog_depth_curve = 0.7
-fog_sky_affect = 0.15
+fog_depth_begin = 20.0
+fog_depth_end = 420.0
+fog_depth_curve = 1.2
+fog_sky_affect = 0.0
 adjustment_enabled = true
-adjustment_saturation = 1.12
+adjustment_contrast = 1.06
+adjustment_saturation = 1.15

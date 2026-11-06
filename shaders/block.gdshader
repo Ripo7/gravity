@@ -43,7 +43,7 @@ uniform vec3 wood_dark : source_color = vec3(0.68, 0.56, 0.43);
 uniform vec3 metal : source_color = vec3(0.62, 0.66, 0.72);
 uniform vec3 ice : source_color = vec3(0.035, 0.03, 0.06);
 uniform vec3 glass : source_color = vec3(0.08, 0.1, 0.14);
-uniform vec3 glass_sky : source_color = vec3(0.6, 0.64, 0.74);
+uniform vec3 glass_sky : source_color = vec3(0.7, 0.78, 0.9);
 // Warm light behind some windows (the city is lived in).
 uniform vec3 window_light : source_color = vec3(1.0, 0.68, 0.38);
 uniform float window_lit_share = 0.1;
@@ -648,12 +648,17 @@ void fragment() {
 		albedo *= 1.0 - near * (0.25 + 0.2 * noise(local_pos * 18.0));
 	}
 
-	// Cheap contact shadow where blocks meet the ground.
-	albedo *= mix(0.72, 1.0, smoothstep(0.0, 0.6, world_y));
+	// Contact shadow where blocks and rubble meet the ground: a little
+	// darker right at the ground, and the sky's light (ambient occlusion)
+	// fades over the last two metres, so walls and piles sit on the square.
+	albedo *= mix(0.82, 1.0, smoothstep(0.0, 0.5, world_y));
+	float ground_ao = mix(0.42, 1.0, smoothstep(0.0, 2.2, world_y));
 
 	albedo *= shade;
 	float t = clamp(tint, 0.0, 1.0);
 	ALBEDO = mix(albedo, violet_deep, t * 0.9);
+	AO = ground_ao;
+	AO_LIGHT_AFFECT = 0.0;
 	ROUGHNESS = rough;
 	METALLIC = metallic * (1.0 - t);
 	EMISSION = violet * t * t * t * glow_strength + lit_window * (1.0 - t);

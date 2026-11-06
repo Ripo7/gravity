@@ -261,3 +261,48 @@ func test_falling_pieces_push_frozen_rubble() -> void:
 			moved += 1
 	check(moved >= 2, "it ploughs into the pile instead of stopping dead (%d freed)" % moved)
 	await _unload()
+
+
+func test_dust_settles_on_the_square() -> void:
+	await _load_world()
+	var dust := world.dust
+	check(dust.floor_mat != null, "the dust knows the floor")
+	var at := SPOT + Vector3(-40, 0, -40)  # inside the map, away from the palace
+	dust.roll(at, 3.0, 1.0)
+	check(dust.floor_mat.get_shader_parameter("ground_dust") is ImageTexture, "the floor reads a dust map")
+	var size := DustSystem.GROUND_SIZE
+	var texel := int((at.x + DustSystem.GROUND_HALF) / (DustSystem.GROUND_HALF * 2.0) * size)
+	texel += int((at.z + DustSystem.GROUND_HALF) / (DustSystem.GROUND_HALF * 2.0) * size) * size
+	check(
+		dust._dusty[texel] > 50, "where the dust rolled out, the square turned pale (%d)" % dust._dusty[texel]
+	)
+	check(dust._dusty[2 * size + 2] == 0, "and nowhere else")
+	await _unload()
+
+
+func test_a_crushed_storey_blows_dust_out_sideways() -> void:
+	await _load_world()
+	var dust := world.dust
+	var before := dust.active
+	world.structures.floor_crushed.emit(SPOT + Vector3(0, 4, 0), 60, 9.0)
+	check(dust.active >= before + 6, "jets of dust all round (%d new)" % (dust.active - before))
+	await frames(10)
+	# They fly out sideways, away from the storey.
+	var out := 0
+	for i in dust.capacity:
+		if dust._life[i] > 0.0 and Vector2(dust._vel[i].x, dust._vel[i].z).length() > 2.0:
+			out += 1
+	check(out >= 4, "flying out (%d)" % out)
+	await _unload()
+
+
+func test_the_sky_has_its_clouds_and_time_never_slows() -> void:
+	await _load_world()
+	var env := (world.get_node("WorldEnvironment") as WorldEnvironment).environment
+	var sky := env.sky.sky_material as ShaderMaterial
+	check(sky != null and sky.get_shader_parameter("clouds") is Texture2D, "clouds baked in Blender")
+	# A big piece of building landing: shake and dust, never slow motion.
+	world.structures.cluster_impact.emit(SPOT, 50000.0, 14.0, 120)
+	await frames(5)
+	check_eq(Engine.time_scale, 1.0, "the game keeps its pace")
+	await _unload()
