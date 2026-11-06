@@ -64,9 +64,11 @@ const PANCAKE_KEEP := 0.3  ## share of speed kept after crushing a layer
 const KNOCK_SPEED := 0.9
 ## Blocks bigger than this (m^3) crack into shards when they come loose: a
 ## wall panel never tumbles away whole (the Lego look). Smaller ones (a
-## stone, a bracket, a column drum) may stay whole. Phones let bigger
+## stone, a bracket, a column drum) may stay whole, unless they are long and
+## thin (a cornice, a beam: they break into lengths). Phones let bigger
 ## blocks stay whole (fewer bodies).
-const WHOLE_MAX_VOLUME := Vector3(1.0, 0.4, 0.4)
+const WHOLE_MAX_VOLUME := Vector3(0.6, 0.4, 0.4)
+const SLENDER := Vector2(2.0, 3.0)  ## m long at least, and that many times its width
 ## Cracking open, the shards of a loosened block part this fast (m/s).
 const LOOSE_CRACK_PUSH := 0.7
 const LEAN_TIME := 0.2  ## seconds of leaning before the weight tells
@@ -78,7 +80,8 @@ const LEAN_SPEED := 2.0  ## leaning counts like an impact at this speed
 var dust: DustSystem  ## optional: gravel and dust when rubble is crushed
 var rebar: RebarSystem  ## optional: steel rods left in broken concrete
 var alive_count := 0
-var walls: WallCells  ## walls that crack open in place
+var walls: WallCells  ## walls, floors and roofs that crack open in place
+var footing: Footing  ## tipping, and how far blocks can hang from their neighbours
 
 var _state := PackedByteArray()
 var _xform: Array[Transform3D] = []  # global rest transform
@@ -154,6 +157,8 @@ func add_structure(origin: Transform3D, segments: Array[Dictionary]) -> int:
 	var before := _alive_mass
 	if walls == null:
 		walls = WallCells.new(self)
+	if footing == null:
+		footing = Footing.new(self)
 	_groups.append(members)
 	_group_origin.append(origin)
 	for seg in segments:
@@ -197,6 +202,7 @@ func add_structure(origin: Transform3D, segments: Array[Dictionary]) -> int:
 		_capacity[i] = maxf(_load[i] * SAFETY[_kind[i]] * robust, floor_cap)
 		var held: float = shear.get(i, 0.0)
 		_shear_cap[i] = maxf(held * SAFETY[_kind[i]] * robust, _mass[i] * SHEAR_WEIGHTS[_kind[i]])
+	footing.calibrate(members)
 	_rebuild_multimesh()
 	return group_id
 
@@ -250,6 +256,7 @@ func add_block(
 	_groups[group].append(i)
 	alive_count += 1
 	_alive_mass += mass
+	footing.add(i)
 	return i
 
 
@@ -337,6 +344,7 @@ func _unanchor(i: int) -> void:
 				break
 		if not still:
 			_grounded[b] = 0
+			footing.touched(b)
 			_dirty_groups[_group[b]] = true
 
 
@@ -510,7 +518,9 @@ func _surface_distance(i: int, p: Vector3) -> float:
 	return local.clamp(-half, half).distance_to(local)
 
 
-func _shatter(i: int, from: Vector3, dmg: float, inherit := Vector3.ZERO) -> void:
+## Breaks block `i`. A cell of a cracked wall comes away whole (it breaks
+## when it lands) unless `crumble` (it already did: a falling piece's hit).
+func _shatter(i: int, from: Vector3, dmg: float, inherit := Vector3.ZERO, crumble := false) -> void:
 	# A wall hit for real cracks open in place (break_segment, dmg 0, takes
 	# the whole block out: tools and tests).
 	if walls and dmg > 0.0 and _state[i] == State.STATIC and walls.can_crack(i):
@@ -524,7 +534,9 @@ func _shatter(i: int, from: Vector3, dmg: float, inherit := Vector3.ZERO) -> voi
 		var away := (xf.origin - from).normalized() * minf(dmg, 6.0) * 0.4
 		_remove(i)
 		shattered.emit(xf.origin, size, kind)
-		walls.to_debris(i, xf, away + inherit, Vector3.ZERO, _power_tint)
+		var j := walls.to_debris(i, xf, away + inherit, Vector3.ZERO, _power_tint)
+		if crumble and j >= 0:
+			debris.fracture(j)
 		return
 	_remove(i)
 	shattered.emit(xf.origin, size, kind)
@@ -550,7 +562,10 @@ func _dislodge(i: int, velocity: Vector3, spin := Vector3.ZERO, tint := 0.5) -> 
 		walls.to_debris(i, xf, velocity, spin, tint)
 		return
 	var size := _size[i]
-	if size.x * size.y * size.z > _whole_max and ShardLibrary.has(_kind[i]):
+	var long := size[size.max_axis_index()]
+	var width := size.x + size.y + size.z - long - size[size.min_axis_index()]
+	var slender := long > SLENDER.x and long > width * SLENDER.y
+	if (size.x * size.y * size.z > _whole_max or slender) and ShardLibrary.has(_kind[i]):
 		debris.shatter_box(
 			xf, size, _kind[i], xf.origin, LOOSE_CRACK_PUSH, velocity, tint, _shade[i], _seed[i], i
 		)
@@ -571,6 +586,7 @@ func _remove(i: int) -> void:
 		PhysicsServer3D.body_set_space(_bodies[i], RID())
 		_dirty_groups[_group[i]] = true
 		_note_cut(i)
+		footing.removed(i)
 		# Rubble frozen on or against it must be free to fall (the box turns
 		# with the block: ramps, rotated cornices).
 		if debris:
@@ -619,12 +635,12 @@ func _settle_group(g: int, hesitate := false) -> int:
 		if not grounded:
 			changed += _release_or_wait(comp, false, g, hesitate)
 			continue
-		if comp.size() > 2 and _is_tipping(comp):
+		if comp.size() > 2 and footing.tipping(comp):
 			changed += _release_or_wait(comp, true, g, hesitate)
 			continue
 		# Standing on what is left of a cut course: the part above may pivot
 		# over its edge (a tower cut at the foot on one side).
-		var upper := _tipping_above(comp, levels)
+		var upper := footing.tipping_above(comp, levels)
 		if upper.size() > 2:
 			if hesitate and _is_pending(upper[0]):
 				waiting = true
@@ -634,12 +650,21 @@ func _settle_group(g: int, hesitate := false) -> int:
 			changed += n
 			continue
 		changed += _crush_overloaded(comp)
+	# Hanging farther from what carries it than it can reach (the roof over
+	# a big hole): it comes away, with all it carries.
+	for part in footing.hanging(g):
+		if hesitate and _is_pending(part[0]):
+			waiting = true
+			continue
+		var n := _release_or_wait(part, false, g, hesitate)
+		waiting = waiting or n == 0
+		changed += n
 	if not waiting:
 		_cut_levels.erase(g)
 	return changed
 
 
-## Remembers where block `i` went (for _tipping_above).
+## Remembers where block `i` went (for Footing.tipping_above).
 func _note_cut(i: int) -> void:
 	var g := _group[i]
 	var levels: PackedFloat32Array = _cut_levels.get(g, PackedFloat32Array())
@@ -650,51 +675,6 @@ func _note_cut(i: int) -> void:
 	if levels.size() < 8:
 		levels.append(h)
 	_cut_levels[g] = levels
-
-
-## The blocks above one of `levels` whose centre of mass has left the
-## section of what still crosses that level, or an empty array.
-func _tipping_above(comp: PackedInt32Array, levels: PackedFloat32Array) -> PackedInt32Array:
-	for h in levels:
-		var pts := PackedVector2Array()
-		var upper := PackedInt32Array()
-		var com := Vector2.ZERO
-		var mass := 0.0
-		for i in comp:
-			var a := _local[i]
-			if a.position.y < h - 0.01 and a.end.y > h + 0.01:
-				pts.append(Vector2(a.position.x, a.position.z))
-				pts.append(Vector2(a.end.x, a.position.z))
-				pts.append(Vector2(a.end.x, a.end.z))
-				pts.append(Vector2(a.position.x, a.end.z))
-			elif a.position.y >= h - 0.01:
-				var c := a.get_center()
-				com += Vector2(c.x, c.z) * _mass[i]
-				mass += _mass[i]
-				upper.append(i)
-		if upper.size() < 3 or mass <= 0.0 or pts.size() < 3:
-			continue
-		com /= mass
-		if not _inside_section(com, pts):
-			return upper
-	return PackedInt32Array()
-
-
-## True when `com` is inside the convex section of `pts`, shrunk a little
-## so knife-edge balance still tips; sets _tip to the way it would fall.
-func _inside_section(com: Vector2, pts: PackedVector2Array) -> bool:
-	var hull := Geometry2D.convex_hull(pts)
-	if hull.size() < 3:
-		return false
-	var centroid := Vector2.ZERO
-	for p in hull:
-		centroid += p
-	centroid /= hull.size()
-	var inset := PackedVector2Array()
-	for p in hull:
-		inset.append(p + (centroid - p).limit_length(0.06))
-	_tip = com - centroid
-	return Geometry2D.is_point_in_polygon(com, inset)
 
 
 func _components(members: PackedInt32Array) -> Array[PackedInt32Array]:
@@ -801,29 +781,6 @@ func _crush_overloaded(comp: PackedInt32Array) -> int:
 	return n
 
 
-## True when the piece's centre of mass is outside the area it stands on.
-func _is_tipping(comp: PackedInt32Array) -> bool:
-	var com := Vector2.ZERO
-	var mass := 0.0
-	var pts := PackedVector2Array()
-	for i in comp:
-		var c := _local[i].get_center()
-		com += Vector2(c.x, c.z) * _mass[i]
-		mass += _mass[i]
-		if _grounded[i]:
-			var a := _local[i]
-			pts.append(Vector2(a.position.x, a.position.z))
-			pts.append(Vector2(a.end.x, a.position.z))
-			pts.append(Vector2(a.end.x, a.end.z))
-			pts.append(Vector2(a.position.x, a.end.z))
-	if mass <= 0.0 or pts.size() < 3:
-		return false
-	com /= mass
-	# It falls away from what still holds it: from the footprint toward the
-	# centre of mass.
-	return not _inside_section(com, pts)
-
-
 # --- Falling clusters -----------------------------------------------------------
 
 
@@ -892,6 +849,7 @@ func _release(comp: PackedInt32Array, toppled: bool) -> int:
 		c.members.append(i)
 		c.offsets.append(off)
 		_state[i] = State.FALLING
+		footing.removed(i)
 		_unanchor(i)
 		alive_count -= 1
 		_alive_mass -= _mass[i]
@@ -935,8 +893,11 @@ func _dissolve(c: FallingCluster, hit: Vector3, severity: float) -> void:
 	var v: Vector3 = PhysicsServer3D.body_get_state(c.body, PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY)
 	var w: Vector3 = PhysicsServer3D.body_get_state(c.body, PhysicsServer3D.BODY_STATE_ANGULAR_VELOCITY)
 	PhysicsServer3D.free_rid(c.body)
-	var shatter_chance := clampf((severity - 4.0) / 12.0, 0.0, 0.55)
+	# A real hit breaks what falls: all near the hit, every big block (a
+	# floor never lands whole) and, the harder the hit, more of the rest.
+	var shatter_chance := clampf((severity - 3.0) / 9.0, 0.0, 0.8)
 	var near := clampf(severity * 0.18, 0.8, 2.5)
+	var big := debris.max_piece * 2.0 if debris else INF
 	for k in c.members.size():
 		var i := c.members[k]
 		if _state[i] != State.FALLING:
@@ -946,8 +907,9 @@ func _dissolve(c: FallingCluster, hit: Vector3, severity: float) -> void:
 		var r := world.origin - xf.origin
 		var vel := v + w.cross(r)
 		var close := hit != Vector3.ZERO and world.origin.distance_to(hit) < near
-		if severity > 4.0 and (close or randf() < shatter_chance):
-			_shatter(i, hit, severity * 0.3, vel * 0.6)
+		var bulk := _size[i].x * _size[i].y * _size[i].z > big
+		if severity > 4.0 and (close or bulk or randf() < shatter_chance):
+			_shatter(i, hit, severity * 0.3, vel * 0.6, true)
 		else:
 			var spin := w
 			if severity <= 0.0:
@@ -1211,14 +1173,16 @@ func _component_of(seg: int) -> PackedInt32Array:
 	return comp
 
 
-## True when the piece touches the ground, a structure or another falling
-## piece; flying debris bumping into it does not count as a landing.
+## True when the piece touches the ground, a structure, another falling
+## piece or a pile of rubble; flying debris bumping into it does not count
+## as a landing.
 func _touches_solid(c: FallingCluster) -> bool:
 	var state := PhysicsServer3D.body_get_direct_state(c.body)
 	if state == null:
 		return true
 	for k in state.get_contact_count():
-		if debris == null or debris.index_of(state.get_contact_collider(k)) < 0:
+		var j := debris.index_of(state.get_contact_collider(k)) if debris else -1
+		if j < 0 or debris.is_resting(j):
 			return true
 	return false
 

@@ -3,8 +3,9 @@ extends Node
 ##   --mode=showcase [--shots=DIR]  scripted blasts, optional screenshots
 ##   --mode=bench [--max=N]         body-count benchmark, prints BENCH lines
 ##   --mode=shot [--wait=S]         one screenshot of whatever is on screen
-##   --mode=play --steps="v@x,y,z;w1;s" [--from=x,y,z] [--god]
-##        plays with scripted casts and prints destruction, health, deaths.
+##   --mode=play --steps="v@x,y,z;w1;s" [--from=x,y,z] [--god] [--shots=DIR]
+##        plays with scripted casts and prints destruction, health, deaths
+##        (screenshots at the start, every second cast and at the end).
 
 var options := {}
 var world: GameWorld
@@ -195,6 +196,7 @@ func _play() -> void:
 		)
 		if k % 2 == 0:
 			await _shot("%02d_cast" % k)
+	await _shot("99_end")
 	print(
 		(
 			"END standing=%.3f hp=%d deaths=%d"

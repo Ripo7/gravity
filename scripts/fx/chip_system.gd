@@ -67,9 +67,17 @@ func _ready() -> void:
 
 
 ## Throws `count` chips out of a box of `size` centred on `at`. `kick` is
-## the velocity the pieces inherit, `speed` how hard chips spray out.
+## the velocity the pieces inherit, `speed` how hard chips spray out;
+## `scale` makes them bigger (the rubble of a big break).
 func burst(
-	at: Vector3, size: Vector3, kind: int, count: int, speed := 4.0, kick := Vector3.ZERO, seed_value := -1.0
+	at: Vector3,
+	size: Vector3,
+	kind: int,
+	count: int,
+	speed := 4.0,
+	kick := Vector3.ZERO,
+	seed_value := -1.0,
+	scale := 1.0
 ) -> void:
 	count = mini(count, capacity / 6)
 	if count <= 0:
@@ -94,7 +102,7 @@ func burst(
 		_pos[i] = p
 		_origin[i] = at
 		_vel[i] = kick + dir * speed * randf_range(0.3, 1.0)
-		_size[i] = _chip_size(kind)
+		_size[i] = _chip_size(kind) * scale
 		_axis[i] = Vector3(randf_range(-1, 1), randf_range(-1, 1), randf_range(-1, 1)).normalized()
 		_angle[i] = randf() * TAU
 		_spin[i] = randf_range(-14.0, 14.0)

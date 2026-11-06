@@ -49,6 +49,13 @@ const CRUMBLE_VOLUME := 0.08
 ## instead of pushing a resting piece out of the pool (which also wakes
 ## what rested on it).
 const FULL_POOL_GRAVEL := 0.15
+## A break leaves no piece longer than this (m): long and big blocks first
+## part into chunks, each of which breaks along a pattern.
+const CHUNK_SIDE := 1.4
+## Big pieces break on softer landings: the speed that breaks a piece of
+## v m^3 is BREAK_SPEED * (BREAK_VOLUME / v)^(1/3), down to BREAK_SPEED_MIN.
+const BREAK_VOLUME := 0.15
+const BREAK_SPEED_MIN := 3.2
 
 ## Set before the scene loads to force a pool size (benchmarks).
 static var capacity_override := 0
@@ -73,6 +80,10 @@ var capacity := 0
 ## A shard landing hard splits into its sub-shards; on phones and in
 ## browsers only the biggest few stay bodies, the rest is gravel (0 = all).
 var landing_keep := 0
+## Biggest piece (m^3) a break aims for, and most bodies one break leaves
+## (the smaller rest is gravel): phones keep fewer, bigger pieces.
+var max_piece := 0.3
+var max_bodies := 8
 var lifetime := 0.0
 var active_count := 0
 var frozen_count := 0
@@ -136,6 +147,8 @@ func _ready() -> void:
 	_quiet_spin = QUIET_SPIN * (1.7 if low else 1.0)
 	Fracture.max_pieces = int(Quality.pick(3, 4, 6))
 	landing_keep = int(Quality.pick(2, 3, 0))
+	max_piece = float(Quality.pick(0.45, 0.3, 0.2))
+	max_bodies = int(Quality.pick(4, 7, 10))
 	lifetime = lifetime_desktop if Quality.tier() == Quality.Tier.HIGH else lifetime_web
 	if hull_min_volume < 0.0:
 		hull_min_volume = tier_hull_min_volume()
@@ -319,7 +332,9 @@ func spawn_shard(
 
 ## Breaks a block of `size` at `xf` into pieces: shards from the library
 ## when it has this material, boxes otherwise. Pieces fly away from `from`
-## at `push` m/s on top of `inherit`. Returns the new indices.
+## at `push` m/s on top of `inherit`. At most `keep` (else max_bodies) of
+## the biggest pieces stay bodies, the rest is gravel. Returns the new
+## indices.
 func shatter_box(
 	xf: Transform3D,
 	size: Vector3,
@@ -331,46 +346,15 @@ func shatter_box(
 	shade: float,
 	seed_value: float,
 	variant: int,
-	volume := -1.0
+	keep := 0
 ) -> PackedInt32Array:
 	var out := PackedInt32Array()
-	# Piece count from the real volume (a shard is smaller than its bounds).
-	var count_size := size
-	if volume > 0.0:
-		count_size = Vector3.ONE * pow(volume, 1.0 / 3.0)
-	var count := Fracture.piece_count_for(count_size, Materials.prop(kind, "pieces"))
 	var basis := xf.basis.orthonormalized()
 	var block := Transform3D(basis, xf.origin)
-	if count >= 2 and ShardLibrary.has(kind):
-		# Wood and metal break along their grain (the longest axis).
-		var grain := size.max_axis_index() if kind != Materials.Kind.CONCRETE else variant % 3
-		var turn := ShardLibrary.axis_turn(grain, (variant / 3) % 2 == 1)
-		var vol := size.x * size.y * size.z
-		# Real shards read as more pieces than boxes did: one fewer is plenty
-		# (and keeps the physics budget where it was).
-		for shard: Dictionary in ShardLibrary.pattern(kind, maxi(count - 1, 2), variant):
-			var centre: Vector3 = block * ((Basis.from_scale(size) * turn) * (shard["center"] as Vector3))
-			var piece_vol: float = shard["volume"] * vol
-			if piece_vol < shard_min_volume or (_free.is_empty() and piece_vol < FULL_POOL_GRAVEL):
-				# Too small to be worth a body: gravel (or grains in a black hole).
-				gravel(
-					centre,
-					(shard["size"] as Vector3) * size,
-					kind,
-					piece_vol,
-					2.0 + push,
-					inherit,
-					seed_value
-				)
-				continue
-			var away := (centre - from).normalized() if centre.distance_to(from) > 0.01 else Vector3.UP
-			var spin := Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * 3.0
-			var j := spawn_shard(
-				block, size, turn, shard, away * push + inherit, spin, tint, shade, kind, seed_value
-			)
-			if j >= 0:
-				out.append(j)
-		return out
+	if ShardLibrary.has(kind):
+		var look := [tint, shade, seed_value]
+		return _shatter_chunks(block, size, kind, from, push, inherit, look, variant, keep)
+	var count := Fracture.piece_count_for(size, Materials.prop(kind, "pieces"))
 	var grain_axis := Fracture.grain_for(kind, size)
 	for piece: AABB in Fracture.pattern(size, maxi(count, 1), variant % 4, grain_axis):
 		var world := block * Transform3D(Basis(), piece.get_center())
@@ -385,6 +369,106 @@ func shatter_box(
 		if j >= 0:
 			out.append(j)
 	return out
+
+
+## Breaks a block along library patterns. A big or long block first parts
+## into chunks (see _chunks), so no break leaves a slab or a beam whole;
+## each chunk breaks along a pattern. The biggest pieces (at most `keep`, else
+## max_bodies) become bodies; the rest of each chunk crumbles to gravel.
+## `look` = [tint, shade, seed].
+func _shatter_chunks(
+	block: Transform3D,
+	size: Vector3,
+	kind: int,
+	from: Vector3,
+	push: float,
+	inherit: Vector3,
+	look: Array,
+	variant: int,
+	keep: int
+) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	var tint: float = look[0]
+	var shade: float = look[1]
+	var seed_value: float = look[2]
+	var chunks := _chunks(size, variant)
+	var vols := PackedFloat32Array()
+	var where := PackedInt32Array()  # chunk of each piece
+	var shards: Array[Dictionary] = []
+	var turns: Array[Basis] = []
+	for k in chunks.size():
+		var cv := chunks[k].get_volume()
+		# Wood and metal break along their grain (the chunk's longest axis).
+		var v := variant + k
+		var grain := chunks[k].size.max_axis_index() if kind != Materials.Kind.CONCRETE else v % 3
+		var turn := ShardLibrary.axis_turn(grain, (v / 3) % 2 == 1)
+		for shard: Dictionary in ShardLibrary.pattern(kind, clampi(roundi(cv / max_piece), 2, 4), v):
+			vols.append(float(shard["volume"]) * cv)
+			where.append(k)
+			shards.append(shard)
+			turns.append(turn)
+	# The biggest pieces become bodies, never more than the pool has free
+	# (taking a slot back from a resting piece costs a scan and wakes its pile).
+	var bodies := mini(keep if keep > 0 else max_bodies, _free.size())
+	var least := INF
+	if bodies > 0:
+		var sorted := vols.duplicate()
+		sorted.sort()
+		least = maxf(sorted[maxi(sorted.size() - bodies, 0)], shard_min_volume)
+	# What does not become a body crumbles: one burst of gravel per third of
+	# the block (along its length).
+	var axis := size.max_axis_index()
+	var rubble := PackedFloat32Array([0.0, 0.0, 0.0])
+	var spots: Array[AABB] = [AABB(), AABB(), AABB()]
+	for p in vols.size():
+		var c := chunks[where[p]]
+		if bodies > 0 and vols[p] >= least:
+			var chunk := block * Transform3D(Basis(), c.get_center())
+			var centre: Vector3 = (
+				chunk * ((Basis.from_scale(c.size) * turns[p]) * (shards[p]["center"] as Vector3))
+			)
+			var away := (centre - from).normalized() if centre.distance_to(from) > 0.01 else Vector3.UP
+			var spin := Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * 3.0
+			var j := spawn_shard(
+				chunk, c.size, turns[p], shards[p], away * push + inherit, spin, tint, shade, kind, seed_value
+			)
+			if j >= 0:
+				out.append(j)
+				bodies -= 1
+				continue
+		var third := clampi(int((c.get_center()[axis] / size[axis] + 0.5) * 3.0), 0, 2)
+		spots[third] = c if rubble[third] == 0.0 else spots[third].merge(c)
+		rubble[third] += vols[p]
+	for t in 3:
+		if rubble[t] > 0.0:
+			var at := block * spots[t].get_center()
+			gravel(at, spots[t].size, kind, rubble[t], 2.0 + push, inherit, seed_value)
+	return out
+
+
+## A block of `size` cut into boxes (centred on it) none longer than
+## CHUNK_SIDE nor bigger than a few max_piece: each box is split across its
+## longest side, a little off the middle, until it is small enough.
+func _chunks(size: Vector3, variant: int) -> Array[AABB]:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = variant * 7919 + 17
+	var most := max_piece * 2.5
+	var boxes: Array[AABB] = [AABB(-size * 0.5, size)]
+	var k := 0
+	while k < boxes.size() and boxes.size() < 40:
+		var b := boxes[k]
+		var axis := b.size.max_axis_index()
+		if b.size[axis] <= CHUNK_SIDE and b.get_volume() <= most:
+			k += 1
+			continue
+		var cut := b.size[axis] * rng.randf_range(0.35, 0.65)
+		var rest := b
+		b.size[axis] = cut
+		rest.position[axis] += cut
+		rest.size[axis] -= cut
+		boxes[k] = b
+		boxes.append(rest)
+	return boxes
 
 
 func _use_box(i: int, size: Vector3) -> void:
@@ -491,8 +575,9 @@ func retire(i: int) -> void:
 		fading_count += 1
 
 
-func is_fading(i: int) -> bool:
-	return _fade[i] > 0.0
+## True for a piece lying still (asleep, or frozen into the rubble).
+func is_resting(i: int) -> bool:
+	return _active[i] == 1 and (_frozen[i] == 1 or _sleeping[i] == 1)
 
 
 func is_active(i: int) -> bool:
@@ -666,7 +751,7 @@ func fracture(i: int, extra_velocity := Vector3.ZERO, keep := 0) -> PackedInt32A
 	# A fresh pattern spans a box of the piece's own volume (its bounds would
 	# make more matter than there was).
 	var fit := size * pow(clampf(volume / maxf(size.x * size.y * size.z, 1e-6), 0.05, 1.0), 1.0 / 3.0)
-	return shatter_box(xform, fit, kind, xform.origin, 0.0, vel, tint, shade, piece_seed, i, volume)
+	return shatter_box(xform, fit, kind, xform.origin, 0.0, vel, tint, shade, piece_seed, i, keep)
 
 
 ## Splits shard `i` into its sub-shards, each exactly where it sat inside it,
@@ -731,7 +816,9 @@ func gravel(
 	if cloud:
 		cloud.add(at, size, kind, seed_value, count * 3)
 	elif chips:
-		chips.burst(at, size, kind, count, speed, kick, seed_value)
+		# The rubble of a big break: bigger stones, not just more gravel.
+		var scale := clampf(pow(volume / (count * CHIP_VOLUME), 1.0 / 3.0), 1.0, 2.0)
+		chips.burst(at, size, kind, count, speed, kick, seed_value, scale)
 
 
 func _take_slot() -> int:
@@ -842,9 +929,11 @@ func _check_landing(i: int, at: Vector3) -> void:
 	if frozen_count > 0 and speed > THAW_AHEAD_SPEED and volume_of(i) >= PLOUGH_MIN_VOLUME:
 		var r := _size[i][_size[i].max_axis_index()] * 0.6 + 0.2
 		thaw_box(AABB(at + v * 0.1 - Vector3.ONE * r, Vector3.ONE * r * 2.0), 0.5)
-	if before < BREAK_SPEED or speed > before * 0.45 or _clock - _born[i] < 0.15:
+	var volume := volume_of(i)
+	var needed := maxf(BREAK_SPEED * pow(BREAK_VOLUME / maxf(volume, 1e-4), 1.0 / 3.0), BREAK_SPEED_MIN)
+	if before < minf(needed, BREAK_SPEED) or speed > before * 0.45 or _clock - _born[i] < 0.15:
 		return
-	if _breaks_left <= 0 or volume_of(i) < MIN_BREAK_VOLUME:
+	if _breaks_left <= 0 or volume < MIN_BREAK_VOLUME:
 		return
 	_breaks_left -= 1
 	var size := _size[i]
