@@ -30,6 +30,13 @@ const VORTEX_BURST_LIFT := 4.0
 ## Orbit angular speed (rad/s) at the core and at the radius.
 const VORTEX_SPIN := Vector2(9.0, 4.5)
 const VORTEX_MAX_SPEED := 22.0
+## A falling piece of building within VORTEX_PULL_REACH (m) of the core is
+## dragged toward it, VORTEX_PULL m/s^2 at the radius (twice that at the
+## core, fading out at the reach), and round it at VORTEX_SWIRL m/s^2: what
+## falls past a black hole does not get by.
+const VORTEX_PULL_REACH := 9.0
+const VORTEX_PULL := 20.0
+const VORTEX_SWIRL := 10.0
 ## Structural damage per second inside the radius and in the band.
 const VORTEX_DPS_INSIDE := 9.0
 const VORTEX_DPS_BAND := 3.0

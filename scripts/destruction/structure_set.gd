@@ -12,8 +12,8 @@ extends Node3D
 ##   - Loads flow top-down from each block to the blocks it rests on. A
 ##     block carrying more than its capacity is crushed, which moves its load
 ##     onto its neighbours, so collapses spread floor by floor.
-## A falling cluster breaks apart on impact: blocks near the hit shatter,
-## the rest tumble as loose debris, and whatever it hits takes damage.
+## Falling clusters crack, crumble and break up chunk by chunk, and damage
+## whatever they hit (see Falls).
 
 signal shattered(at: Vector3, size: Vector3, kind: int)
 signal cluster_released(at: Vector3, count: int, toppled: bool)
@@ -425,6 +425,13 @@ func standing_fraction() -> float:
 ## A black hole tears the blocks of falling pieces it reaches out of them.
 func tear_clusters(center: Vector3, radius: float) -> void:
 	falls.tear(center, radius)
+
+
+## A black hole drags the falling pieces near it in and round (see Falls.pull).
+func pull_clusters(
+	center: Vector3, radius: float, reach: float, strength: float, swirl: float, dt: float
+) -> void:
+	falls.pull(center, radius, reach, strength, swirl, dt)
 
 
 ## Damages every block within the blast. Returns how many broke or came loose.
