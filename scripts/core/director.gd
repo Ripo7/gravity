@@ -6,6 +6,8 @@ extends Node
 ##   --mode=play --steps="v@x,y,z;w1;s" [--from=x,y,z] [--god] [--shots=DIR]
 ##        plays with scripted casts and prints destruction, health, deaths
 ##        (screenshots at the start, every second cast and at the end).
+##        Also "a@x,y,z" looks there, "c@x0,y0,z0,x1,y1,z1" breaks every
+##        standing block centred in that box (cut a tower's foot).
 
 var options := {}
 var world: GameWorld
@@ -165,7 +167,7 @@ func _probe() -> void:
 
 ## Plays the level with a scripted list of steps and reports what happened.
 ## Steps (separated by ";"): v/p/s [+ @x,y,z target], "w<seconds>" to wait,
-## "m<x,y,z>" to teleport there.
+## "m<x,y,z>" to teleport there, "a@x,y,z" to look there, "c@<box>" to cut.
 func _play() -> void:
 	if options.has("from"):
 		player.global_position = _vec(options["from"])
@@ -183,6 +185,12 @@ func _play() -> void:
 			continue
 		if kind == "m":
 			player.global_position = _vec(spec.substr(1))
+			continue
+		if kind == "a":
+			_aim_now(_vec(spec.substr(2)))
+			continue
+		if kind == "c":
+			_cut(spec.substr(2).split_floats(","))
 			continue
 		var parts := spec.split("@")
 		var target := _vec(parts[1]) if parts.size() > 1 else Vector3.INF
@@ -204,6 +212,15 @@ func _play() -> void:
 		)
 	)
 	get_tree().quit()
+
+
+## Breaks every standing block centred in the box `b` (x0, y0, z0, x1, y1, z1).
+func _cut(b: PackedFloat64Array) -> void:
+	var box := AABB(Vector3(b[0], b[1], b[2]), Vector3(b[3] - b[0], b[4] - b[1], b[5] - b[2]))
+	var s := world.structures
+	for i in s.segment_count():
+		if s.is_alive(i) and box.has_point(s.transform_of(i).origin):
+			s.break_segment(i)
 
 
 ## One screenshot from --pos=x,y,z looking at --at=x,y,z.

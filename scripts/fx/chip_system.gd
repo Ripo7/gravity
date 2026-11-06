@@ -3,14 +3,18 @@ extends Node3D
 ## Gravel and splinters: hundreds of tiny irregular chips per collapse with
 ## no physics bodies at all. Each chip flies on a simple arc, bounces once
 ## on the surface below the break, then lies there for a long while (the
-## gravel of the rubble field) until the oldest are recycled. Only flying
-## chips cost anything per frame; one draw call for all of them.
+## gravel of the rubble field). When the pool fills up, the oldest resting
+## chips shrink away; a chip in flight is never taken back (a burst that
+## finds no room is just smaller). Only flying chips cost anything per
+## frame; one draw call for all of them.
 
 const GRAVITY := 18.0
 const FADE := 0.8
 ## Seconds between lifetime checks (resting chips only change then).
 const LIFE_TICK := 0.25
 const FLOATS := 20  # same instance layout as the debris (block shader)
+## Above this share of the pool in use, the oldest resting chips fade out.
+const SOFT_BUDGET := 0.75
 
 var capacity := 0
 var active := 0
@@ -25,7 +29,9 @@ var _life := PackedFloat32Array()
 var _origin := PackedVector3Array()  # where the burst came from
 var _state := PackedByteArray()  # 0 free, 1 flying, 2 bounced, 3 resting
 var _flying := PackedInt32Array()
-var _next := 0
+var _free := PackedInt32Array()
+var _rested := PackedInt32Array()  ## resting chips, oldest first (some stale)
+var _rested_head := 0
 var _life_tick := 0.0
 var _buffer := PackedFloat32Array()
 var _dirty := false
@@ -45,6 +51,9 @@ func _ready() -> void:
 	_origin.resize(capacity)
 	_state.resize(capacity)
 	_state.fill(0)
+	_free.resize(capacity)
+	for k in capacity:
+		_free[k] = capacity - 1 - k
 	_buffer.resize(capacity * FLOATS)
 	_buffer.fill(0.0)
 	var box := BoxMesh.new()
@@ -85,11 +94,9 @@ func burst(
 	var floor_y := _floor_below(at)
 	var shade := randf_range(0.85, 1.05)
 	for k in count:
-		var i := _next
-		_next = (_next + 1) % capacity
-		var was := _state[i]
-		if was == 0:
-			active += 1
+		var i := _take()
+		if i < 0:
+			break  # every chip is in the air: this burst is smaller
 		var p := (
 			at
 			+ Vector3(
@@ -109,8 +116,7 @@ func burst(
 		_floor[i] = floor_y
 		_life[i] = randf_range(40.0, 70.0) * float(Quality.pick(0.5, 0.8, 1.0))
 		_state[i] = 1
-		if was != 1 and was != 2:  # a recycled flying chip is already listed
-			_flying.append(i)
+		_flying.append(i)
 		var o := i * FLOATS
 		_buffer[o + 12] = shade * randf_range(0.9, 1.05)
 		_buffer[o + 13] = Materials.encode(kind)
@@ -120,6 +126,22 @@ func burst(
 		_buffer[o + 15] = 0.0
 		_buffer[o + 16] = Materials.custom(kind, 0.0, chip_seed)
 		_write(i, 1.0)
+
+
+## A free slot, else the chip that has been lying still the longest (it
+## should have faded already, see SOFT_BUDGET), else -1.
+func _take() -> int:
+	if not _free.is_empty():
+		var i := _free[_free.size() - 1]
+		_free.remove_at(_free.size() - 1)
+		active += 1
+		return i
+	while _rested_head < _rested.size():
+		var i := _rested[_rested_head]
+		_rested_head += 1
+		if _state[i] == 3:
+			return i
+	return -1
 
 
 func _chip_size(kind: int) -> Vector3:
@@ -169,6 +191,7 @@ func _process(delta: float) -> void:
 				else:
 					v = Vector3.ZERO
 					_state[i] = 3
+					_rested.append(i)
 		_vel[i] = v
 		_pos[i] = p
 		_angle[i] += _spin[i] * delta
@@ -180,6 +203,7 @@ func _process(delta: float) -> void:
 	# only change here).
 	_life_tick += delta
 	if _life_tick >= LIFE_TICK:
+		_trim()
 		for i in capacity:
 			if _state[i] == 0:
 				continue
@@ -187,6 +211,7 @@ func _process(delta: float) -> void:
 			if _life[i] <= 0.0:
 				_state[i] = 0
 				active -= 1
+				_free.append(i)
 				_write(i, 0.0)
 			elif _life[i] < FADE:
 				_write(i, _life[i] / FADE)
@@ -194,6 +219,26 @@ func _process(delta: float) -> void:
 	if _dirty:
 		_multimesh.buffer = _buffer
 		_dirty = false
+
+
+## Above the soft budget the oldest resting chips start their fade, so a
+## new burst finds room without anything vanishing at once.
+func _trim() -> void:
+	# Chips gone (or flying again) since they came to rest leave the queue.
+	while _rested_head < _rested.size() and _state[_rested[_rested_head]] != 3:
+		_rested_head += 1
+	var excess := active - int(capacity * SOFT_BUDGET)
+	var k := _rested_head
+	while excess > 0 and k < _rested.size():
+		var i := _rested[k]
+		k += 1
+		if _state[i] != 3:
+			continue
+		_life[i] = minf(_life[i], FADE)  # the front ones may be fading already
+		excess -= 1
+	if _rested_head > 1024 and _rested_head * 2 > _rested.size():
+		_rested = _rested.slice(_rested_head)
+		_rested_head = 0
 
 
 func _write(i: int, scale: float) -> void:
