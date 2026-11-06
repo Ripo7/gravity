@@ -128,6 +128,7 @@ func test_a_structure_on_a_roof_falls_with_its_support() -> void:
 	tank.block = Vector3(0.8, 0.5, 0.8)
 	var top_first := s.segment_count()
 	s.add_structure(Transform3D(Basis(), base + Vector3(0, roof_top, 0)), tank.build_segments())
+	var top_last := s.segment_count()  # walls it hits may crack into new blocks after this
 	tank.free()
 	s.link_anchors()
 	await frames(5)
@@ -139,7 +140,7 @@ func test_a_structure_on_a_roof_falls_with_its_support() -> void:
 			s.break_segment(i)
 	await get_tree().create_timer(2.0).timeout
 	var left := 0
-	for i in range(top_first, s.segment_count()):
+	for i in range(top_first, top_last):
 		if s.is_alive(i):
 			left += 1
 	check_eq(left, 0, "it comes down with the roof")

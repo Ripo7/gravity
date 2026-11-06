@@ -90,8 +90,9 @@ cost as little of it as possible:
 | Black hole / black ice shield | `scripts/powers/vortex.gd`, `ice_shield.gd` |
 | Health and what hurts | `scripts/player/player.gd`, `scripts/powers/hazards.gd` |
 | Menu (live attract-mode backdrop) | `scenes/menu.tscn`, `scripts/ui/main_menu.gd` |
-| Structural physics: loads and shear, toppling (also above a cut course), creak-and-hold, floor-by-floor pancake collapses | `scripts/destruction/structure_set.gd`, `falling_cluster.gd`, `sphere_grid.gd`, `structure_mesh.gd` |
-| Walls that crack open in place (cells cut in Blender) | `scripts/destruction/wall_cells.gd` |
+| Structural physics: loads and shear, creak-and-hold, floor-by-floor pancake collapses | `scripts/destruction/structure_set.gd`, `falling_cluster.gd`, `sphere_grid.gd`, `structure_mesh.gd` |
+| Footing: toppling (also above a cut course), and how far a block can hang from its neighbours or bridge a gap before it comes away | `scripts/destruction/footing.gd` |
+| Walls, floors and roofs that crack open in place (cells cut in Blender) | `scripts/destruction/wall_cells.gd` |
 | Loose pieces: pooled server bodies + one MultiMesh; resting rubble freezes into static bodies until disturbed | `scripts/destruction/debris_system.gd` |
 | Shard library: how concrete, wood and metal break (cut in Blender) | `tools/make_shards.py`, `assets/shards/shards.json`, `scripts/destruction/shard_library.gd` |
 | Box patterns (fallback, and materials without shards) | `scripts/destruction/fracture.gd` |
@@ -116,7 +117,12 @@ Breaking is never computed at runtime: `tools/make_shards.py` (Blender's
 Python module, `pip install bpy`) cuts unit cubes into Voronoi cells once,
 with rough fracture faces, and writes `assets/shards/shards.json`:
 
-- **Concrete:** 2 to 6 chunky pieces (at most 3 on phones, 4 in browsers).
+- **Concrete:** 2 to 6 chunky pieces. A big or long block first parts into
+  chunks no longer than 1.4 m (a BSP of boxes), and each chunk breaks along
+  a pattern, so no break leaves a slab or a beam whole. One break leaves at
+  most 5 bodies on phones, 8 in browsers, 12 on desktop (the biggest
+  pieces, about 0.45, 0.3 and 0.2 m³); the rest crumbles to gravel, in
+  bigger stones when a lot broke at once.
 - **The cascade:** every concrete and wood shard is cut again into 3 to 5
   sub-shards that tile it exactly. When a piece breaks a second time (a
   hard landing, the black hole's grinding) it splits along cracks that were
@@ -145,29 +151,48 @@ godot --headless --path . --import
 After anything changes, each structure is re-checked:
 
 1. **Connected pieces.** A piece with no contact to the ground falls as one
-   rigid body (a compound of its blocks) and breaks apart where it lands.
+   rigid body (a compound of its blocks) and breaks apart where it lands:
+   every big block of it breaks, and the harder the hit, the more of the
+   rest.
 2. **Toppling.** If a grounded piece's centre of mass leaves the footprint it
    stands on, it tips over as one body. The same check runs at every course
    where blocks were cut out: a tower whose foot is half gone falls over
    from there.
-3. **Loads.** Weight flows top-down from each block to the blocks it rests on,
+3. **Hanging and bridging.** A block that rests on nothing hangs from its
+   neighbours; one resting on two supports with its centre between them
+   bridges the gap; one whose centre is off the edge of what it rests on
+   would pivot off it (a floor left on one wall) and can only hang. Both
+   only reach so far: stone 1.5 m from the edge of what stands on its own
+   (long mouldings 0.6 m), floors 4 m along their beams but 1.5 m across
+   them, wood 4 m, metal 7 m. Whatever is held out farther comes away with
+   all it carries (it creaks first when it is big): the roof over a big
+   hole falls in instead of floating like a lid. The reach is walked from
+   the ground up (a Dijkstra over the blocks, only redone round what
+   changed) and calibrated on the intact building, so it always stands
+   (`scripts/destruction/footing.gd`).
+4. **Loads.** Weight flows top-down from each block to the blocks it rests on,
    split by contact area. Capacities (in compression and in shear) are
    calibrated on the intact structure (safety factor 2.4 for stone and
    concrete, 2 for wood, 3 for metal), so a building stands
    until enough supports are lost; then the most overloaded blocks crush, a
    few per frame, and the collapse spreads floor by floor.
-4. **Impacts.** A falling piece damages the blocks it hits (heavier hits
+5. **Impacts.** A falling piece damages the blocks it hits (heavier hits
    harder), so towers can be toppled into each other.
-5. **Coming loose.** A block bigger than 0.4 m³ (1 m³ on phones) cracks into
-   shards as it comes away: a wall panel never tumbles off whole.
-6. **Walls crack open in place.** A wall panel that breaks is replaced by the
-   cells of a wall pattern cut in Blender (prisms through its thickness,
-   seeded by a Geometry Nodes Poisson disk): the cells round the hit break
-   out, the others stay up as blocks of their own, linked along the faces
-   they share (areas from Blender) and to what the panel touched. Holes get
-   ragged edges across the stone joints, and the wall can go on failing a
-   cell at a time. The cells are drawn in the wall's own space, so plaster
+6. **Coming loose.** A block bigger than 0.4 m³ (0.6 m³ on phones) cracks
+   into shards as it comes away, and so does a long one (a cornice, a beam:
+   it breaks into lengths): a wall panel never tumbles off whole. Loose
+   pieces break on landing, big ones on softer landings (a cubic metre at
+   3.7 m/s, a stone of 0.15 m³ at 7).
+7. **Walls, floors and roofs crack open in place.** A wall panel or a slab
+   that breaks is replaced by the cells of a wall pattern cut in Blender
+   (prisms through its thickness, seeded by a Geometry Nodes Poisson disk):
+   the cells round the hit break out, the others stay up as blocks of their
+   own, linked along the faces they share (areas from Blender) and to what
+   the panel touched. Holes get ragged edges across the stone joints, and
+   the wall can go on failing a cell at a time. The cells are drawn in the wall's own space, so plaster
    and courses run on across them (`scripts/destruction/wall_cells.gd`).
+   The cells of a floor lie side by side and only hang from each other
+   (step 3), so a floor holds round a hole but not far past a lost wall.
 
 Blocks keep their damage between blasts (shown as cracks), which lowers
 their capacity.
@@ -180,10 +205,10 @@ their capacity.
   expire after 240 s.
 - The palace and the tower start with about 1,730 blocks (static bodies,
   one MultiMesh per kind).
-- Showcase (`--mode=showcase --prof --seed=1`, native build on a 4-core
-  Linux VM), physics ms per step while things are moving: phone
-  settings 3.1 mean (worst second 5.1–5.2), browser settings 4.5–4.7
-  (7.4–8.9), desktop 7.6–7.7 (12.8–17.9).
+- Showcase (`--mode=showcase --prof --seed=1..3`, native build on a
+  2-core Linux VM), physics ms per step while things are moving: phone
+  settings 3.6–4.0 mean (worst second 6.8–7.4), browser settings 5.9–6.3
+  (10.3–12.3), desktop 8.7–10.5 (14.1–20.9).
 - CI fails if the browser-settings showcase averages more than 12 ms per
   busy step (`tools/perf_gate.py`). `godot -- --mode=bench` still measures
   raw body counts by hand.

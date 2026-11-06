@@ -1,12 +1,13 @@
 class_name WallCells
 extends RefCounted
-## Walls that crack open in place. A wall panel (a big flat block) that
-## breaks is replaced by the cells of a wall pattern cut in Blender (prisms
-## through its thickness, tools/make_shards.py): the cells round the hit
-## become debris, the others stay up as blocks of their own, linked to each
-## other along the faces they share and to whatever the panel touched. So a
-## hole has ragged edges that cross the stone joints, and the rest of the
-## wall can go on falling a cell at a time.
+## Walls, floors and roofs that crack open in place. A wall panel or a slab
+## (a big flat block) that breaks is replaced by the cells of a wall pattern
+## cut in Blender (prisms through its thickness, tools/make_shards.py): the
+## cells round the hit become debris, the others stay up as blocks of their
+## own, linked to each other along the faces they share and to whatever the
+## panel touched. So a hole has ragged edges that cross the stone joints,
+## and the rest can go on falling a cell at a time (see Footing for how far
+## the cells of a floor can hang from each other).
 ##
 ## Cells are drawn with the debris mesh and material (one draw call for all
 ## of them), in their wall's own axes so the plaster or the stone courses
@@ -29,8 +30,16 @@ const MAX_PER_STEP := 2
 ## Fewer free debris slots than this: broken-out cells crumble to gravel.
 const FULL_POOL := 12
 ## Pattern turns: the patterns are cut with the thickness along z; a wall
-## thin along x turns them a quarter round y (a rotation, never a mirror).
-const TURNS: Array[Basis] = [Basis.IDENTITY, Basis(Vector3(0, 0, -1), Vector3(0, 1, 0), Vector3(1, 0, 0))]
+## thin along x turns them a quarter round y, a slab (thin along y) a
+## quarter round x (rotations, never mirrors).
+const TURNS: Array[Basis] = [
+	Basis.IDENTITY,
+	Basis(Vector3(0, 0, -1), Vector3(0, 1, 0), Vector3(1, 0, 0)),
+	Basis(Vector3(1, 0, 0), Vector3(0, 0, -1), Vector3(0, 1, 0)),
+]
+## The block axes across a cracked panel's face (width, height) and through
+## it, by turn.
+const FACE_AXES: Array[Vector3i] = [Vector3i(0, 1, 2), Vector3i(2, 1, 0), Vector3i(0, 2, 1)]
 
 var capacity := 0
 var cracked := 0  ## walls cracked so far
@@ -62,7 +71,7 @@ func is_cell(i: int) -> bool:
 	return _cells.has(i)
 
 
-## True if block `i` is a wall panel that can crack open.
+## True if block `i` is a wall panel or a slab that can crack open.
 func can_crack(i: int) -> bool:
 	if _cells.has(i) or _set._round[i] >= 0 or _set._kind[i] != Materials.Kind.CONCRETE:
 		return false
@@ -72,11 +81,11 @@ func can_crack(i: int) -> bool:
 	if absf(b.y.y) < 0.99:
 		return false  # tilted (ramps, voussoirs)
 	var size := _set._size[i]
-	var thin := 0 if size.x < size.z else 2
+	var axes := FACE_AXES[_turn_of(size)]
 	return (
-		size[thin] <= MAX_THICKNESS
-		and size.y >= MIN_SIDE
-		and size[2 - thin] >= MIN_SIDE
+		size[axes.z] <= MAX_THICKNESS
+		and size[axes.x] >= MIN_SIDE
+		and size[axes.y] >= MIN_SIDE
 		and size.x * size.y * size.z >= MIN_VOLUME
 	)
 
@@ -87,11 +96,11 @@ func crack(i: int, from: Vector3, dmg: float, tint: float) -> void:
 	var size := s._size[i]
 	var xf := s._xform[i]
 	var basis := xf.basis.orthonormalized()
-	var thin := 0 if size.x < size.z else 2
-	var turn_index := 0 if thin == 2 else 1
-	var width := size[2 - thin]
-	var count := clampi(roundi(width * size.y / cell_area), 6, 28)
-	var cells := ShardLibrary.wall_pattern(width / size.y, count)
+	var turn_index := _turn_of(size)
+	var axes := FACE_AXES[turn_index]
+	var width := size[axes.x]
+	var count := clampi(roundi(width * size[axes.y] / cell_area), 6, 28)
+	var cells := ShardLibrary.wall_pattern(width / size[axes.y], count)
 	var to_block := Basis.from_scale(size) * TURNS[turn_index]
 	var reach := s._surface_distance(i, from) + HOLE * clampf(0.75 + dmg * 0.05, 0.75, 1.6)
 	var near := -1
@@ -149,9 +158,10 @@ func crack(i: int, from: Vector3, dmg: float, tint: float) -> void:
 		)
 		# Each cell carries its share of what the panel carried (the cells
 		# of one column stand on each other, so shares overlap).
-		var share := clampf(cell_size[2 - thin] / width * 1.5, SHARE.x, SHARE.y)
+		var share := clampf(cell_size[axes.x] / width * 1.5, SHARE.x, SHARE.y)
 		s._capacity[c] = s._capacity[i] * share
 		s._shear_cap[c] = s._shear_cap[i] * share
+		s.footing.inherit(c, i)
 		_add(c, cell, size, turn_index)
 		ids[k] = c
 	_link_inside(cells, ids, size, turn_index)
@@ -272,11 +282,13 @@ func _hull(cell: Dictionary, size: Vector3, turn_index: int, to_block: Basis) ->
 	return _shapes[key]
 
 
-## Cells touching along a shared face are neighbours; the lower one holds
-## the upper one up when the face is far enough from upright.
+## Cells touching along a shared face are neighbours; in a wall the lower
+## one holds the upper one up when the face is far enough from upright (the
+## cells of a slab lie side by side: they only hang from each other).
 func _link_inside(cells: Array, ids: PackedInt32Array, size: Vector3, turn_index: int) -> void:
-	var thin := 2 if turn_index == 0 else 0
-	var width := size[2 - thin]
+	var axes := FACE_AXES[turn_index]
+	var width := size[axes.x]
+	var height := size[axes.y]
 	for k in cells.size():
 		var a := ids[k]
 		if a < 0:
@@ -288,12 +300,19 @@ func _link_inside(cells: Array, ids: PackedInt32Array, size: Vector3, turn_index
 			# The face in metres: its edge across the face, times the thickness.
 			var nx: float = link[2]
 			var ny: float = link[3]
-			var edge := Vector2(-ny * width, nx * size.y).length() * float(link[1])
-			var normal := Vector2(nx / width, ny / size.y).normalized()
-			var area := edge * size[thin]
+			var edge := Vector2(-ny * width, nx * height).length() * float(link[1])
+			var normal := Vector2(nx / width, ny / height).normalized()
+			var area := edge * size[axes.z]
 			# Normal points from a to b: b is below a when it points down.
-			var holds := area * -normal.y if normal.y < -SUPPORT_SLOPE else 0.0
+			var holds := area * -normal.y if normal.y < -SUPPORT_SLOPE and turn_index < 2 else 0.0
 			_set.link_blocks(a, b, holds)
+
+
+## Which way a panel of `size` turns the patterns: by its thinnest side.
+static func _turn_of(size: Vector3) -> int:
+	if size.y < size.x and size.y < size.z:
+		return 2
+	return 0 if size.z <= size.x else 1
 
 
 ## Cells touching what the panel touched take over its links (and what

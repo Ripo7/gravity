@@ -318,9 +318,13 @@ void vertex() {
 			vec3 c = texelFetch(shard_centers, ivec2(shard, 0), 0).xyz;
 			// A standing wall cell (INSTANCE_CUSTOM.b = 1 + turn) is drawn in
 			// its wall's own axes: its pattern (cut with the thickness along
-			// z) turned to the wall (turn 1: thickness along x).
+			// z) turned to the wall (turn 1: thickness along x; turn 2: a
+			// floor or a roof, thickness along y).
 			static_cell = INSTANCE_CUSTOM.b > 0.5 ? 1.0 : 0.0;
-			if (INSTANCE_CUSTOM.b > 1.5) {
+			if (INSTANCE_CUSTOM.b > 2.5) {
+				v = vec3(v.x, v.z, -v.y);
+				c = vec3(c.x, c.z, -c.y);
+			} else if (INSTANCE_CUSTOM.b > 1.5) {
 				v = vec3(v.z, v.y, -v.x);
 				c = vec3(c.z, c.y, -c.x);
 			}
