@@ -2,12 +2,16 @@ class_name FallingCluster
 extends RefCounted
 ## A falling piece of a structure: one rigid body with a box per block.
 ## StructureSet owns the blocks; this is their shared body while they fall.
+## Its blocks are grouped in chunks along ragged lines (see carve): where it
+## will crack, chunk by chunk, as it falls and lands (see Falls).
 
 var body: RID
 var members := PackedInt32Array()
 var offsets: Array[Transform3D] = []  # block transform in body space
 var masses := PackedFloat32Array()  # of each member
+var chunk := PackedInt32Array()  # chunk of each member (see carve)
 var mass := 0.0
+var gravity_scale := 1.0
 var age := 0.0
 var prev_velocity := Vector3.ZERO
 var prev_spin := Vector3.ZERO
@@ -17,8 +21,18 @@ var lean_time := 0.0  # seconds resting against a standing structure
 var leaned := false
 var crush_tick := 0.0
 var press_tick := 0.0
-var slow_time := 0.0  # seconds it has crept along (see StructureSet.SETTLE_TIME)
-var whole := true  # false once it broke across its height (see sections)
+var slow_time := 0.0  # seconds it has crept along (see Falls.SETTLE_TIME)
+var crawl_time := 0.0  # seconds it has crawled since it landed (Falls.CRAWL_TIME)
+var landed := false  # it hit something hard already
+var turned_at := 0.0  # how far it had turned when it last cracked across (rad)
+var peel_tick := 0.0
+var crumbling := false  # come to rest: it falls apart chunk by chunk
+## Chunks the shock of a landing will break off: {"time", "chunk", "from", "kick"}.
+var waves: Array[Dictionary] = []
+
+var _index := {}  # block -> position in members
+var _index_ok := false
+var _extent := -1.0
 
 
 ## One rigid body for `blocks`, each where `xforms` says (world), of mass
@@ -30,9 +44,10 @@ static func build(
 	block_masses: PackedFloat32Array,
 	shapes: Array[RID],
 	space: RID,
-	gravity_scale := 1.0
+	gravity := 1.0
 ) -> FallingCluster:
 	var c := FallingCluster.new()
+	c.gravity_scale = gravity
 	var com := Vector3.ZERO
 	for k in blocks.size():
 		com += xforms[k].origin * block_masses[k]
@@ -49,8 +64,8 @@ static func build(
 		c.offsets.append(off)
 		c.masses.append(block_masses[k])
 	PhysicsServer3D.body_set_param(c.body, PhysicsServer3D.BODY_PARAM_MASS, c.mass)
-	if gravity_scale != 1.0:
-		PhysicsServer3D.body_set_param(c.body, PhysicsServer3D.BODY_PARAM_GRAVITY_SCALE, gravity_scale)
+	if gravity != 1.0:
+		PhysicsServer3D.body_set_param(c.body, PhysicsServer3D.BODY_PARAM_GRAVITY_SCALE, gravity)
 	# A big piece touches a lot at once (its foot in rubble, its side on a
 	# wall): it needs to hear about all of it to bear down where it leans.
 	PhysicsServer3D.body_set_max_contacts_reported(c.body, 24 if blocks.size() < 30 else 96)
@@ -89,7 +104,172 @@ func take_out(ks: PackedInt32Array, xf: Transform3D, where: Array[Transform3D]) 
 		offsets.remove_at(k)
 		mass -= masses[k]
 		masses.remove_at(k)
+		if k < chunk.size():
+			chunk.remove_at(k)
+	_index_ok = false
+	_extent = -1.0
 	PhysicsServer3D.body_set_param(body, PhysicsServer3D.BODY_PARAM_MASS, maxf(mass, 1.0))
+	return out
+
+
+## Block -> its position in members.
+func index() -> Dictionary:
+	if not _index_ok:
+		_index.clear()
+		for k in members.size():
+			_index[members[k]] = k
+		_index_ok = true
+	return _index
+
+
+## How far its farthest block centre is from the body's origin (m).
+func extent() -> float:
+	if _extent < 0.0:
+		_extent = 0.0
+		for off in offsets:
+			_extent = maxf(_extent, off.origin.length())
+	return _extent
+
+
+## Cuts it into chunks of about `per_chunk` blocks along ragged lines: seeds
+## spread over it, then a random flood through the blocks from all of them
+## at once (a Voronoi of its blocks with torn edges). At least two chunks
+## from 6 blocks on. Linked by `neighbors` (block -> blocks it touches).
+func carve(neighbors: Array[PackedInt32Array], per_chunk: int) -> void:
+	var n := members.size()
+	chunk.resize(n)
+	var count := roundi(float(n) / maxf(per_chunk, 1))
+	count = mini(maxi(count, 2 if n >= 6 else 1), n)
+	if count <= 1:
+		chunk.fill(0)
+		return
+	chunk.fill(-1)
+	var seeds := PackedInt32Array([randi() % n])
+	var far := PackedFloat32Array()
+	far.resize(n)
+	far.fill(INF)
+	while seeds.size() < count:
+		var last := offsets[seeds[seeds.size() - 1]].origin
+		var best := 0
+		var best_d := -1.0
+		for k in n:
+			far[k] = minf(far[k], offsets[k].origin.distance_squared_to(last))
+			var d := far[k] * randf_range(0.6, 1.0)  # uneven chunks
+			if d > best_d:
+				best_d = d
+				best = k
+		seeds.append(best)
+	var at := index()
+	var frontier := PackedInt32Array()
+	for q in seeds.size():
+		chunk[seeds[q]] = q
+		frontier.append(seeds[q])
+	while not frontier.is_empty():
+		var f := randi() % frontier.size()
+		var k := frontier[f]
+		frontier[f] = frontier[frontier.size() - 1]
+		frontier.remove_at(frontier.size() - 1)
+		for nb in neighbors[members[k]]:
+			var kn: int = at.get(nb, -1)
+			if kn >= 0 and chunk[kn] < 0:
+				chunk[kn] = chunk[k]
+				frontier.append(kn)
+	var next := count
+	for k in n:
+		if chunk[k] < 0:  # cut off from the seeds: a chunk of its own
+			chunk[k] = next
+			next += 1
+
+
+## Positions (in members) of the blocks of chunk `q`.
+func chunk_members(q: int) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	for k in chunk.size():
+		if chunk[k] == q:
+			out.append(k)
+	return out
+
+
+## Its chunks, each once.
+func chunk_ids() -> PackedInt32Array:
+	var seen := {}
+	for q in chunk:
+		seen[q] = true
+	return PackedInt32Array(seen.keys())
+
+
+## Of the positions `ks`, those of blocks touching a block of the piece that
+## is not in `ks`: the rim along which they come away.
+func rim(ks: PackedInt32Array, neighbors: Array[PackedInt32Array]) -> PackedInt32Array:
+	var inside := {}
+	for k in ks:
+		inside[k] = true
+	var at := index()
+	var out := PackedInt32Array()
+	for k in ks:
+		for nb in neighbors[members[k]]:
+			var kn: int = at.get(nb, -1)
+			if kn >= 0 and not inside.has(kn):
+				out.append(k)
+				break
+	return out
+
+
+## Up to `count` blocks sticking out of it (touching at most two of its
+## other blocks), picked at random: the stones that come off as it tumbles.
+func loose(neighbors: Array[PackedInt32Array], count: int) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	var at := index()
+	var n := members.size()
+	for _attempt in count * 4:
+		if out.size() >= count:
+			break
+		var k := randi() % n
+		if out.has(k):
+			continue
+		var held := 0
+		for nb in neighbors[members[k]]:
+			if at.has(nb):
+				held += 1
+		if held <= 2:
+			out.append(k)
+	return out
+
+
+## Where a tall piece cracks across once it turns: the blocks of the chunks
+## beyond a ragged line a third to half way along it from its lower end
+## (bending is worst near the foot). Empty unless it is at least `tall`
+## times as long as it is wide. At `xf`.
+func crack_line(xf: Transform3D, tall: float) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	var box := AABB(offsets[0].origin, Vector3.ZERO)
+	for off in offsets:
+		box = box.expand(off.origin)
+	var axis := box.size.max_axis_index()
+	var length := box.size[axis] + 1.0
+	var width := 1.0
+	for a in 3:
+		if a != axis:
+			width = maxf(width, box.size[a] + 1.0)
+	if length < width * tall:
+		return out
+	var dir := Vector3.ZERO
+	dir[axis] = 1.0
+	# Its lower end, in the world, is the foot.
+	var up := (xf.basis * dir).y >= 0.0
+	var foot := box.position[axis] if up else box.end[axis]
+	var cut := box.size[axis] * randf_range(0.3, 0.55)
+	var sums := {}
+	var counts := {}
+	for k in offsets.size():
+		var along := absf(offsets[k].origin[axis] - foot)
+		sums[chunk[k]] = sums.get(chunk[k], 0.0) + along
+		counts[chunk[k]] = counts.get(chunk[k], 0) + 1
+	for k in offsets.size():
+		if sums[chunk[k]] / counts[chunk[k]] > cut:
+			out.append(k)
+	if out.size() < 3 or out.size() > offsets.size() - 3:
+		out.clear()
 	return out
 
 
@@ -97,9 +277,7 @@ func take_out(ks: PackedInt32Array, xf: Transform3D, where: Array[Transform3D]) 
 ## `neighbors` (block -> blocks it touches): 0 is the biggest piece.
 func parts(neighbors: Array[PackedInt32Array]) -> PackedInt32Array:
 	var n := members.size()
-	var at := {}
-	for k in n:
-		at[members[k]] = k
+	var at := index()
 	var part := PackedInt32Array()
 	part.resize(n)
 	part.fill(-1)
@@ -186,32 +364,6 @@ func struck_points(xf: Transform3D, v: Vector3, w: Vector3) -> PackedVector3Arra
 	for k in speeds.size():
 		if speeds[k] >= fastest * 0.5:
 			out.append(state.get_contact_local_position(k))
-	return out
-
-
-## How a tall piece (a tower) breaks across its height once it has tipped
-## more than `tilt` (radians): a section number per member, 0 being its
-## foot, each section about `ratio` times as long as the piece is wide.
-## Empty when it is not at least `tall` times as long as it is wide, or not
-## tipped that far yet. Masonry does not bend: it snaps.
-func sections(xf: Transform3D, tilt: float, tall: float, ratio: float) -> PackedInt32Array:
-	var out := PackedInt32Array()
-	if not whole or xf.basis.y.angle_to(Vector3.UP) < tilt:
-		return out
-	var box := AABB(offsets[0].origin, Vector3.ZERO)
-	for off in offsets:
-		box = box.expand(off.origin)
-	var width := maxf(box.size.x, box.size.z) + 1.0
-	if box.size.y + 1.0 < width * tall:
-		whole = false  # never will
-		return out
-	whole = false
-	var count := clampi(roundi((box.size.y + 1.0) / (width * ratio)), 2, 4)
-	var shift := randf_range(-0.2, 0.2)
-	out.resize(offsets.size())
-	for k in offsets.size():
-		var along := (offsets[k].origin.y - box.position.y) / maxf(box.size.y, 0.01)
-		out[k] = clampi(int(along * count + shift), 0, count - 1)
 	return out
 
 

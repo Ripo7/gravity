@@ -1,7 +1,8 @@
 class_name Vortex
 extends Node3D
 ## Black hole power. It opens where you aim and does not explode: everything
-## inside its radius is torn loose and spins around the core like a storm.
+## inside its radius is torn loose and spins around the core like a storm,
+## and pieces of building falling nearby are dragged in.
 ## Just outside the radius is a band that is not pulled but shredded:
 ## blocks there crack and break, and it hurts you. Inside, the storm grinds
 ## what it holds: pieces crack again and again along their own cracks, and
@@ -158,6 +159,14 @@ func _physics_process(delta: float) -> void:
 		_cloud.accepting = true
 		get_parent().add_child(_cloud)
 	_spin_debris(delta)
+	_world.structures.pull_clusters(
+		center,
+		PowerDefs.VORTEX_RADIUS,
+		PowerDefs.VORTEX_PULL_REACH,
+		PowerDefs.VORTEX_PULL,
+		PowerDefs.VORTEX_SWIRL,
+		delta
+	)
 	_tick += delta
 	if _tick >= TICK:
 		var r := PowerDefs.VORTEX_RADIUS

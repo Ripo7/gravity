@@ -1,17 +1,20 @@
 class_name Falls
 extends RefCounted
 ## The falling pieces of building, one rigid body each (FallingCluster), and
-## what becomes of them (StructureSet decides what stands and what falls):
-##   - a tall piece toppling over snaps across its height, each section
-##     flying on as it was moving (masonry does not bend);
-##   - resting or leaning, a piece bears down on what it touches: standing
-##     blocks give way when that is more than they can carry, rubble is
-##     ground to gravel;
-##   - a hard landing crushes the part that struck (floors pile up storey by
-##     storey) and damages what it hit; a smaller piece breaks up;
-##   - a black hole tears the blocks it reaches out of a piece as it sinks in.
+## how they come apart (StructureSet decides what stands and what falls).
+## Nothing stays a rigid lump: a piece is cut in chunks along ragged lines
+## the moment it falls, and crumbles chunk by chunk:
+##   - a tall piece turning over (a toppling tower) cracks across, again and
+##     again, along those lines (masonry does not bend);
+##   - tumbling or falling fast, it sheds the stones sticking out of it;
+##   - a hard landing crushes the part that struck and damages what it hit,
+##     then the shock runs on through it and breaks chunks off one after
+##     the other (a big piece keeps going, slowed: floors pile up);
+##   - resting or leaning, it bears down on what it touches (standing blocks
+##     give way, rubble is ground), and once at rest it falls apart from the
+##     top into stones, shards and gravel;
+##   - a black hole drags it in and tears out the blocks it reaches.
 
-const MAX_CLUSTERS := 12
 const IMPACT_DV := 3.5  ## m/s change in one step that counts as a hit
 const IMPACT_MIN_SPEED := 4.5  ## m/s; slower contacts are just settling
 const CLUSTER_MAX_AGE := 9.0
@@ -36,17 +39,43 @@ const GRIND_LOAD := 40.0
 ## whole; less, it cracks open where it is pressed.
 const CRUSH_WHOLE := 3.0
 ## A falling piece at least TALL times as long as it is wide (a tower)
-## breaks across its height into sections about SECTION times as long as it
-## is wide once it has tipped BREAK_TILT (radians) over: masonry snaps.
+## cracks across each time it has turned BREAK_TILT (radians) more.
 const TALL := 2.5
-const SECTION := 1.3
 const BREAK_TILT := 0.2
+## The shock of a landing runs through a piece at WAVE_SPEED (m/s), as far
+## as WAVE_REACH s times the speed it hit at (a third of that for a big
+## piece), breaking off what it reaches with WAVE_KICK times that speed.
+const WAVE_SPEED := 22.0
+const WAVE_REACH := 0.5
+const WAVE_KICK := 0.12
+const WAVES_PER_FRAME := 3
+## Along a crack, this share of the blocks crumbles instead of staying with
+## the chunk that comes away (ragged edges, rubble).
+const RIM_CRUMBLE := 0.6
+## Blocks smaller than this (m^3) leave a piece as whole stones; bigger
+## ones break into shards and gravel as they come away.
+const STONE_VOLUME := 0.06
+## Faster than this (m/s) or spinning faster than this (rad/s), a piece
+## sheds up to PEEL_PER_TICK stones every PRESS_TICK.
+const PEEL_SPEED := 5.0
+const PEEL_SPIN := 0.8
+const PEEL_PER_TICK := 2
+## A piece at rest falls apart this many chunks a frame.
+const CRUMBLE_CHUNKS := 2
 ## A piece that has crept slower than SETTLE_SPEED (m/s) for SETTLE_TIME
 ## seconds has come to rest (lying across rubble or a ruin): it comes apart.
+## So does a piece that has landed and only crawls on (slower than
+## CRAWL_SPEED for CRAWL_TIME s), grinding through a roof.
 const SETTLE_SPEED := 0.5
 const SETTLE_TIME := 0.6
+const CRAWL_SPEED := 2.0
+const CRAWL_TIME := 0.8
 
 var clusters: Array[FallingCluster] = []
+## Most pieces falling at once (more break off: the smallest comes apart).
+var max_clusters := int(Quality.pick(16, 22, 30))
+## Blocks in a chunk (phones: fewer, bigger chunks).
+var chunk_blocks := int(Quality.pick(10, 8, 7))
 
 var _set: StructureSet
 
@@ -111,24 +140,26 @@ func tear(center: Vector3, radius: float) -> void:
 
 
 ## Makes room for a new falling body of `count` blocks when there are
-## already MAX_CLUSTERS: the smallest one comes apart into loose blocks (the
-## least visible change). False if the new one is the smallest itself.
-func make_room(count: int) -> bool:
-	if clusters.size() < MAX_CLUSTERS:
+## already max_clusters: the smallest one (never `spare`) comes apart into
+## loose blocks, the least visible change. False if the new one would be
+## the smallest itself.
+func make_room(count: int, spare: FallingCluster = null) -> bool:
+	if clusters.size() < max_clusters:
 		return true
-	var least := clusters[0]
+	var least: FallingCluster = null
 	for c in clusters:
-		if c.members.size() < least.members.size():
+		if c != spare and (least == null or c.members.size() < least.members.size()):
 			least = c
-	if least.members.size() >= count:
+	if least == null or least.members.size() >= count:
 		return false
 	dissolve(least, Vector3.ZERO, 0.0)
 	return true
 
 
 ## One rigid body for `blocks` (already FALLING) where they are now, with a
-## box per block.
-func add(blocks: PackedInt32Array) -> FallingCluster:
+## box per block. `chunks` (one per block) keeps the cracks it had in a
+## bigger piece; else it is cut in chunks afresh.
+func add(blocks: PackedInt32Array, chunks := PackedInt32Array()) -> FallingCluster:
 	var xforms: Array[Transform3D] = []
 	var masses := PackedFloat32Array()
 	var shapes: Array[RID] = []
@@ -138,6 +169,13 @@ func add(blocks: PackedInt32Array) -> FallingCluster:
 		shapes.append(_set._box_shape(_set._size[i] * 0.995))
 	var heavy := CLUSTER_GRAVITY if blocks.size() >= PANCAKE_MIN else 1.0
 	var c := FallingCluster.build(blocks, xforms, masses, shapes, _set.get_world_3d().space, heavy)
+	var kinds := {}
+	for q in chunks:
+		kinds[q] = true
+	if chunks.size() == blocks.size() and kinds.size() > 1:
+		c.chunk = chunks
+	else:
+		c.carve(_set._neighbors, mini(chunk_blocks, maxi(blocks.size() / 3, 2)))
 	clusters.append(c)
 	return c
 
@@ -166,13 +204,16 @@ func _regroup(c: FallingCluster) -> void:
 ## when small), moving as it was.
 func _split(c: FallingCluster, part: PackedInt32Array) -> void:
 	var pieces: Array[PackedInt32Array] = []
+	var chunks: Array[PackedInt32Array] = []
 	var away := PackedInt32Array()
 	for k in part.size():
 		if part[k] == 0:
 			continue
 		if part[k] >= pieces.size():
 			pieces.resize(part[k] + 1)
+			chunks.resize(part[k] + 1)
 		pieces[part[k]].append(c.members[k])
+		chunks[part[k]].append(c.chunk[k])
 		away.append(k)
 	if away.is_empty():
 		return
@@ -180,25 +221,34 @@ func _split(c: FallingCluster, part: PackedInt32Array) -> void:
 	var v: Vector3 = PhysicsServer3D.body_get_state(c.body, PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY)
 	var w: Vector3 = PhysicsServer3D.body_get_state(c.body, PhysicsServer3D.BODY_STATE_ANGULAR_VELOCITY)
 	_take_out(c, away, xf)
-	for blocks in pieces:
+	for p in pieces.size():
+		var blocks := pieces[p]
 		if blocks.is_empty():
 			continue
-		if blocks.size() < 3 or not make_room(blocks.size()):
+		if blocks.size() < 3 or not make_room(blocks.size(), c):
 			for i in blocks:
-				_set._dislodge(i, v + w.cross(_set._xform[i].origin - xf.origin), w, 0.0)
+				_loosen(i, v + w.cross(_set._xform[i].origin - xf.origin), w)
 			continue
-		var piece := add(blocks)
-		var pv := v + w.cross(piece.transform().origin - xf.origin)
-		PhysicsServer3D.body_set_state(piece.body, PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY, pv)
-		PhysicsServer3D.body_set_state(piece.body, PhysicsServer3D.BODY_STATE_ANGULAR_VELOCITY, w)
-		piece.age = c.age
-		piece.toppled = c.toppled
-		piece.prev_velocity = pv
-		piece.recent.fill(pv.length())
+		_fly_on(add(blocks, chunks[p]), c, xf, v, w, Vector3.ZERO)
 
 
-## Breaks a cluster into loose debris. `severity` (impact speed) decides how
-## much of it shatters around `hit`.
+## New piece `piece` (split off `from`, which was at `xf` moving at `v`,
+## spinning at `w`) goes on as that part of it was moving, plus `kick`.
+func _fly_on(
+	piece: FallingCluster, from: FallingCluster, xf: Transform3D, v: Vector3, w: Vector3, kick: Vector3
+) -> void:
+	var pv := v + w.cross(piece.transform().origin - xf.origin) + kick
+	PhysicsServer3D.body_set_state(piece.body, PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY, pv)
+	PhysicsServer3D.body_set_state(piece.body, PhysicsServer3D.BODY_STATE_ANGULAR_VELOCITY, w)
+	piece.age = from.age
+	piece.toppled = from.toppled
+	piece.prev_velocity = pv
+	piece.recent.fill(pv.length())
+
+
+## Breaks a cluster up at once into loose debris (the rest of what its
+## chunks did not take). `severity` (impact speed) decides how much of it
+## shatters around `hit`.
 func dissolve(c: FallingCluster, hit: Vector3, severity: float) -> void:
 	clusters.erase(c)
 	var xf: Transform3D = PhysicsServer3D.body_get_state(c.body, PhysicsServer3D.BODY_STATE_TRANSFORM)
@@ -232,7 +282,7 @@ func dissolve(c: FallingCluster, hit: Vector3, severity: float) -> void:
 				# block and flung big pieces across the city.)
 				vel += Vector3(randf_range(-1, 1), randf_range(0, 0.5), randf_range(-1, 1)) * 0.8
 				spin += Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * 2.0
-			_set._dislodge(i, vel, spin, 0.0, keep)
+			_loosen(i, vel, spin, keep)
 
 
 ## Centres of the falling pieces of building moving faster than `speed`
@@ -254,6 +304,11 @@ func update(delta: float) -> void:
 			continue
 		c.age += delta
 		var xf: Transform3D = PhysicsServer3D.body_get_state(c.body, PhysicsServer3D.BODY_STATE_TRANSFORM)
+		if c.crumbling:
+			_crumble(c, xf)
+			if clusters.has(c):
+				_draw(c, xf)
+			continue
 		var v: Vector3 = PhysicsServer3D.body_get_state(c.body, PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY)
 		var asleep: bool = PhysicsServer3D.body_get_state(c.body, PhysicsServer3D.BODY_STATE_SLEEPING)
 		var w: Vector3 = PhysicsServer3D.body_get_state(c.body, PhysicsServer3D.BODY_STATE_ANGULAR_VELOCITY)
@@ -272,11 +327,14 @@ func update(delta: float) -> void:
 			_impact(c, xf, hit.y, before, spun)
 			continue
 		_bear_down(c, xf, delta)
+		if clusters.has(c):
+			_run_waves(c, delta)
+		if clusters.has(c):
+			_crack(c, xf)
+		if clusters.has(c):
+			_peel(c, xf, v, w, delta)
 		if not clusters.has(c):
 			continue
-		var cut := c.sections(xf, BREAK_TILT, TALL, SECTION)
-		if not cut.is_empty():
-			_split(c, cut)
 		# Push through rubble rather than stopping dead on frozen pieces.
 		if _set.debris and _set.debris.frozen_count > 0 and v.length() > 1.0:
 			c.crush_tick -= delta
@@ -284,50 +342,60 @@ func update(delta: float) -> void:
 				c.crush_tick = 0.0
 				_set.debris.thaw_box(c.bounds(xf).grow(0.4).merge(c.bounds(xf.translated(v * 0.15))), 0.4)
 		c.slow_time = c.slow_time + delta if v.length() < SETTLE_SPEED else 0.0
-		var settled := c.slow_time > SETTLE_TIME or (asleep and c.age > 0.5)
-		if c.age > CLUSTER_MAX_AGE or settled or xf.origin.y < DebrisSystem.KILL_Y:
+		c.crawl_time = c.crawl_time + delta if c.landed and v.length() < CRAWL_SPEED else 0.0
+		if c.age > CLUSTER_MAX_AGE or xf.origin.y < DebrisSystem.KILL_Y:
 			dissolve(c, Vector3.ZERO, 0.0)
 			continue
+		# At rest (lying across rubble or a ruin): it falls apart from now on.
+		c.crumbling = (
+			c.crumbling or c.slow_time > SETTLE_TIME or c.crawl_time > CRAWL_TIME or (asleep and c.age > 0.5)
+		)
+		_draw(c, xf)
+
+
+func _draw(c: FallingCluster, xf: Transform3D) -> void:
+	for k in c.members.size():
+		_set._write_instance(c.members[k], xf * c.offsets[k])
+
+
+## A black hole at `center` drags the falling pieces within `reach` toward
+## it (`strength` m/s^2 at `radius`, fading out at `reach`, twice that at
+## the core) and round it (`swirl`), block by block, so a long piece swings in
+## by its near end; inside the radius they weigh nothing. What gets inside
+## is torn out of them (see tear).
+func pull(center: Vector3, radius: float, reach: float, strength: float, swirl: float, dt: float) -> void:
+	for c in clusters:
+		var xf := c.transform()
+		if xf.origin.distance_to(center) > reach + c.extent():
+			continue
+		var g := 9.8 * c.gravity_scale
+		var force := Vector3.ZERO
+		var torque := Vector3.ZERO
 		for k in c.members.size():
-			_set._write_instance(c.members[k], xf * c.offsets[k])
-
-
-## A big falling block landed: the storey that struck (around `struck`,
-## else its lowest) is crushed into rubble and the rest keeps going, slowed
-## down: floors pile up one after the other, a toppling tower breaks up
-## from its top as it comes down onto the palace, instead of the whole
-## thing bursting at once. Returns false when there is nothing left to
-## crush (then it breaks up as usual).
-func _pancake(c: FallingCluster, xf: Transform3D, speed: float, struck: PackedVector3Array) -> bool:
-	var crush := c.near(xf, struck, PANCAKE_LAYER) if not struck.is_empty() else PackedInt32Array()
-	if crush.is_empty():
-		crush = c.bottom(xf, PANCAKE_LAYER)  # positions in c.members
-	if crush.is_empty() or c.members.size() - crush.size() < PANCAKE_MIN / 2:
-		return false
-	var hit := Vector3.ZERO
-	for k in crush:
-		hit += xf * c.offsets[k].origin
-	hit /= crush.size()
-	var v: Vector3 = PhysicsServer3D.body_get_state(c.body, PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY)
-	_set.floor_crushed.emit(hit, crush.size(), speed)
-	_set.cluster_impact.emit(hit, c.mass * crush.size() / c.members.size(), speed, crush.size())
-	if _set.debris:
-		_set.debris.thaw_near(hit, 3.0)
-	_strike(struck if not struck.is_empty() else PackedVector3Array([hit]), 1.5, speed * 0.3 * _heft(c))
-	var keep := _fair_share(crush.size())
-	for i in _take_out(c, crush, xf):
-		if randf() < 0.65:
-			_set._shatter(i, hit, speed * 0.25, v * 0.2, false, keep)
-		else:
-			var kick := v * 0.25 + Vector3(randf_range(-1, 1), 0, randf_range(-1, 1))
-			_set._dislodge(i, kick, Vector3.ZERO, 0.0, keep)
-	_regroup(c)
-	PhysicsServer3D.body_set_state(c.body, PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY, v * PANCAKE_KEEP)
-	PhysicsServer3D.body_set_state(c.body, PhysicsServer3D.BODY_STATE_SLEEPING, false)
-	c.recent = PackedFloat32Array([0.0, 0.0, 0.0, 0.0])
-	c.prev_velocity = v * PANCAKE_KEEP
-	c.age = 0.05
-	return true
+			var p := xf * c.offsets[k].origin
+			var to := center - p
+			var d := to.length()
+			if d > reach or d < 0.05:
+				continue
+			var near := (
+				sqrt(clampf((reach - d) / (reach - radius), 0.0, 1.0)) if d > radius else 2.0 - d / radius
+			)
+			var around := Vector3.UP.cross(-to)
+			around.y = 0.0
+			var a := to / d * strength * near
+			if around.length_squared() > 0.0025:
+				a += around.normalized() * swirl * near
+			if d < radius:
+				a.y += g
+			var f := a * c.masses[k]
+			force += f
+			torque += (p - xf.origin).cross(f)
+		if force == Vector3.ZERO:
+			continue
+		PhysicsServer3D.body_apply_central_impulse(c.body, force * dt)
+		PhysicsServer3D.body_apply_torque_impulse(c.body, torque * dt)
+		PhysicsServer3D.body_set_state(c.body, PhysicsServer3D.BODY_STATE_SLEEPING, false)
+		c.slow_time = 0.0
 
 
 ## A piece resting or leaning on things bears down on them with its weight,
@@ -371,6 +439,7 @@ func _bear_down(c: FallingCluster, xf: Transform3D, delta: float) -> void:
 	# all of it at rest (Jolt's impulses can add up to more: shares then).
 	var carried := c.mass * minf(total / (c.mass * 9.8 * delta), 1.0)
 	var gave := 0
+	var worn := PackedVector3Array()  # where it crushed standing blocks
 	for key: int in pushes:
 		var j: Vector3 = pushes[key]
 		var weight := carried * j.length() / total
@@ -411,6 +480,7 @@ func _bear_down(c: FallingCluster, xf: Transform3D, delta: float) -> void:
 			_set._shatter(key, where[key], 0.0)
 			_set.apply_impact(where[key], clampf(over * 0.1, 0.8, 2.0), minf(over, 20.0))
 			gave += 1
+			worn.append(where[key])
 		elif over > 1.0:
 			_set._shatter(key, where[key], 2.0)  # a little: it cracks open there
 			gave += 1
@@ -418,15 +488,23 @@ func _bear_down(c: FallingCluster, xf: Transform3D, delta: float) -> void:
 		# It sinks into the room it just made: keep it awake and falling.
 		PhysicsServer3D.body_set_state(c.body, PhysicsServer3D.BODY_STATE_SLEEPING, false)
 		c.age = maxf(c.age - PRESS_TICK, 0.35)
+	# Masonry crushing masonry gives way too, where it presses.
+	var ground := c.near(xf, worn, 1.0)
+	if not ground.is_empty() and ground.size() < c.members.size() - 3:
+		var v: Vector3 = PhysicsServer3D.body_get_state(c.body, PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY)
+		for i in _take_out(c, ground, xf):
+			_loosen(i, v + Vector3(randf_range(-1, 1), 0.3, randf_range(-1, 1)), Vector3.ZERO)
+		_regroup(c)
 
 
-## A falling piece hit something: damage what it struck, then break it up.
-## `push` is the velocity it had just before the hit (the direction it was
-## going: after the hit it may be stopped or bouncing back).
+## A falling piece hit something: the part that struck is crushed into
+## shards and gravel and what it hit takes the blow; then the shock runs on
+## through it and breaks chunks off one after the other, the farther the
+## harder it hit (see _shake). A big piece keeps going, slowed: floors pile
+## up storey by storey, a toppling tower breaks up from its top as it comes
+## down onto the palace. `push` and `spin`: how it moved just before.
 func _impact(c: FallingCluster, xf: Transform3D, speed: float, push: Vector3, spin: Vector3) -> void:
 	var spots := c.struck_points(xf, push, spin)
-	if c.members.size() >= PANCAKE_MIN and _pancake(c, xf, speed, spots):
-		return
 	var hit := c.lowest_point(xf)
 	var struck := -1
 	var state := PhysicsServer3D.body_get_direct_state(c.body)
@@ -437,16 +515,224 @@ func _impact(c: FallingCluster, xf: Transform3D, speed: float, push: Vector3, sp
 			if seg >= 0 and _set._state[seg] == StructureSet.State.STATIC:
 				struck = seg  # hitting a standing structure matters most
 				break
-	_set.cluster_impact.emit(hit, c.mass, speed, c.members.size())
+	if spots.is_empty():
+		spots.append(hit)
+	var heavy := c.members.size() >= PANCAKE_MIN
+	var crush := c.near(xf, spots, PANCAKE_LAYER)
+	var mid := Vector3.ZERO
+	for q in spots:
+		mid += q
+	mid /= spots.size()
+	var v: Vector3 = PhysicsServer3D.body_get_state(c.body, PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY)
+	if heavy:
+		_set.floor_crushed.emit(mid, crush.size(), speed)
+		_set.cluster_impact.emit(mid, c.mass * crush.size() / c.members.size(), speed, crush.size())
+	else:
+		_set.cluster_impact.emit(mid, c.mass, speed, c.members.size())
 	if _set.debris:
-		_set.debris.thaw_near(hit, 3.0)
-	# Heavy pieces hit harder: chain reactions and dominoes.
-	var reach := clampf(0.8 + c.members.size() * 0.02, 1.0, 2.5)
-	spots.append(hit)
-	_strike(spots, reach, speed * 0.35 * _heft(c))
-	dissolve(c, hit, speed)
+		_set.debris.thaw_near(mid, 3.0)
+	var blow := spots.duplicate()
+	blow.append(hit)
+	if heavy:
+		_strike(blow, 1.5, speed * 0.3 * _heft(c))
+	else:
+		_strike(blow, clampf(0.8 + c.members.size() * 0.02, 1.0, 2.5), speed * 0.35 * _heft(c))
+	var keep := _fair_share(crush.size())
+	for i in _take_out(c, crush, xf):
+		if randf() < 0.65:
+			_set._shatter(i, mid, speed * 0.25, v * 0.2, true, keep)
+		else:
+			_loosen(i, v * 0.25 + Vector3(randf_range(-1, 1), 0, randf_range(-1, 1)), Vector3.ZERO, keep)
+	if c.members.size() < 3:
+		dissolve(c, mid, speed)
+	else:
+		_shake(c, xf, spots, clampf(speed * WAVE_REACH * (0.35 if heavy else 1.0), 1.0, 12.0), speed)
+		_regroup(c)
+		# Keep going, slowed, onto what is below (and do not count this
+		# landing again next step).
+		var keep_v := v * (PANCAKE_KEEP if heavy else 1.0)
+		PhysicsServer3D.body_set_state(c.body, PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY, keep_v)
+		PhysicsServer3D.body_set_state(c.body, PhysicsServer3D.BODY_STATE_SLEEPING, false)
+		c.recent = PackedFloat32Array([0.0, 0.0, 0.0, 0.0])
+		c.prev_velocity = keep_v
+		c.age = 0.05
+		c.landed = true
 	if struck >= 0 and _set._state[struck] == StructureSet.State.STATIC:
 		_knock(struck, push, c.mass * speed, hit)
+
+
+## The shock of a landing runs through what is left of `c` from `spots`:
+## each chunk within `reach` breaks off when it gets there (WAVE_SPEED),
+## pushed off harder the nearer it is.
+func _shake(
+	c: FallingCluster, xf: Transform3D, spots: PackedVector3Array, reach: float, speed: float
+) -> void:
+	var near := {}  # chunk -> how far from the blow
+	for k in c.members.size():
+		var p := xf * c.offsets[k].origin
+		var d := INF
+		for q in spots:
+			d = minf(d, p.distance_to(q))
+		near[c.chunk[k]] = minf(near.get(c.chunk[k], INF), d)
+	var from := spots[0]
+	for q: int in near:
+		var d: float = near[q]
+		if d < reach:
+			c.waves.append(
+				{
+					"time": d / WAVE_SPEED,
+					"chunk": q,
+					"from": from,
+					"kick": speed * WAVE_KICK * (1.0 - d / reach)
+				}
+			)
+
+
+## Breaks off the chunks the shock has reached by now (a few a frame).
+func _run_waves(c: FallingCluster, delta: float) -> void:
+	var done := 0
+	for wave: Dictionary in c.waves.duplicate():
+		wave["time"] -= delta
+		if wave["time"] > 0.0 or done >= WAVES_PER_FRAME:
+			continue
+		c.waves.erase(wave)
+		var ks := c.chunk_members(wave["chunk"])
+		if ks.is_empty():
+			continue
+		if ks.size() > c.members.size() - 3:
+			c.crumbling = true  # it is all that is left: it falls apart
+			c.waves.clear()
+			return
+		_break_off(c, ks, wave["from"], wave["kick"])
+		done += 1
+		if not clusters.has(c):
+			return
+
+
+## The blocks at positions `ks` come away from falling piece `c`, pushed
+## from `from` at `kick` m/s on top of how they moved: together as a piece
+## of their own when they are enough, while about half of the rim along the
+## crack crumbles into stones, shards and gravel.
+func _break_off(c: FallingCluster, ks: PackedInt32Array, from: Vector3, kick: float) -> void:
+	var xf := c.transform()
+	var v: Vector3 = PhysicsServer3D.body_get_state(c.body, PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY)
+	var w: Vector3 = PhysicsServer3D.body_get_state(c.body, PhysicsServer3D.BODY_STATE_ANGULAR_VELOCITY)
+	var rim := {}
+	for k in c.rim(ks, _set._neighbors):
+		rim[c.members[k]] = true
+	var chunk_of := {}
+	for k in ks:
+		chunk_of[c.members[k]] = c.chunk[k]
+	var blocks := _take_out(c, ks, xf)
+	var centre := Vector3.ZERO
+	for i in blocks:
+		centre += _set._xform[i].origin
+	centre /= blocks.size()
+	var away := (centre - from).normalized() if centre.distance_to(from) > 0.05 else Vector3.UP
+	var keep := _fair_share(blocks.size())
+	var piece := PackedInt32Array()
+	var chunks := PackedInt32Array()
+	var crumbs := 0
+	for i in blocks:
+		if rim.has(i) and randf() < RIM_CRUMBLE:
+			var r := _set._xform[i].origin - xf.origin
+			_loosen(i, v + w.cross(r) + away * kick * randf_range(0.5, 1.2), w, keep)
+			crumbs += 1
+		else:
+			piece.append(i)
+			chunks.append(chunk_of[i])
+	if piece.size() >= 3 and make_room(piece.size(), c):
+		var spin := Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * kick * 0.3
+		var nc := add(piece, chunks)
+		_fly_on(nc, c, xf, v, w + spin, away * kick)
+	else:
+		for i in piece:
+			_loosen(i, v + w.cross(_set._xform[i].origin - xf.origin) + away * kick, w, keep)
+	if crumbs > 0 and _set.dust:
+		_set.dust.puff(centre, clampf(crumbs * 0.4, 0.8, 2.5), _set._kind[blocks[0]], mini(4 + crumbs, 10))
+	if c.members.size() < 3:
+		dissolve(c, from, 0.0)
+	elif clusters.has(c):
+		_regroup(c)
+
+
+## A tall piece that has turned BREAK_TILT more since it last cracked (a
+## toppling tower) cracks across along the ragged line of its chunks: what
+## is beyond goes on alone. Masonry does not bend.
+func _crack(c: FallingCluster, xf: Transform3D) -> void:
+	if c.members.size() < 12:
+		return
+	var turned := xf.basis.get_rotation_quaternion().get_angle()
+	if turned - c.turned_at < BREAK_TILT:
+		return
+	c.turned_at = turned
+	var beyond := c.crack_line(xf, TALL)
+	if not beyond.is_empty():
+		_break_off(c, beyond, xf.origin, 0.0)
+
+
+## Tumbling or falling fast, a piece sheds the stones sticking out of it.
+func _peel(c: FallingCluster, xf: Transform3D, v: Vector3, w: Vector3, delta: float) -> void:
+	c.peel_tick -= delta
+	if c.peel_tick > 0.0 or c.members.size() < 6:
+		return
+	c.peel_tick = PRESS_TICK
+	var rush := maxf(v.length() - PEEL_SPEED, 0.0) / 8.0 + maxf(w.length() - PEEL_SPIN, 0.0)
+	if randf() >= rush:
+		return
+	var ks := c.loose(_set._neighbors, PEEL_PER_TICK)
+	if ks.is_empty():
+		return
+	for i in _take_out(c, ks, xf):
+		var r := _set._xform[i].origin - xf.origin
+		var out := r.normalized() if r.length() > 0.1 else Vector3.UP
+		_loosen(i, v + w.cross(r) + out * randf_range(0.5, 1.5), w)
+	if c.members.size() < 3:
+		dissolve(c, Vector3.ZERO, 0.0)
+	else:
+		_regroup(c)
+
+
+## A piece at rest falls apart from the top, a few chunks a frame, into
+## stones, shards and gravel: a heap, not blocks.
+func _crumble(c: FallingCluster, xf: Transform3D) -> void:
+	if c.members.size() < 3:
+		dissolve(c, Vector3.ZERO, 0.0)
+		return
+	var tops := {}  # chunk -> highest block centre
+	for k in c.members.size():
+		tops[c.chunk[k]] = maxf(tops.get(c.chunk[k], -INF), (xf * c.offsets[k].origin).y)
+	var ids := tops.keys()
+	ids.sort_custom(func(a: int, b: int) -> bool: return tops[a] > tops[b])
+	var ks := PackedInt32Array()
+	for q: int in ids.slice(0, CRUMBLE_CHUNKS):
+		ks.append_array(c.chunk_members(q))
+	if ks.size() > c.members.size() - 3:
+		dissolve(c, Vector3.ZERO, 0.0)
+		return
+	var v: Vector3 = PhysicsServer3D.body_get_state(c.body, PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY)
+	var blocks := _take_out(c, ks, xf)
+	var keep := _fair_share(blocks.size())
+	var centre := Vector3.ZERO
+	for i in blocks:
+		var r := _set._xform[i].origin - xf.origin
+		var slump := Vector3(r.x, 0, r.z).normalized() * randf_range(0.2, 0.8)
+		_loosen(i, v + slump, Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5), keep)
+		centre += _set._xform[i].origin
+	if _set.dust:
+		_set.dust.puff(centre / blocks.size(), 1.5, _set._kind[blocks[0]], 6)
+	_regroup(c)
+
+
+## Block `i` leaves a falling piece as rubble, moving at `vel`: a stone
+## stays whole, a bigger block breaks into shards and gravel.
+func _loosen(i: int, vel: Vector3, spin: Vector3, keep := 0) -> void:
+	var size := _set._size[i]
+	if size.x * size.y * size.z < STONE_VOLUME:
+		_set._dislodge(i, vel, spin, 0.0, keep)
+		return
+	var behind := vel.normalized() * 0.5 if vel.length() > 0.1 else Vector3.DOWN * 0.5
+	_set._shatter(i, _set._xform[i].origin - behind, 1.0, vel, true, keep)
 
 
 ## Heavy pieces hit harder (chain reactions, dominoes): 1 to 3.

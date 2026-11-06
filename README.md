@@ -16,7 +16,7 @@ the palace.
 1. **Black hole** – a black ball opens where you aim. Everything inside its
    radius is torn loose and orbits it fast; there is no explosion. The band
    just outside the radius (red ring) is not pulled but takes damage –
-   including you.
+   including you. Pieces of building falling near it are dragged in.
 2. **Shield** – not aimed: pressing its button makes a tall, curved shell of
    black ice (close to a half dome, but lumpy) burst out of the ground around
    your front. It stops debris and falling pieces until it breaks; its shards
@@ -183,9 +183,7 @@ godot --headless --path . --import
 After anything changes, each structure is re-checked:
 
 1. **Connected pieces.** A piece with no contact to the ground falls as one
-   rigid body (a compound of its blocks) and breaks apart where it lands:
-   every big block of it breaks, and the harder the hit, the more of the
-   rest.
+   body (a compound of its blocks) that crumbles as it goes (step 5).
 2. **Toppling.** If a grounded piece's centre of mass leaves the footprint it
    stands on, it tips over as one body. The same check runs at every course
    where blocks were cut out: a tower whose foot is half gone falls over
@@ -208,21 +206,29 @@ After anything changes, each structure is re-checked:
    concrete, 2 for wood, 3 for metal), so a building stands
    until enough supports are lost; then the most overloaded blocks crush, a
    few per frame, and the collapse spreads floor by floor.
-5. **Impacts.** A falling piece damages the blocks it hits, all along
-   where it struck (heavier hits harder), so towers can be toppled into
-   each other. A big piece crushes the storey that struck and keeps going,
-   slowed: floors pile up one after the other, a toppling tower breaks up
-   from its top as it comes down on the palace.
+5. **What falls crumbles.** A piece that comes away is not a rigid lump
+   of blocks: it is cut in chunks of 7 to 10 blocks along ragged lines (a
+   random flood through its blocks from seeds spread over it), and it comes
+   apart chunk by chunk. A tall piece (a tower) cracks across along those
+   lines each time it has turned 11° more; tumbling or falling fast, a
+   piece sheds the stones sticking out of it; a hard landing crushes the
+   part that struck and damages what it hit (heavier hits harder, so towers
+   can be toppled into each other), then the shock runs on through it at
+   22 m/s and breaks chunks off one after the other, the farther the harder
+   it hit (a big piece keeps going, slowed: floors pile up storey by
+   storey). Along every crack about half the rim crumbles into stones,
+   shards, gravel and dust. A piece that has come to rest, or that only
+   crawls on after landing, falls apart from the top in a few frames
+   (`scripts/destruction/falls.gd`).
 6. **Falling pieces bear down.** A piece resting or leaning on things puts
    its weight on them, shared out as its contacts push: a standing block
    gives way when that is more than it can carry or hold (crushed whole,
-   with what is around it, when it is far too much), rubble under a heavy
-   piece is ground to gravel. A tall piece (a tower) snaps across its
-   height into sections once it has tipped over 11°, each flying on as it
-   was moving: cut the campanile's foot on the palace side and it folds
-   onto the palace's west wing and crushes it, instead of leaning on it in
-   one piece. A black hole tears out of a falling piece only the blocks it
-   reaches, a few at a time (`scripts/destruction/falls.gd`).
+   with what is around it, when it is far too much, and the piece wears
+   away there too), rubble under a heavy piece is ground to gravel. Cut the
+   campanile's foot on the palace side and it cracks, folds onto the
+   palace's west wing and crushes it while its lower part pours down. A
+   black hole drags in what falls within 9 m of its core, block by block
+   (a long piece swings in by its near end), and tears out what it reaches.
 7. **Coming loose.** A block bigger than 0.4 m³ (0.6 m³ on phones) cracks
    into shards as it comes away, and so does a long one (a cornice, a beam:
    it breaks into lengths): a wall panel never tumbles off whole. Loose
