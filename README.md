@@ -120,7 +120,8 @@ cost as little of it as possible:
 | Black hole / black ice shield | `scripts/powers/vortex.gd`, `ice_shield.gd` |
 | Health and what hurts | `scripts/player/player.gd`, `scripts/powers/hazards.gd` |
 | Menu (live attract-mode backdrop) | `scenes/menu.tscn`, `scripts/ui/main_menu.gd` |
-| Structural physics: loads and shear, creak-and-hold, floor-by-floor pancake collapses | `scripts/destruction/structure_set.gd`, `falling_cluster.gd`, `sphere_grid.gd`, `structure_mesh.gd` |
+| Structural physics: loads and shear, creak-and-hold, floor-by-floor pancake collapses | `scripts/destruction/structure_set.gd`, `sphere_grid.gd`, `structure_mesh.gd` |
+| Falling pieces: sections of a toppling tower, bearing down, impacts, black-hole tearing | `scripts/destruction/falls.gd`, `falling_cluster.gd` |
 | Footing: toppling (also above a cut course), and how far a block can hang from its neighbours or bridge a gap before it comes away | `scripts/destruction/footing.gd` |
 | Walls, floors and roofs that crack open in place (cells cut in Blender) | `scripts/destruction/wall_cells.gd` |
 | Loose pieces: pooled server bodies + one MultiMesh; resting rubble freezes into static bodies until disturbed | `scripts/destruction/debris_system.gd` |
@@ -207,14 +208,27 @@ After anything changes, each structure is re-checked:
    concrete, 2 for wood, 3 for metal), so a building stands
    until enough supports are lost; then the most overloaded blocks crush, a
    few per frame, and the collapse spreads floor by floor.
-5. **Impacts.** A falling piece damages the blocks it hits (heavier hits
-   harder), so towers can be toppled into each other.
-6. **Coming loose.** A block bigger than 0.4 m³ (0.6 m³ on phones) cracks
+5. **Impacts.** A falling piece damages the blocks it hits, all along
+   where it struck (heavier hits harder), so towers can be toppled into
+   each other. A big piece crushes the storey that struck and keeps going,
+   slowed: floors pile up one after the other, a toppling tower breaks up
+   from its top as it comes down on the palace.
+6. **Falling pieces bear down.** A piece resting or leaning on things puts
+   its weight on them, shared out as its contacts push: a standing block
+   gives way when that is more than it can carry or hold (crushed whole,
+   with what is around it, when it is far too much), rubble under a heavy
+   piece is ground to gravel. A tall piece (a tower) snaps across its
+   height into sections once it has tipped over 11°, each flying on as it
+   was moving: cut the campanile's foot on the palace side and it folds
+   onto the palace's west wing and crushes it, instead of leaning on it in
+   one piece. A black hole tears out of a falling piece only the blocks it
+   reaches, a few at a time (`scripts/destruction/falls.gd`).
+7. **Coming loose.** A block bigger than 0.4 m³ (0.6 m³ on phones) cracks
    into shards as it comes away, and so does a long one (a cornice, a beam:
    it breaks into lengths): a wall panel never tumbles off whole. Loose
    pieces break on landing, big ones on softer landings (a cubic metre at
    3.7 m/s, a stone of 0.15 m³ at 7).
-7. **Walls, floors and roofs crack open in place.** A wall panel or a slab
+8. **Walls, floors and roofs crack open in place.** A wall panel or a slab
    that breaks is replaced by the cells of a wall pattern cut in Blender
    (prisms through its thickness, seeded by a Geometry Nodes Poisson disk):
    the cells round the hit break out, the others stay up as blocks of their
@@ -225,6 +239,10 @@ After anything changes, each structure is re-checked:
    The cells of a floor lie side by side and only hang from each other
    (step 3), so a floor holds round a hole but not far past a lost wall.
 
+`tests/test_tower.gd` is the reference physics test: the tower, cut at its
+foot on the palace side, must snap, come down on the palace and crush its
+west wing, and leave its rubble there.
+
 Blocks keep their damage between blasts (shown as cracks), which lowers
 their capacity.
 
@@ -232,14 +250,22 @@ their capacity.
 
 - Pieces are raw `PhysicsServer3D` bodies (no nodes), created once and pooled.
 - Budget: 1500 pieces on desktop, 900 in desktop browsers, 500 on phones.
-  Above 80% the oldest resting pieces shrink away; on web, pieces also
+  Nothing the player can see just vanishes. Above 80%, pieces out of sight
+  (behind the camera, or smaller than about 2 px) go at once and the
+  smallest looking ones in view shrink away; when a collapse fills the pool
+  anyway, the least visible piece makes room, crumbling into gravel if it
+  can be seen. A break shares out what the pool can spare (every block of a
+  falling tower leaves at least a chunk), and small fragments become gravel
+  rather than push a visible piece out. Gravel chips are never taken back
+  in flight; the oldest resting ones shrink away first. On web, pieces also
   expire after 240 s.
 - The palace and the tower start with about 1,730 blocks (static bodies,
   one MultiMesh per kind).
 - Showcase (`--mode=showcase --prof --seed=1..3`, native build on a
   2-core Linux VM), physics ms per step while things are moving: phone
-  settings 3.6–4.0 mean (worst second 6.8–7.4), browser settings 5.9–6.3
-  (10.3–12.3), desktop 8.7–10.5 (14.1–20.9).
+  settings 4.4–4.7 mean (worst second 6.4–8.3), browser settings 6.0–6.1
+  (11.4–11.9), desktop 10.2–11.1 (19.1–20.2). Since the tower crushes the
+  palace instead of crumbling beside it, its act costs more than it did.
 - CI fails if the browser-settings showcase averages more than 12 ms per
   busy step (`tools/perf_gate.py`). `godot -- --mode=bench` still measures
   raw body counts by hand.

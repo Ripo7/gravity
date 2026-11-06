@@ -5,8 +5,9 @@ extends Node3D
 ## Pieces are raw PhysicsServer3D bodies (no nodes) drawn by a single
 ## MultiMesh, so hundreds of pieces cost one draw call and no scene-tree
 ## overhead. Bodies are created once and pooled. Above a soft budget the
-## oldest settled pieces shrink away over a second, so the pool rarely runs
-## dry and nothing pops out of existence in front of the player.
+## pieces out of sight go first and the smallest looking ones shrink away
+## over a second; when the pool runs dry anyway, the piece the player would
+## miss least makes room. Nothing pops out of existence in front of them.
 
 ## A big piece broke up on a hard landing.
 signal piece_broke(at: Vector3, size: Vector3, kind: int, speed: float)
@@ -45,9 +46,9 @@ const CHIP_VOLUME := 0.0013
 ## A piece with no sub-shards left and smaller than this (m^3) crumbles into
 ## gravel (grains in a black hole) when it breaks.
 const CRUMBLE_VOLUME := 0.08
-## When the pool is full, fragments smaller than this (m^3) become gravel
-## instead of pushing a resting piece out of the pool (which also wakes
-## what rested on it).
+## When the pool is full and nothing in it is out of sight, fragments
+## smaller than this (m^3) become gravel instead of pushing a piece the
+## player can see out of it.
 const FULL_POOL_GRAVEL := 0.15
 ## A break leaves no piece longer than this (m): long and big blocks first
 ## part into chunks, each of which breaks along a pattern.
@@ -56,6 +57,18 @@ const CHUNK_SIDE := 1.4
 ## v m^3 is BREAK_SPEED * (BREAK_VOLUME / v)^(1/3), down to BREAK_SPEED_MIN.
 const BREAK_VOLUME := 0.15
 const BREAK_SPEED_MIN := 3.2
+## A piece can leave the pool unnoticed when it is off screen or looks
+## smaller than this (its radius over its distance: about 2 px on a phone).
+const UNSEEN := 0.006
+## Seconds between two rankings of the pieces to give up (see _rank_spare).
+const RANK_EVERY := 0.1
+## Above the soft budget, at most this many unseen pieces go per frame.
+const DROP_PER_FRAME := 24
+## A break leaves at least one body for a block this big (m^3), even when
+## that means taking the least visible piece out of the pool.
+const KEEP_ONE_VOLUME := 0.05
+const _SLOT_BITS := 20
+const _SEEN_SCALE := 100000.0
 
 ## Set before the scene loads to force a pool size (benchmarks).
 static var capacity_override := 0
@@ -85,6 +98,9 @@ var landing_keep := 0
 var max_piece := 0.3
 var max_bodies := 8
 var lifetime := 0.0
+## Pieces the player could see that the full pool had to take back: they
+## crumble into gravel (nothing just vanishes).
+var crumbled_in_view := 0
 var active_count := 0
 var frozen_count := 0
 var chips: ChipSystem  ## where tiny shards go (set by the world)
@@ -132,6 +148,15 @@ var _space: RID
 var _clock := 0.0
 var _quiet_speed := QUIET_SPEED
 var _quiet_spin := QUIET_SPIN
+## Pieces ranked least visible first: (young << 50 | look << 20 | slot).
+var _spare := PackedInt64Array()
+var _spare_next := 0
+var _spare_clock := -INF
+var _serial := PackedInt32Array()  ## bumped each time a slot gets a new piece
+var _ranked := PackedInt32Array()  ## a slot's serial when it was ranked
+var _eye := Vector3.ZERO
+var _ahead := Vector3.FORWARD
+var _cone := -2.0  ## cos of the view's half diagonal; < -1 with no camera
 
 
 func _ready() -> void:
@@ -183,6 +208,10 @@ func _build_pool() -> void:
 	_pos.resize(capacity)
 	_mass.resize(capacity)
 	_born.resize(capacity)
+	_serial.resize(capacity)
+	_serial.fill(0)
+	_ranked.resize(capacity)
+	_ranked.fill(-1)
 	_tint.resize(capacity)
 	_storm.resize(capacity)
 	_storm.fill(0)
@@ -362,12 +391,13 @@ func shatter_box(
 			(world.origin - from).normalized() if world.origin.distance_to(from) > 0.01 else Vector3.UP
 		)
 		var spin := Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * 3.0
-		if _free.is_empty() and piece.get_volume() < FULL_POOL_GRAVEL:
-			gravel(world.origin, piece.size, kind, piece.get_volume(), 2.0 + push, inherit, seed_value)
-			continue
-		var j := spawn(world, piece.size * 0.985, away * push + inherit, spin, tint, shade, kind, seed_value)
+		var j := -1
+		if piece.get_volume() >= FULL_POOL_GRAVEL or room(1) > 0:
+			j = spawn(world, piece.size * 0.985, away * push + inherit, spin, tint, shade, kind, seed_value)
 		if j >= 0:
 			out.append(j)
+		else:
+			gravel(world.origin, piece.size, kind, piece.get_volume(), 2.0 + push, inherit, seed_value)
 	return out
 
 
@@ -407,9 +437,11 @@ func _shatter_chunks(
 			where.append(k)
 			shards.append(shard)
 			turns.append(turn)
-	# The biggest pieces become bodies, never more than the pool has free
-	# (taking a slot back from a resting piece costs a scan and wakes its pile).
-	var bodies := mini(keep if keep > 0 else max_bodies, _free.size())
+	# The biggest pieces become bodies, never more than the pool can spare
+	# unseen; a big block always leaves one (the least visible piece goes).
+	var bodies := room(keep if keep > 0 else max_bodies)
+	if bodies == 0 and size.x * size.y * size.z >= KEEP_ONE_VOLUME:
+		bodies = 1
 	var least := INF
 	if bodies > 0:
 		var sorted := vols.duplicate()
@@ -525,6 +557,7 @@ func _place(
 	_pos[i] = clean.origin
 	_mass[i] = mass
 	_born[i] = _clock
+	_serial[i] += 1
 	_tint[i] = tint
 	_shade[i] = shade
 	_kind[i] = kind
@@ -616,11 +649,6 @@ func set_storm(i: int, on: bool) -> void:
 	# Sweeping hundreds of fast orbiting pieces every step is the other big
 	# cost; inside the storm a piece may as well cut through a thin panel.
 	PhysicsServer3D.body_set_enable_continuous_collision_detection(_bodies[i], not on)
-
-
-## Pool slots still free (no piece has to be recycled for these).
-func free_slots() -> int:
-	return _free.size()
 
 
 func in_storm(i: int) -> bool:
@@ -787,21 +815,15 @@ func _split_shard(i: int, kids: Array, extra: Vector3, keep := 0) -> PackedInt32
 		var away := r.normalized() if r.length() > 0.01 else Vector3.UP
 		var kv := v + w.cross(r) + away * SPLIT_PUSH * randf_range(0.5, 1.2)
 		var vol: float = kid["volume"] * block_vol
-		if vol < min_body or (_free.is_empty() and vol < FULL_POOL_GRAVEL):
-			gravel(
-				centre,
-				(to_block * (kid["size"] as Vector3)).abs(),
-				kind,
-				vol,
-				SPLIT_PUSH * 2.0,
-				kv,
-				seed_value
-			)
-			continue
-		var spin := w * 0.8 + Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5)
-		var j := spawn_shard(block, bsize, turn, kid, kv, spin, tint, shade, kind, seed_value)
+		var j := -1
+		if vol >= min_body and (vol >= FULL_POOL_GRAVEL or room(1) > 0):
+			var spin := w * 0.8 + Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5)
+			j = spawn_shard(block, bsize, turn, kid, kv, spin, tint, shade, kind, seed_value)
 		if j >= 0:
 			out.append(j)
+			continue
+		var kid_size := (to_block * (kid["size"] as Vector3)).abs()
+		gravel(centre, kid_size, kind, vol, SPLIT_PUSH * 2.0, kv, seed_value)
 	return out
 
 
@@ -821,47 +843,151 @@ func gravel(
 		chips.burst(at, size, kind, count, speed, kick, seed_value, scale)
 
 
+## How many new pieces (up to `want`) the pool can take right now without
+## anything vanishing in view: free slots, then pieces nobody can see.
+func room(want: int) -> int:
+	if _free.size() >= want:
+		return want
+	_rank_spare()
+	var n := _free.size()
+	for k in range(_spare_next, _spare.size()):
+		if n >= want or not _unseen(_spare[k]):
+			break  # ranked: everything after it can be seen
+		if _still_ranked(_spare[k]):
+			n += 1
+	return n
+
+
+## A free slot; when the pool is full, the piece the player would miss least
+## leaves it: off screen (or not drawn yet) it just goes, else the smallest
+## looking one crumbles into gravel.
 func _take_slot() -> int:
 	if not _free.is_empty():
 		return _free.pop_back()
-	# Pool empty: take the piece closest to finishing its shrink, else the
-	# oldest sleeping piece, else the oldest piece.
-	var victim := -1
-	var best := INF
+	_rank_spare()
+	for _attempt in 2:
+		while _spare_next < _spare.size():
+			var key := _spare[_spare_next]
+			_spare_next += 1
+			if not _still_ranked(key):
+				continue
+			var i := int(key & ((1 << _SLOT_BITS) - 1))
+			if _unseen(key) or _born[i] >= _clock:
+				despawn(i)  # nobody saw it (out of sight, or not drawn yet)
+			else:
+				_crumble(i)
+			recycled_total += 1
+			return _free.pop_back()
+		_rank_spare(true)  # all used up within the frame: rank again
+	return -1
+
+
+## Piece `i`, which the player may see, leaves the pool by crumbling into
+## gravel where it is (what is left of it, if it was shrinking away).
+func _crumble(i: int) -> void:
+	crumbled_in_view += 1
+	var left := _fade[i] / FADE_TIME if _fade[i] > 0.0 else 1.0
+	var at := transform_of(i).origin
+	var kick := velocity_of(i)
+	var vol := volume_of(i) * left * left * left
+	var size := _size[i] * left
+	var seed_value := _seed[i]
+	var kind := _kind[i]
+	despawn(i)
+	gravel(at, size, kind, vol, 1.0, kick, seed_value)
+
+
+## The ranked piece is still the one in its slot (not freed or replaced).
+func _still_ranked(key: int) -> bool:
+	var i := int(key & ((1 << _SLOT_BITS) - 1))
+	return _active[i] == 1 and _serial[i] == _ranked[i]
+
+
+## Ranks the live pieces from least to most visible: off screen first, then
+## the smallest on screen (a shrinking one by what is left of it), pieces
+## born in the last half second last. At most every RANK_EVERY seconds.
+func _rank_spare(now := false) -> void:
+	if not now and _clock - _spare_clock < RANK_EVERY:
+		return
+	_spare_clock = _clock
+	_spare_next = 0
+	_spare.clear()
+	_look()
 	for i in capacity:
 		if not _active[i]:
 			continue
-		var score := _born[i]
+		var look := _looks(i)
 		if _fade[i] > 0.0:
-			score = -1e9 + _fade[i]
-		elif _sleeping[i]:
-			score -= 1e6
-		if score < best:
-			best = score
-			victim = i
-	if victim < 0:
-		return -1
-	despawn(victim)
-	recycled_total += 1
-	return _free.pop_back()
+			look *= _fade[i] / FADE_TIME
+		var young := 1 if _clock - _born[i] < 0.5 else 0
+		_spare.append((young << 50) | (mini(int(look * _SEEN_SCALE), (1 << 29) - 1) << _SLOT_BITS) | i)
+		_ranked[i] = _serial[i]
+	_spare.sort()
 
 
-## Above the soft budget, retire a few of the oldest settled pieces per frame.
+## Where the camera is and how wide it sees, for _looks.
+func _look() -> void:
+	var cam := get_viewport().get_camera_3d() if is_inside_tree() else null
+	if cam == null:
+		_cone = -2.0
+		return
+	_eye = cam.global_position
+	_ahead = -cam.global_basis.z
+	var view := get_viewport().get_visible_rect().size
+	var aspect := view.x / maxf(view.y, 1.0)
+	var t := tan(deg_to_rad(cam.fov) * 0.5)
+	var tall := t if cam.keep_aspect == Camera3D.KEEP_HEIGHT else t / aspect
+	var wide := tall * aspect
+	_cone = cos(atan(sqrt(tall * tall + wide * wide)) + 0.1)
+
+
+## How big piece `i` looks: its radius over its distance, 0 off screen.
+func _looks(i: int) -> float:
+	var r := _size[i].length() * 0.5
+	if _cone < -1.0:
+		return r * 0.1  # no camera: by size alone
+	var d := _pos[i] - _eye
+	var dist := d.length()
+	if dist <= r:
+		return 10.0
+	if d.dot(_ahead) < dist * _cone - r:
+		return 0.0
+	return r / dist
+
+
+func _unseen(key: int) -> bool:
+	return key >> 50 == 0 and (key >> _SLOT_BITS) & ((1 << 30) - 1) < int(UNSEEN * _SEEN_SCALE)
+
+
+## Above the soft budget: pieces nobody can see go at once (a few dozen per
+## frame), visible ones shrink away, the smallest looking first. Nothing
+## younger than retire_min_age (a second if unseen) goes; INF turns the
+## budget off (benchmarks).
 func _enforce_budget() -> void:
 	var excess := active_count - fading_count - int(capacity * soft_budget)
-	if excess <= 0:
+	if excess <= 0 or retire_min_age == INF:
 		return
-	var candidates: Array[Vector2] = []  # (score, index)
-	for i in capacity:
-		if not _active[i] or _fade[i] > 0.0 or _tint[i] > 0.0:
+	_rank_spare()
+	var dropped := 0
+	var faded := 0
+	var drop_age := minf(retire_min_age, 1.0)
+	for k in range(_spare_next, _spare.size()):
+		if dropped + faded >= excess or faded >= RETIRE_PER_FRAME:
+			break
+		var key := _spare[k]
+		var i := int(key & ((1 << _SLOT_BITS) - 1))
+		if not _still_ranked(key) or _fade[i] > 0.0 or _tint[i] > 0.0:
 			continue
-		if _clock - _born[i] < retire_min_age:
-			continue
-		var score := _born[i] - (1e6 if _sleeping[i] else 0.0)
-		candidates.append(Vector2(score, i))
-	candidates.sort()
-	for k in mini(mini(excess, RETIRE_PER_FRAME), candidates.size()):
-		retire(int(candidates[k].y))
+		var age := _clock - _born[i]
+		if _unseen(key):
+			if age >= drop_age:
+				despawn(i)
+				dropped += 1
+				if dropped >= DROP_PER_FRAME:
+					break  # the rest next frame, before anything in view
+		elif age >= retire_min_age:
+			retire(i)
+			faded += 1
 
 
 func _physics_process(delta: float) -> void:

@@ -165,7 +165,7 @@ func test_a_resting_block_breaking_up_does_not_fling_pieces() -> void:
 	check_eq(s.cluster_count(), 1, "released as one block")
 	await get_tree().create_timer(0.4).timeout
 	if s.cluster_count() > 0:
-		s._dissolve(s._clusters[s._clusters.size() - 1], Vector3.ZERO, 0.0)
+		s.falls.dissolve(s.falls.clusters[s.falls.clusters.size() - 1], Vector3.ZERO, 0.0)
 	var vmax := 0.0
 	for k in 10:
 		await get_tree().physics_frame

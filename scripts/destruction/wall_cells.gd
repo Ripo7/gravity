@@ -27,7 +27,8 @@ const FLOATS := 20
 ## Walls cracked per physics step at most (each adds up to 28 bodies); past
 ## that a wall shatters the old way (a building coming down all at once).
 const MAX_PER_STEP := 2
-## Fewer free debris slots than this: broken-out cells crumble to gravel.
+## Less room than this in the debris pool (free slots and pieces out of
+## sight): broken-out cells crumble to gravel.
 const FULL_POOL := 12
 ## Pattern turns: the patterns are cut with the thickness along z; a wall
 ## thin along x turns them a quarter round y, a slab (thin along y) a
@@ -130,9 +131,9 @@ func crack(i: int, from: Vector3, dmg: float, tint: float) -> void:
 			ids[k] = -1
 			hole = hole.expand(at)
 			var away := (at - from).normalized() * PUSH * randf_range(0.6, 1.3)
-			if s.debris.free_slots() < FULL_POOL:
-				# No room for more bodies: it crumbles (recycling pieces wakes
-				# whole piles).
+			if s.debris.room(FULL_POOL) < FULL_POOL:
+				# No room for more bodies: it crumbles rather than make a
+				# piece the player can see vanish.
 				var vol := mass_per_unit * float(cell["volume"]) / Materials.prop(s._kind[i], "density")
 				var cell_size := (to_block * (cell["size"] as Vector3)).abs()
 				s.debris.gravel(at, cell_size, s._kind[i], vol, 3.0, away, s._seed[i])
