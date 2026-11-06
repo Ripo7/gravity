@@ -37,6 +37,14 @@ const FLOATS_PER_INSTANCE := 20  # 12 transform + 4 colour + 4 custom
 const TINT_DECAY := 0.6  # violet glow fades per second
 const FADE_TIME := 1.2  ## seconds a retired piece takes to shrink away
 const RETIRE_PER_FRAME := 4
+## A shard splitting along its own cracks pushes its pieces apart this fast.
+const SPLIT_PUSH := 0.3
+## Average volume (m^3) of a gravel chip or a grain: how many a small piece
+## turns into.
+const CHIP_VOLUME := 0.0013
+## A piece with no sub-shards left and smaller than this (m^3) crumbles into
+## gravel (grains in a black hole) when it breaks.
+const CRUMBLE_VOLUME := 0.08
 ## When the pool is full, fragments smaller than this (m^3) become gravel
 ## instead of pushing a resting piece out of the pool (which also wakes
 ## what rested on it).
@@ -55,13 +63,16 @@ static var capacity_override := 0
 ## Negative: picked from the quality tier.
 @export var hull_min_volume := -1.0
 ## Shards smaller than this (m^3) are not bodies at all: they become gravel.
-@export var shard_min_volume := 0.004
+@export var shard_min_volume := 0.012
 ## Seconds a piece may live; 0 keeps pieces until the budget recycles them.
 @export var lifetime_desktop := 0.0
 @export var lifetime_web := 240.0
 @export var material: Material
 
 var capacity := 0
+## A shard landing hard splits into its sub-shards; on phones and in
+## browsers only the biggest few stay bodies, the rest is gravel (0 = all).
+var landing_keep := 0
 var lifetime := 0.0
 var active_count := 0
 var frozen_count := 0
@@ -82,6 +93,9 @@ var _hulls: Array[RID] = []  ## convex hull shape per slot, made on first use
 var _uses_hull := PackedByteArray()
 var _render: Array[Basis] = []  ## unit mesh -> body space (scale, turn)
 var _shard := PackedInt32Array()  ## shard shape drawn, -1 for a plain chunk
+var _bsize := PackedVector3Array()  ## size of the block a shard's pattern spans
+var _turn: Array[Basis] = []  ## how that pattern was turned (see ShardLibrary)
+var _storm_since := PackedFloat32Array()  ## clock when the black hole caught it
 var _rid_to_index := {}
 var _active := PackedByteArray()
 var _sleeping := PackedByteArray()
@@ -121,6 +135,7 @@ func _ready() -> void:
 	_quiet_speed = QUIET_SPEED * (1.7 if low else 1.0)
 	_quiet_spin = QUIET_SPIN * (1.7 if low else 1.0)
 	Fracture.max_pieces = int(Quality.pick(3, 4, 6))
+	landing_keep = int(Quality.pick(2, 3, 0))
 	lifetime = lifetime_desktop if Quality.tier() == Quality.Tier.HIGH else lifetime_web
 	if hull_min_volume < 0.0:
 		hull_min_volume = tier_hull_min_volume()
@@ -175,6 +190,10 @@ func _build_pool() -> void:
 	_render.fill(Basis.IDENTITY)
 	_shard.resize(capacity)
 	_shard.fill(-1)
+	_bsize.resize(capacity)
+	_turn.resize(capacity)
+	_turn.fill(Basis.IDENTITY)
+	_storm_since.resize(capacity)
 	_uses_hull.resize(capacity)
 	_uses_hull.fill(0)
 	_hulls.resize(capacity)
@@ -209,6 +228,7 @@ func _build_pool() -> void:
 		_multimesh.mesh = ShardLibrary.mesh
 		if material is ShaderMaterial:
 			(material as ShaderMaterial).set_shader_parameter("shard_shapes", ShardLibrary.shapes)
+			(material as ShaderMaterial).set_shader_parameter("shard_centers", ShardLibrary.centers)
 	else:
 		var box := BoxMesh.new()
 		box.subdivide_width = 1
@@ -285,6 +305,8 @@ func spawn_shard(
 		_use_box(i, size * fill * 0.98)
 	_render[i] = to_block * 0.995
 	_shard[i] = shard["id"]
+	_bsize[i] = block_size
+	_turn[i] = turn
 	# Irregular shards rock for ages on their edges: damp the spin a bit
 	# more so they settle (and freeze) like real rubble.
 	PhysicsServer3D.body_set_param(_bodies[i], PhysicsServer3D.BODY_PARAM_ANGULAR_DAMP, SHARD_SPIN_DAMP)
@@ -329,12 +351,17 @@ func shatter_box(
 		for shard: Dictionary in ShardLibrary.pattern(kind, maxi(count - 1, 2), variant):
 			var centre: Vector3 = block * ((Basis.from_scale(size) * turn) * (shard["center"] as Vector3))
 			var piece_vol: float = shard["volume"] * vol
-			if (
-				chips
-				and (piece_vol < shard_min_volume or (_free.is_empty() and piece_vol < FULL_POOL_GRAVEL))
-			):
-				# Too small to be worth a body: gravel.
-				chips.burst(centre, (shard["size"] as Vector3) * size, kind, 3, 2.0 + push, inherit)
+			if piece_vol < shard_min_volume or (_free.is_empty() and piece_vol < FULL_POOL_GRAVEL):
+				# Too small to be worth a body: gravel (or grains in a black hole).
+				gravel(
+					centre,
+					(shard["size"] as Vector3) * size,
+					kind,
+					piece_vol,
+					2.0 + push,
+					inherit,
+					seed_value
+				)
 				continue
 			var away := (centre - from).normalized() if centre.distance_to(from) > 0.01 else Vector3.UP
 			var spin := Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * 3.0
@@ -351,8 +378,8 @@ func shatter_box(
 			(world.origin - from).normalized() if world.origin.distance_to(from) > 0.01 else Vector3.UP
 		)
 		var spin := Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * 3.0
-		if chips and _free.is_empty() and piece.get_volume() < FULL_POOL_GRAVEL:
-			chips.burst(world.origin, piece.size, kind, 3, 2.0 + push, inherit)
+		if _free.is_empty() and piece.get_volume() < FULL_POOL_GRAVEL:
+			gravel(world.origin, piece.size, kind, piece.get_volume(), 2.0 + push, inherit, seed_value)
 			continue
 		var j := spawn(world, piece.size * 0.985, away * push + inherit, spin, tint, shade, kind, seed_value)
 		if j >= 0:
@@ -495,6 +522,8 @@ func set_storm(i: int, on: bool) -> void:
 	if _storm[i] == v:
 		return
 	_storm[i] = v
+	if on:
+		_storm_since[i] = _clock
 	var mask := LAYER_WORLD | LAYER_STRUCTURES | LAYER_PLAYER
 	if not on:
 		mask |= LAYER_DEBRIS
@@ -504,8 +533,27 @@ func set_storm(i: int, on: bool) -> void:
 	PhysicsServer3D.body_set_enable_continuous_collision_detection(_bodies[i], not on)
 
 
+## Pool slots still free (no piece has to be recycled for these).
+func free_slots() -> int:
+	return _free.size()
+
+
 func in_storm(i: int) -> bool:
 	return _storm[i] == 1
+
+
+## Seconds piece `i` has been spinning in a black hole (0 if it is not).
+func storm_age(i: int) -> float:
+	return _clock - _storm_since[i] if _storm[i] == 1 else 0.0
+
+
+## Finish and random seed a piece carries (the look of what it broke from).
+func seed_of(i: int) -> float:
+	return _seed[i]
+
+
+func shade_of(i: int) -> float:
+	return _shade[i]
 
 
 ## Real volume of piece `i` (a shard fills only part of its bounds).
@@ -585,23 +633,105 @@ func set_tint(i: int, t: float) -> void:
 	_tint[i] = maxf(_tint[i], t)
 
 
-## Breaks piece `i` into smaller pieces. Returns the new indices.
-func fracture(i: int, extra_velocity := Vector3.ZERO) -> PackedInt32Array:
+## Breaks piece `i` into smaller pieces. Returns the new indices. A shard
+## with sub-shards splits along the cracks already inside it; anything else
+## is broken with a fresh pattern stretched to its bounds.
+## With `keep` > 0 only that many of the biggest pieces stay bodies and the
+## rest turns to gravel (or grains): grinding chips bits off a piece.
+func fracture(i: int, extra_velocity := Vector3.ZERO, keep := 0) -> PackedInt32Array:
 	var out := PackedInt32Array()
 	if not is_active(i):
 		return out
+	if _shard[i] >= 0:
+		var kids := ShardLibrary.children_of(_shard[i])
+		if not kids.is_empty():
+			return _split_shard(i, kids, extra_velocity, keep)
 	var size := _size[i]
 	var kind := _kind[i]
 	var volume := volume_of(i)
-	if size[size.min_axis_index()] < Fracture.MIN_EDGE * 2.0 or volume < MIN_BREAK_VOLUME:
-		return out
 	var xform := transform_of(i)
 	var vel := velocity_of(i) + extra_velocity
+	if volume < CRUMBLE_VOLUME:
+		# Nothing left to split along: it crumbles.
+		var seed_value := _seed[i]
+		despawn(i)
+		gravel(xform.origin, size, kind, volume, 2.0, vel, seed_value)
+		return out
+	if size[size.min_axis_index()] < Fracture.MIN_EDGE * 2.0:
+		return out
 	var tint := _tint[i]
 	var shade := _shade[i]
-	var seed_value := _seed[i]
+	var piece_seed := _seed[i]
 	despawn(i)
-	return shatter_box(xform, size, kind, xform.origin, 0.0, vel, tint, shade, seed_value, i, volume)
+	# A fresh pattern spans a box of the piece's own volume (its bounds would
+	# make more matter than there was).
+	var fit := size * pow(clampf(volume / maxf(size.x * size.y * size.z, 1e-6), 0.05, 1.0), 1.0 / 3.0)
+	return shatter_box(xform, fit, kind, xform.origin, 0.0, vel, tint, shade, piece_seed, i, volume)
+
+
+## Splits shard `i` into its sub-shards, each exactly where it sat inside it,
+## moving with it (spin included) and pushed a little apart.
+func _split_shard(i: int, kids: Array, extra: Vector3, keep := 0) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	var xf := transform_of(i)
+	var basis := xf.basis.orthonormalized()
+	var parent := ShardLibrary.shard(_shard[i])
+	var bsize := _bsize[i]
+	var turn := _turn[i]
+	var to_block := Basis.from_scale(bsize) * turn
+	# The block the pattern was cut from: shard centres are relative to it.
+	var block := Transform3D(basis, xf.origin - basis * (to_block * (parent["center"] as Vector3)))
+	var v := velocity_of(i) + extra
+	var w: Vector3 = PhysicsServer3D.body_get_state(_bodies[i], PhysicsServer3D.BODY_STATE_ANGULAR_VELOCITY)
+	var tint := _tint[i]
+	var shade := _shade[i]
+	var kind := _kind[i]
+	var seed_value := _seed[i]
+	var block_vol := bsize.x * bsize.y * bsize.z
+	var min_body := shard_min_volume
+	if keep > 0 and keep < kids.size():
+		var vols: Array[float] = []
+		for kid: Dictionary in kids:
+			vols.append(kid["volume"] * block_vol)
+		vols.sort()
+		min_body = maxf(min_body, vols[vols.size() - keep])
+	despawn(i)
+	for kid: Dictionary in kids:
+		var centre := block * (to_block * (kid["center"] as Vector3))
+		var r := centre - xf.origin
+		var away := r.normalized() if r.length() > 0.01 else Vector3.UP
+		var kv := v + w.cross(r) + away * SPLIT_PUSH * randf_range(0.5, 1.2)
+		var vol: float = kid["volume"] * block_vol
+		if vol < min_body or (_free.is_empty() and vol < FULL_POOL_GRAVEL):
+			gravel(
+				centre,
+				(to_block * (kid["size"] as Vector3)).abs(),
+				kind,
+				vol,
+				SPLIT_PUSH * 2.0,
+				kv,
+				seed_value
+			)
+			continue
+		var spin := w * 0.8 + Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5)
+		var j := spawn_shard(block, bsize, turn, kid, kv, spin, tint, shade, kind, seed_value)
+		if j >= 0:
+			out.append(j)
+	return out
+
+
+## A piece too small to be a body: grains of a black hole's cloud when one
+## spins here, gravel chips on the ground otherwise (as many as its volume
+## makes).
+func gravel(
+	at: Vector3, size: Vector3, kind: int, volume: float, speed: float, kick: Vector3, seed_value: float
+) -> void:
+	var count := clampi(int(round(volume / CHIP_VOLUME)), 2, 14)
+	var cloud := GrainCloud.find(get_tree(), at) if is_inside_tree() else null
+	if cloud:
+		cloud.add(at, size, kind, seed_value, count * 3)
+	elif chips:
+		chips.burst(at, size, kind, count, speed, kick, seed_value)
 
 
 func _take_slot() -> int:
@@ -719,7 +849,7 @@ func _check_landing(i: int, at: Vector3) -> void:
 	_breaks_left -= 1
 	var size := _size[i]
 	var kind := _kind[i]
-	if not fracture(i).is_empty():
+	if not fracture(i, Vector3.ZERO, landing_keep).is_empty():
 		piece_broke.emit(at, size, kind, before)
 
 

@@ -1,6 +1,7 @@
 # Godot
 .godot/
 *.import
+!assets/textures/*.import
 !icon.svg.import
 /build/
 /android/

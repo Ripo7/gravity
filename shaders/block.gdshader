@@ -16,6 +16,26 @@ uniform bool chunky = false;
 // Shard shapes from the library: xyz = vertex, w = 1 on the block's outer
 // surface, 0 on a fresh fracture face.
 uniform sampler2D shard_shapes : filter_nearest;
+// Where each shard sits in its pattern (one texel per shard): patterns are
+// drawn in the whole block's space, so they run on from piece to piece (a
+// cracked wall's cells look like the wall).
+uniform sampler2D shard_centers : filter_nearest;
+// Finishes baked in Blender (tools/make_textures.py), one layer each:
+// 0 stone, 1 brick, 2 plaster (tinted here), 3 travertine, 4 marble,
+// 5 terracotta. Detail: normal x, y (tangent space), roughness, cavity.
+uniform bool use_textures = false;
+uniform sampler2DArray finish_albedo : filter_linear_mipmap_anisotropic, repeat_enable;  // linear
+uniform sampler2DArray finish_detail : filter_linear_mipmap, repeat_enable;
+uniform float relief = 0.8;  // strength of the baked normals
+// Carved depth: parallax occlusion over the baked height (joints, bosses,
+// pores look cut in and shift with the view). 0 steps = one-read offset
+// (phones); set from the quality tier.
+uniform int parallax_steps = 8;
+// Chamfer on block edges, drawn by the bevelled box mesh (StructureMesh):
+// the vertices flagged in UV2.x are pulled in by the block's own chamfer
+// (COLOR.a on standing blocks, metres; 0 on wall panels, whose edges meet
+// their neighbours in one plane), at most this much.
+uniform float bevel = 0.03;
 
 uniform vec3 concrete : source_color = vec3(0.78, 0.76, 0.72);
 uniform vec3 wood : source_color = vec3(0.84, 0.75, 0.62);
@@ -33,7 +53,8 @@ uniform float window_glow = 0.8;
 varying vec3 local_pos;   // metres, centred on the block
 varying vec3 half_size;   // metres
 varying vec3 local_normal;
-varying float is_round;  // 1 for columns drawn by the cylinder MultiMesh
+varying float is_round;  // 1 for columns and turned pieces (patterns wrap round)
+varying float fluted;  // 1 for column shafts
 varying float shade;
 varying float material_id;
 varying float finish;
@@ -44,6 +65,7 @@ varying float damage;
 varying vec3 hit_at;  // metres in block space; x > 90 when never hit
 varying float world_y;
 varying float outer;  // 0 on fresh fracture faces
+varying float static_cell;  // 1 for a standing cell of a cracked wall (WallCells)
 
 float hash(vec3 p) {
 	p = fract(p * 0.3183099 + 0.1);
@@ -118,6 +140,75 @@ float courses(vec2 uv, vec2 size, float stagger, float joint, out vec2 id) {
 	float jx = grid_line((uv.x + shift) / size.x, joint / size.x);
 	float jy = grid_line(uv.y / size.y, joint / size.y);
 	return max(jx, jy);
+}
+
+// Texture layer for a finish (-1: drawn procedurally), and its tile in metres.
+int finish_layer(int f) {
+	if (f == 1) { return 0; }
+	if (f == 2) { return 1; }
+	if (f >= 5 && f <= 8) { return 2; }
+	if (f == 3) { return 3; }
+	if (f == 4) { return 4; }
+	if (f == 9) { return 5; }
+	return -1;
+}
+
+vec2 finish_tile(int layer) {
+	if (layer == 0) { return vec2(3.12, 2.52); }
+	if (layer == 1) { return vec2(1.84, 2.4); }
+	if (layer == 2) { return vec2(4.0); }
+	if (layer == 3) { return vec2(2.0); }
+	if (layer == 4) { return vec2(3.0); }
+	return vec2(2.2, 2.0);
+}
+
+// How deep (metres) a finish's lowest point lies below its face.
+float finish_depth(int layer) {
+	if (layer == 0) { return 0.035; }  // rusticated stone: deep joints
+	if (layer == 1) { return 0.012; }  // brick: raked mortar
+	if (layer == 5) { return 0.03; }  // roof tiles
+	if (layer == 3) { return 0.008; }  // travertine pores
+	return 0.004;
+}
+
+// Parallax occlusion: walks the view ray down into the height field (1 =
+// face, 0 = bottom of a joint) and returns where it hits, in metres.
+vec2 carve(vec2 uv, int layer, vec3 view_t, int steps) {
+	vec2 tile = finish_tile(layer);
+	float depth = finish_depth(layer);
+	vec2 shift = view_t.xy / max(view_t.z, 0.25) * depth;
+	vec3 base = vec3(uv / tile, float(layer));
+	vec2 gx = dFdx(base.xy);
+	vec2 gy = dFdy(base.xy);
+	if (steps <= 0) {
+		float h = textureGrad(finish_detail, base, gx, gy).a;
+		return uv - shift * (1.0 - h) * 0.6;
+	}
+	float step_size = 1.0 / float(steps);
+	float ray = 0.0;
+	vec2 at = uv;
+	float floor_h = 1.0 - textureGrad(finish_detail, base, gx, gy).a;
+	float prev_ray = 0.0;
+	float prev_floor = floor_h;
+	for (int i = 0; i < 16; i++) {
+		if (i >= steps || ray >= floor_h) {
+			break;
+		}
+		prev_ray = ray;
+		prev_floor = floor_h;
+		ray += step_size;
+		at -= shift * step_size;
+		floor_h = 1.0 - textureGrad(finish_detail, vec3(at / tile, float(layer)), gx, gy).a;
+	}
+	// Between the last two steps, where the ray crossed the floor.
+	float a = floor_h - ray;
+	float b = prev_floor - prev_ray;
+	float t = clamp(b / max(b - a, 1e-4), 0.0, 1.0);
+	return mix(at + shift * step_size, at, t);
+}
+
+vec3 plaster_tint(int f) {
+	return f == 5 ? vec3(0.88, 0.66, 0.38) : (f == 6 ? vec3(0.86, 0.6, 0.52) : (f == 7 ? vec3(0.74, 0.43, 0.29) : vec3(0.93, 0.86, 0.7)));
 }
 
 void apply_finish(int f, vec2 uv, vec3 p, inout vec3 albedo, inout float rough, inout float metallic) {
@@ -215,13 +306,26 @@ void vertex() {
 	finish = floor(packed / 5.0 + 0.001);
 	seed = COLOR.b;
 	outer = 1.0;
+	static_cell = 0.0;
+	vec3 shard_offset = vec3(0.0);
 	if (chunky) {
 		// Debris: a shard shape from the library (one texture row per
 		// shard, one texel per vertex), or a plain chunk cut from the cube.
 		int shard = int(INSTANCE_CUSTOM.g + 0.5) - 1;
 		if (shard >= 0) {
 			vec4 t = texelFetch(shard_shapes, ivec2(VERTEX_ID, shard), 0);
-			VERTEX = t.xyz;
+			vec3 v = t.xyz;
+			vec3 c = texelFetch(shard_centers, ivec2(shard, 0), 0).xyz;
+			// A standing wall cell (INSTANCE_CUSTOM.b = 1 + turn) is drawn in
+			// its wall's own axes: its pattern (cut with the thickness along
+			// z) turned to the wall (turn 1: thickness along x).
+			static_cell = INSTANCE_CUSTOM.b > 0.5 ? 1.0 : 0.0;
+			if (INSTANCE_CUSTOM.b > 1.5) {
+				v = vec3(v.z, v.y, -v.x);
+				c = vec3(c.z, c.y, -c.x);
+			}
+			VERTEX = v;
+			shard_offset = c;
 			outer = t.w;
 			if (material_id > 1.5 && material_id < 2.5) {
 				// Metal does not shatter, it bends: curve the length of the
@@ -235,12 +339,24 @@ void vertex() {
 			VERTEX = chunk(VERTEX, seed);
 		}
 	}
-	local_pos = VERTEX * scale;
+	// The bevelled box: vertices flagged in UV2.x sit `bevel` metres in from
+	// the edge on the flagged axes (bits 1, 2, 4 = x, y, z), whatever the
+	// block's size.
+	int inset = int(UV2.x + 0.5);
+	float chamfer = chunky ? 0.0 : min(COLOR.a, bevel);
+	if (inset > 0 && chamfer > 0.0) {
+		vec3 half_m = scale * 0.5;
+		float c = min(chamfer, 0.3 * min(half_m.x, min(half_m.y, half_m.z)));
+		vec3 m = vec3(float(inset & 1), float((inset >> 1) & 1), float((inset >> 2) & 1));
+		VERTEX -= sign(VERTEX) * m * c / max(scale, vec3(1e-4));
+	}
+	local_pos = (VERTEX + shard_offset) * scale;
 	half_size = scale * 0.5;
 	local_normal = NORMAL;
 	is_round = COLOR.g > 0.5 ? 1.0 : 0.0;
+	fluted = COLOR.g > 0.9 ? 1.0 : 0.0;
 	shade = COLOR.r;
-	tint = COLOR.a;
+	tint = chunky ? COLOR.a : 0.0;  // standing blocks: COLOR.a is their chamfer
 	damage = clamp(fract(INSTANCE_CUSTOM.r + 0.001) / 0.9, 0.0, 1.0);
 	vec3 h = INSTANCE_CUSTOM.gba;
 	hit_at = (!chunky && (h.x + h.y + h.z) > 0.0) ? (h - 1.0) * scale : vec3(99.0);
@@ -297,6 +413,14 @@ void fragment() {
 	vec3 albedo;
 	vec3 lit_window = vec3(0.0);
 	vec3 face = abs(local_normal);
+	vec3 up_normal = local_normal;
+	bool solid = !chunky || static_cell > 0.5;  // standing: world-space patterns
+	if (static_cell > 0.5) {
+		// The cell's vertices keep the layout's normals: use the real face,
+		// in the world (the wall's patterns are in world space).
+		up_normal = normalize((INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz);
+		face = abs(up_normal);
+	}
 	float rough = 0.9;
 	float metallic = 0.0;
 	// A finish (stone, plaster, tiles...) paints the whole surface: the bare
@@ -369,7 +493,7 @@ void fragment() {
 	// Finishes (Materials.Finish): what the printers copied. Static blocks
 	// use world space so courses and joints run on across blocks; debris
 	// uses its own space so the pattern stays on the piece.
-	vec3 q = chunky ? local_pos + seed * 7.0 : world_p;
+	vec3 q = solid ? world_p : local_pos + seed * 7.0;
 	vec2 fuv = face.y > 0.5 ? q.xz : vec2(face.x > 0.5 ? q.z : q.x, q.y);
 	float around = 0.0;
 	if (is_round > 0.5 && face.y < 0.5) {
@@ -377,13 +501,49 @@ void fragment() {
 		around = atan(local_pos.z, local_pos.x);
 		fuv = vec2(around * half_size.x, q.y);
 	}
-	if (fin > 0) {
+	int layer = use_textures && fin > 0 ? finish_layer(fin) : -1;
+	vec4 detail = vec4(0.5, 0.5, rough, 1.0);
+	bool flat_face = solid && !(is_round > 0.5 && face.y < 0.5) && outer > 0.99;
+	if (layer >= 0 && flat_face) {
+		// Carve: the joints sink in, the bosses stand out, seen from the side.
+		vec3 v = normalize((INV_VIEW_MATRIX * vec4(VIEW, 0.0)).xyz);
+		vec3 wn0 = static_cell > 0.5 ? up_normal : normalize((INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz);
+		vec3 tu = face.x > 0.5 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
+		vec3 tv = face.y > 0.5 ? vec3(0.0, 0.0, 1.0) : vec3(0.0, 1.0, 0.0);
+		fuv = carve(fuv, layer, vec3(dot(v, tu), dot(v, tv), abs(dot(v, wn0))), parallax_steps);
+	}
+	if (layer >= 0) {
+		// Baked in Blender: colour, relief, roughness, joints.
+		vec3 tuv = vec3(fuv / finish_tile(layer), float(layer));
+		albedo = texture(finish_albedo, tuv).rgb;
+		detail = texture(finish_detail, tuv);
+		rough = detail.b;
+		metallic = 0.0;
+		if (layer == 2) {
+			// Render over brick, worn through in patches.
+			float worn = smoothstep(0.66, 0.72, fbm(p * 0.9 + 11.0));
+			vec3 under = texture(finish_albedo, vec3(fuv / finish_tile(1), 1.0)).rgb;
+			albedo = mix(albedo * plaster_tint(fin) * 1.08, under, worn);
+		}
+	} else if (fin > 0) {
 		apply_finish(fin, fuv, p, albedo, rough, metallic);
 	}
-	if (is_round > 0.5 && face.y < 0.5 && !chunky) {
+	if (fluted > 0.5 && face.y < 0.5 && !chunky) {
 		// Fluted shaft: 20 grooves catch the low sun.
 		float flute = 0.5 + 0.5 * cos(around * 20.0);
 		albedo *= 0.8 + 0.2 * flute;
+	}
+
+	// Baked relief on standing walls: the normal tilts by the texture's,
+	// along the face's own axes (the same ones the texture is laid on).
+	if (layer >= 0 && flat_face) {
+		vec3 wn = static_cell > 0.5 ? up_normal : normalize((INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz);
+		vec3 tan_u = face.x > 0.5 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
+		vec3 tan_v = face.y > 0.5 ? vec3(0.0, 0.0, 1.0) : vec3(0.0, 1.0, 0.0);
+		vec2 tilt = (detail.rg * 2.0 - 1.0) * relief;
+		vec3 bent = normalize(wn + tan_u * tilt.x + tan_v * tilt.y);
+		NORMAL = normalize((VIEW_MATRIX * vec4(bent, 0.0)).xyz);
+		albedo *= mix(0.8, 1.0, detail.a);  // joints and pits hold shadow
 	}
 
 	// Fresh fracture faces: the inside of the material, never weathered.
@@ -391,14 +551,20 @@ void fragment() {
 		float inner = 1.0 - smoothstep(0.2, 0.8, outer);
 		vec3 fresh = albedo;
 		int fin_in = int(finish + 0.5);
-		if (fin_in == 3 || fin_in == 4 || fin_in == 10) {
-			// Printed stone is not solid: a honeycomb infill of stone walls
-			// around dark composite cells, the future hiding inside.
+		if (fin_in == 10) {
+			// Printed composite is not solid: a honeycomb infill of walls
+			// around dark cells.
 			vec2 uv = (face.x > 0.5 ? local_pos.yz : (face.y > 0.5 ? local_pos.xz : local_pos.xy)) * 9.0;
 			float wall = hex_wall(uv);
-			vec3 stone = fin_in == 4 ? vec3(0.9, 0.88, 0.84) : vec3(0.84, 0.76, 0.62);
-			fresh = mix(vec3(0.07, 0.07, 0.08), stone, wall);
+			fresh = mix(vec3(0.07, 0.07, 0.08), vec3(0.84, 0.76, 0.62), wall);
 			rough = mix(0.5, 0.95, wall);
+		} else if (fin_in == 3 || fin_in == 4) {
+			// Solid stone: travertine cream with its pores, marble white
+			// and sugary.
+			vec3 stone = fin_in == 4 ? vec3(0.9, 0.89, 0.86) : vec3(0.84, 0.77, 0.63);
+			float pores = fin_in == 3 ? step(0.78, noise(p * vec3(30.0, 60.0, 30.0))) * 0.35 : 0.0;
+			fresh = stone * (0.9 + 0.15 * noise(p * 40.0)) * (1.0 - pores);
+			rough = 0.9;
 		} else if (fin_in == 2 || (fin_in >= 5 && fin_in <= 8)) {
 			// Brick (also under the plaster): raw red clay.
 			fresh = vec3(0.62, 0.3, 0.2) * (0.85 + 0.25 * noise(p * 12.0));
@@ -427,8 +593,8 @@ void fragment() {
 	// - grime streaks run down vertical faces from their top edge;
 	// - each block is darker near its bottom and on its underside, which
 	//   reads as ambient occlusion wherever blocks meet slabs and floors.
-	if (material_id < 2.5 && !chunky) {
-		vec3 n = local_normal;
+	if (material_id < 2.5 && solid) {
+		vec3 n = up_normal;
 		if (n.y > 0.5) {
 			float patches = smoothstep(0.35, 0.75, fbm(p * 0.9));
 			albedo = mix(albedo, vec3(0.86, 0.83, 0.77), patches * 0.35);
@@ -453,8 +619,8 @@ void fragment() {
 	if (is_round > 0.5) {
 		edge_dist = d.y;  // only the top and bottom rims
 	}
-	float edge = chunky ? 0.0 : 1.0 - smoothstep(0.0, 0.05, edge_dist);
-	albedo *= 1.0 - edge * 0.22;
+	float edge = solid && static_cell < 0.5 ? 1.0 - smoothstep(0.0, 0.05, edge_dist) : 0.0;
+	albedo *= 1.0 - edge * 0.1;  // the bevelled mesh does most of it now
 
 	// Cracks: they start where the block was hit and spread out across it
 	// as damage grows; the surface around the hit is chipped and darker.

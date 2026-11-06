@@ -61,8 +61,14 @@ func test_breaks_spray_chips_that_land() -> void:
 		if chips._state[i] == 3 and chips._pos[i].y < 0.2:
 			low += 1
 	check(low > 20, "most landed on the ground (%d)" % low)
-	await get_tree().create_timer(7.5).timeout
-	check_eq(chips.active, 0, "and faded away")
+	# Gravel stays as the rubble field's gravel; it fades when it gets old.
+	await get_tree().create_timer(3.0).timeout
+	check_eq(chips.active, 30, "it stays on the ground for a while")
+	for i in chips.capacity:
+		if chips._state[i] != 0:
+			chips._life[i] = 0.5
+	await get_tree().create_timer(1.5).timeout
+	check_eq(chips.active, 0, "then fades away")
 	await _unload()
 
 

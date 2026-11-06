@@ -30,8 +30,8 @@ enum Finish {
 const KIND_SLOTS := 5
 const FINISH_COUNT := 15
 ## Finishes that were printed: their fracture faces show the honeycomb
-## infill inside.
-const PRINTED := [Finish.TRAVERTINE, Finish.MARBLE, Finish.COMPOSITE]
+## infill inside (travertine and marble are solid stone inside).
+const PRINTED := [Finish.COMPOSITE]
 
 ## Per material: strength multiplier, density (kg/m^3), fracture piece
 ## multiplier, fraction of strength that knocks a block loose, how strongly

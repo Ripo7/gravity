@@ -11,6 +11,14 @@ extends RefCounted
 ## Patterns live in a unit cube. To break a block, a pattern is turned so
 ## its x axis follows the grain (wood, metal: the block's longest axis),
 ## then stretched to the block's size.
+##
+## Concrete and wood shards also carry their sub-shards (the cascade): the
+## pieces they split into when they break again, which tile them exactly,
+## in the same pattern space.
+##
+## Wall patterns are cut for walls that crack open in place (WallCells):
+## prisms through the cube's thickness (z), each listing the cells it
+## touches as [cell, shared face area, normal x, normal y] (unit space).
 
 const PATH := "res://assets/shards/shards.json"
 const KINDS := {
@@ -21,7 +29,12 @@ const KINDS := {
 
 static var mesh: ArrayMesh
 static var shapes: ImageTexture
+## Centre of every shard in its pattern (one texel per shard): the shader
+## places patterns in the whole block's space, so they run on across pieces.
+static var centers: ImageTexture
 static var _patterns := {}  # kind -> Array[Array[Dictionary]]
+static var _by_id := {}  # shard id -> Dictionary (its "children" too)
+static var _walls: Array[Dictionary] = []  # {"aspect", "count", "shards"}
 static var _tried := false
 
 
@@ -42,6 +55,33 @@ static func ensure() -> bool:
 
 static func has(kind: int) -> bool:
 	return ensure() and _patterns.has(kind)
+
+
+## The shard with this id (empty if unknown).
+static func shard(id: int) -> Dictionary:
+	return _by_id.get(id, {})
+
+
+static func has_walls() -> bool:
+	return ensure() and not _walls.is_empty()
+
+
+## The wall pattern closest to a face `aspect` wide (width / height) with
+## about `count` cells.
+static func wall_pattern(aspect: float, count: int) -> Array:
+	var best: Dictionary = {}
+	var score := INF
+	for w: Dictionary in _walls:
+		var s := absf(log(aspect / float(w["aspect"]))) * 4.0 + absf(log(float(count) / float(w["count"])))
+		if s < score:
+			score = s
+			best = w
+	return best["shards"]
+
+
+## The sub-shards a shard splits into (empty when it has none).
+static func children_of(id: int) -> Array:
+	return (_by_id.get(id, {}) as Dictionary).get("children", [])
 
 
 ## A pattern for `kind` with about `count` pieces; `variant` picks among
@@ -101,22 +141,41 @@ static func _build(d: Dictionary) -> void:
 		for p: Dictionary in d["materials"].get(KINDS[kind], []):
 			var shards: Array = []
 			for s: Dictionary in p["shards"]:
-				var hull := PackedVector3Array()
-				var h: Array = s["hull"]
-				for k in range(0, h.size(), 3):
-					hull.append(Vector3(h[k], h[k + 1], h[k + 2]))
-				(
-					shards
-					. append(
-						{
-							"id": int(s["id"]),
-							"center": Vector3(s["center"][0], s["center"][1], s["center"][2]),
-							"size": Vector3(s["size"][0], s["size"][1], s["size"][2]),
-							"hull": hull,
-							"volume": float(s["volume"]),
-						}
-					)
-				)
+				var entry := _entry(s)
+				var kids: Array = []
+				for c: Dictionary in s.get("children", []):
+					kids.append(_entry(c))
+				if not kids.is_empty():
+					entry["children"] = kids
+				shards.append(entry)
 			list.append(shards)
 		if not list.is_empty():
 			_patterns[kind] = list
+	for w: Dictionary in d.get("walls", []):
+		var cells: Array = []
+		for s: Dictionary in w["shards"]:
+			var entry := _entry(s)
+			entry["links"] = s.get("links", [])
+			cells.append(entry)
+		_walls.append({"aspect": float(w["aspect"]), "count": int(w["count"]), "shards": cells})
+	var c := Image.create(int(d["shard_count"]), 1, false, Image.FORMAT_RGBAH)
+	for id: int in _by_id:
+		var v: Vector3 = _by_id[id]["center"]
+		c.set_pixel(id, 0, Color(v.x, v.y, v.z, 1.0))
+	centers = ImageTexture.create_from_image(c)
+
+
+static func _entry(s: Dictionary) -> Dictionary:
+	var hull := PackedVector3Array()
+	var h: Array = s["hull"]
+	for k in range(0, h.size(), 3):
+		hull.append(Vector3(h[k], h[k + 1], h[k + 2]))
+	var entry := {
+		"id": int(s["id"]),
+		"center": Vector3(s["center"][0], s["center"][1], s["center"][2]),
+		"size": Vector3(s["size"][0], s["size"][1], s["size"][2]),
+		"hull": hull,
+		"volume": float(s["volume"]),
+	}
+	_by_id[entry["id"]] = entry
+	return entry

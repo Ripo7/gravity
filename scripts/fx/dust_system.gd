@@ -9,6 +9,7 @@ extends Node3D
 ## Owns the chip system too (gravel and splinters without physics).
 
 const FLOATS := 20  # transform 12, colour 4, custom 4
+const FLIPBOOK := "res://assets/textures/dust_flipbook.png"
 const DUST_COLORS := {
 	Materials.Kind.CONCRETE: Color(0.78, 0.75, 0.7, 0.75),
 	Materials.Kind.WOOD: Color(0.74, 0.64, 0.5, 0.6),
@@ -60,6 +61,10 @@ func _ready() -> void:
 	var mat := ShaderMaterial.new()
 	mat.shader = preload("res://shaders/dust.gdshader")
 	mat.set_shader_parameter("noise_tex", _noise_texture())
+	# The billowing puff built and rendered in Blender (tools/make_smoke.py).
+	if ResourceLoader.exists(FLIPBOOK):
+		mat.set_shader_parameter("flipbook", load(FLIPBOOK))
+		mat.set_shader_parameter("use_flipbook", true)
 	mat.render_priority = 1
 	var mmi := MultiMeshInstance3D.new()
 	mmi.multimesh = _multimesh

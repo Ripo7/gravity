@@ -3,8 +3,11 @@ extends Node3D
 ## Black hole power. It opens where you aim and does not explode: everything
 ## inside its radius is torn loose and spins around the core like a storm.
 ## Just outside the radius is a band that is not pulled but shredded:
-## blocks there crack and break, and it hurts you. When it closes, the
-## spinning pieces spill out.
+## blocks there crack and break, and it hurts you. Inside, the storm grinds
+## what it holds: pieces crack again and again along their own cracks, and
+## once small they become grains of a cloud swirling round the core (no
+## physics: see GrainCloud). When it closes, the spinning pieces spill out
+## and the cloud bursts into dust and gravel.
 
 signal closed
 
@@ -18,9 +21,19 @@ const RELEASE_SPIN := 0.25  ## share of orbit speed kept when it bursts
 ## Flung pieces pass through each other this long (s): the disc packs them
 ## closer than they fit, and colliding at once would stop them dead.
 const SPREAD_TIME := 0.35
+## Grinding: chance per second that a piece in the storm cracks again, plus
+## more for every m^3 it weighs; at most this many cracks per step.
+const GRIND_RATE := 2.0
+const GRIND_PER_M3 := 3.0
+const MAX_GRINDS_PER_STEP := 3
+## Pieces smaller than this (m^3) that spun this long (s) turn to grains.
+const GRAIN_MAX_VOLUME := 0.06
+const GRAIN_DELAY := 0.3
 
 var center := Vector3.ZERO
 var caught := 0  ## pieces currently orbiting
+## Grinds what it holds into grains (tests of the orbit alone turn it off).
+var grind := true
 var _world: GameWorld
 var _t := 0.0
 var _tick := 0.0
@@ -35,12 +48,18 @@ var _inflow: CPUParticles3D
 var _pull_started := false
 var _flung := PackedInt32Array()
 var _spread_until := 0.0
+var _cloud: GrainCloud
 
 
 func setup(world: GameWorld, at: Vector3) -> void:
 	_world = world
 	center = at
 	position = at
+
+
+## The grains this hole has ground (null before it pulls).
+func cloud() -> GrainCloud:
+	return _cloud
 
 
 func _ready() -> void:
@@ -118,7 +137,8 @@ func is_pulling() -> bool:
 func _physics_process(delta: float) -> void:
 	_t += delta
 	_update_visuals()
-	if _t >= PowerDefs.VORTEX_SPINUP + PowerDefs.VORTEX_DURATION and _pull_started and caught > 0:
+	var over := _t >= PowerDefs.VORTEX_SPINUP + PowerDefs.VORTEX_DURATION
+	if over and _pull_started and (caught > 0 or (_cloud and _cloud.accepting)):
 		_release()
 	if not _flung.is_empty() and _t >= _spread_until:
 		_end_spread()
@@ -132,6 +152,11 @@ func _physics_process(delta: float) -> void:
 	if not _pull_started:
 		_pull_started = true
 		Sfx.play("implode", center, 4.0, 0.7)
+		# The cloud outlives the hole (its grains are flung after it closes).
+		_cloud = GrainCloud.new()
+		_cloud.setup(center)
+		_cloud.accepting = true
+		get_parent().add_child(_cloud)
 	_spin_debris(delta)
 	_tick += delta
 	if _tick >= TICK:
@@ -175,6 +200,7 @@ func _spin_debris(delta: float) -> void:
 	var debris := _world.debris
 	var r := PowerDefs.VORTEX_RADIUS
 	caught = 0
+	var grinds := MAX_GRINDS_PER_STEP
 	for i in debris.slot_end():
 		if not debris.is_active(i):
 			continue
@@ -182,6 +208,9 @@ func _spin_debris(delta: float) -> void:
 		if p.distance_to(center) > r:
 			if debris.in_storm(i):
 				debris.set_storm(i, false)
+			continue
+		if grind and _grind(debris, i, delta, grinds > 0):
+			grinds -= 1
 			continue
 		caught += 1
 		debris.set_storm(i, true)
@@ -193,13 +222,43 @@ func _spin_debris(delta: float) -> void:
 		# Gravity is cancelled inside the storm.
 		v.y += 18.0 * delta
 		debris.set_velocity(i, v)
-		debris.set_tint(i, 0.8)
+		debris.set_tint(i, 0.35)
+
+
+## Grinds piece `i`: small enough and spun long enough, it becomes grains;
+## otherwise it may crack along its own cracks. True if it is gone.
+func _grind(debris: DebrisSystem, i: int, delta: float, may_crack: bool) -> bool:
+	var age := debris.storm_age(i)
+	if age <= 0.0:
+		return false
+	var volume := debris.volume_of(i)
+	if volume < GRAIN_MAX_VOLUME:
+		if age > GRAIN_DELAY and _cloud:
+			_cloud.add_piece(debris, i)
+			return true
+		return false
+	if may_crack and age > 0.2 and randf() < delta * (GRIND_RATE + volume * GRIND_PER_M3):
+		# Grinding chips bits off: the biggest piece goes on spinning, the
+		# rest is ground to grains at once (the storm never gets fuller).
+		var pieces := debris.fracture(i, Vector3.ZERO, 1)
+		if pieces.size() > 1 and _cloud:
+			var biggest := pieces[0]
+			for j in pieces:
+				if debris.volume_of(j) > debris.volume_of(biggest):
+					biggest = j
+			for j in pieces:
+				if j != biggest:
+					_cloud.add_piece(debris, j)
+		return true
+	return false
 
 
 ## The storm ends in a burst: everything it held is flung outward (faster
 ## from near the core), with a little lift and some of its swirl.
 func _release() -> void:
 	caught = 0
+	if _cloud and _cloud.accepting:
+		_cloud.release(_world)
 	if _world == null:
 		return
 	var debris := _world.debris
@@ -220,9 +279,11 @@ func _release() -> void:
 		var v := dir * speed + Vector3.UP * (PowerDefs.VORTEX_BURST_LIFT + off.y * 1.5)
 		debris.set_velocity(i, v + debris.velocity_of(i) * RELEASE_SPIN)
 		debris.add_spin(i, Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * 8.0)
-		debris.set_tint(i, 1.0)
+		debris.set_tint(i, 0.5)
 		flung += 1
 	_spread_until = _t + SPREAD_TIME
+	# The cloud's grains count too (every twenty, like a piece).
+	flung += _cloud.used / 20 if _cloud else 0
 	if flung > 0:
 		Sfx.play("burst", center, 2.0 + minf(flung, 80) * 0.05, 0.8)
 		if _world.dust:

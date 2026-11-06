@@ -46,6 +46,7 @@ func test_vortex_spins_pieces_without_exploding() -> void:
 		var p := at + Vector3(randf_range(-2.5, 2.5), randf_range(-0.5, 0.5), randf_range(-2.5, 2.5))
 		ids.append(world.debris.spawn(Transform3D(Basis(), p), Vector3.ONE * 0.4))
 	var v := world.cast_vortex(at)
+	v.grind = false  # the orbit alone (grinding: test_grinding.gd)
 	await get_tree().create_timer(PowerDefs.VORTEX_SPINUP + 1.5).timeout
 	check(v.caught > 18, "pieces caught in the radius (%d)" % v.caught)
 	# Pieces move around the core, not away from it.
@@ -79,6 +80,7 @@ func test_vortex_ends_by_flinging_pieces_outward() -> void:
 		var p := at + Vector3(randf_range(-2.5, 2.5), randf_range(-0.5, 0.5), randf_range(-2.5, 2.5))
 		ids.append(world.debris.spawn(Transform3D(Basis(), p), Vector3.ONE * 0.4))
 	var v := world.cast_vortex(at)
+	v.grind = false  # the orbit alone (grinding: test_grinding.gd)
 	await get_tree().create_timer(PowerDefs.VORTEX_SPINUP + PowerDefs.VORTEX_DURATION - 0.3).timeout
 	while v.caught > 0:  # until it bursts
 		await get_tree().physics_frame
