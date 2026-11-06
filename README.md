@@ -50,6 +50,31 @@ raises the shield, arrow to jump, II to pause.
   and download the `gravity-*` artifacts from the run summary.
   The macOS build is ad-hoc signed; right-click → Open the first time.
 
+## The look
+
+Not realism for its own sake: a late afternoon in Tuscany, and destruction
+you can feel.
+
+- **Light:** a low golden sun on your right as you face the palace (long
+  shadows, carved joints and mouldings caught in raking light), shade lit
+  by the blue sky (cool shadows against warm stone), AgX tone mapping, a
+  touch more contrast and colour.
+- **Sky:** deep blue overhead, a pale band at the horizon warming toward the
+  sun, the sun's halo, and a field of cumulus baked in Blender: a slab of
+  volume noise lit by the same sun and rendered by Cycles into a panorama
+  (`python3 tools/make_sky.py`, about 6 min), graded in `shaders/sky.gdshader`.
+- **Haze:** the plain and far things fade into a pale blue haze, warmer
+  toward the sun.
+- **Contact:** walls and rubble darken where they meet the ground, and the
+  square darkens at the foot of the walls (ambient occlusion).
+- **Dust:** lit by the sun (warm on its sunny side, sky blue on the other,
+  glowing when you look toward the sun). A storey crushed flat blows jets of
+  dust out sideways; the dust that settles turns the square pale round the
+  ruins (a map of the ground's dust painted where clouds roll out, read by
+  the floor shader).
+- **Feel:** the camera shakes by weight and distance; no slow motion and no
+  freeze frames, the game always runs at its own pace.
+
 ## Making it look good on phones
 
 Physics, not drawing, is what limits the game, so the effects are built to
@@ -71,6 +96,11 @@ cost as little of it as possible:
 - Every kind of thing is one draw call: blocks, debris, chips, dust, rebar.
 - Dust is a few large clouds drawn from one noise texture (overdraw is what
   hurts phones), lit and eroded in the shader.
+- The sky is one shader over one baked texture (clouds rendered in Blender),
+  the light it gives the scene is worked out once (no time in it). Contact
+  shadows at the foot of walls and rubble are ambient occlusion written by
+  the block and floor shaders themselves: no screen-space pass (the
+  Compatibility renderer has none anyway).
 - Phones get a lighter tier (render scale, shadow range, fewer pieces), and
   the adaptive quality steps down further if frames run long.
 - Measure with `godot --headless --path . -- --mode=showcase --prof --seed=1`
@@ -102,12 +132,13 @@ cost as little of it as possible:
 | Carved depth: parallax occlusion over the baked height map (joints, bosses, pores; one read on phones, 6 steps in browsers, 12 on desktop) and chamfered edges on trim stone (a bevelled box mesh whose chamfer stays a few cm whatever the block's size) | `shaders/block.gdshader`, `scripts/destruction/structure_mesh.gd` |
 | Surface textures baked in Blender: stone, brick, plaster, travertine, marble and roof tiles built from nodes and baked (Cycles) into seamless colour, relief, roughness and joint maps (`python3 tools/make_textures.py`) | `tools/make_textures.py`, `assets/textures/` |
 | Gravel and glass shards without physics (one bounce, rest, fade) | `scripts/fx/chip_system.gd` |
-| Dust clouds, rolling dust walls (one noise texture, one draw call) | `scripts/fx/dust_system.gd`, `shaders/dust.gdshader` |
+| Dust clouds, rolling dust walls, jets out of crushed storeys (one noise texture, one draw call), lit by the sun; the dust that settles on the square | `scripts/fx/dust_system.gd`, `shaders/dust.gdshader`, `shaders/floor.gdshader` |
+| Sky: gradient, sun halo, clouds baked in Blender (`python3 tools/make_sky.py`); light, haze and grading | `shaders/sky.gdshader`, `tools/make_sky.py`, `assets/textures/sky_clouds.png`, `materials/environment.tres`, `scenes/game.tscn` |
 | The black hole's cloud of grains (moved by the shader) | `scripts/fx/grain_cloud.gd`, `shaders/grain.gdshader` |
 | Rebar left in broken concrete | `scripts/fx/rebar_system.gd` |
 | Quality tiers and adaptive quality (render scale, shadows, pieces kept) | `scripts/core/quality.gd`, `scripts/core/adaptive_quality.gd` |
 | Physics timing (mean and worst step per second) | `scripts/core/physics_clock.gd` |
-| Shake, slow motion on big collapses | `scripts/fx/*`, `scripts/core/game_world.gd` |
+| Camera shake by distance and weight (no slow motion, no freeze frames) | `scripts/fx/camera_shake.gd`, `scripts/core/game_world.gd` |
 | Sound effects (synthesised, regenerate with `python3 tools/make_sounds.py`) | `audio/*.wav`, `scripts/core/sfx.gd` |
 | Music and the wind on the square (seamless loops, `python3 tools/make_music.py`) | `audio/*.ogg`, `scripts/core/sfx.gd` |
 

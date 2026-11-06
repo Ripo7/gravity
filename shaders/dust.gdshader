@@ -12,13 +12,19 @@ uniform sampler2D noise_tex : filter_linear_mipmap, repeat_enable;
 // 8 x 8 frames: R = light on the cloud, A = density.
 uniform sampler2D flipbook : filter_linear_mipmap;
 uniform bool use_flipbook = false;
-uniform vec3 sun_dir = vec3(0.4, 0.85, 0.35);
+// The sun (toward it, world space) and the two lights on the dust: warm
+// where the sun reaches it, the sky's blue on the side away from it. Set
+// from the scene's sun (DustSystem.light_from).
+uniform vec3 sun_dir = vec3(0.775, 0.407, 0.484);
+uniform vec3 sun_color : source_color = vec3(1.0, 0.84, 0.64);
+uniform vec3 sky_color : source_color = vec3(0.58, 0.65, 0.8);
 
 varying float age;
 varying float seed;
 varying float rot;
 varying vec4 tint;
 varying vec3 up_view;
+varying vec3 sun_view;
 
 void vertex() {
 	// Face the camera, keep the instance's position and scale.
@@ -30,6 +36,21 @@ void vertex() {
 	rot = INSTANCE_CUSTOM.z;
 	tint = COLOR;
 	up_view = (VIEW_MATRIX * vec4(0.0, 1.0, 0.0, 0.0)).xyz;
+	sun_view = (VIEW_MATRIX * vec4(normalize(sun_dir), 0.0)).xyz;
+}
+
+// The light on a puff: `own` is its own shading (1 lit, 0 dark), `c` the
+// point on the quad. The side facing the sun is warm and bright, the other
+// side takes the sky's blue; looking toward the sun, thin dust glows.
+vec3 dust_light(vec2 c, float own, float thin, vec3 view, vec3 sunv) {
+	vec2 sun2 = normalize(sunv.xy + vec2(0.0001));
+	float side = clamp(dot(c, sun2) * 0.5 + 0.5, 0.0, 1.0);
+	float lit = smoothstep(0.15, 0.95, own * 0.65 + side * 0.55);
+	float behind = pow(clamp(dot(-view, normalize(sunv)), 0.0, 1.0), 5.0);
+	// Dust is pale: only a touch of the lights' colour.
+	vec3 warm = mix(vec3(1.0), sun_color, 0.45);
+	vec3 cool = mix(vec3(1.0), sky_color, 0.6);
+	return mix(cool * 0.78, warm * 1.22, lit) + warm * behind * thin * 1.3;
 }
 
 vec4 flip_frame(vec2 uv, float f) {
@@ -53,7 +74,7 @@ vec4 flipbook_puff(vec2 c, float a_age, float a_seed, float a_rot, vec4 a_tint, 
 	float top = clamp(dot(c, up2) * 0.5 + 0.5, 0.0, 1.0);
 	// Rendered thin (light gets in): thicken it to read as a cloud.
 	float density = clamp(v.a * 1.8, 0.0, 1.0);
-	return vec4(a_tint.rgb * (0.35 + 0.8 * v.r) * mix(0.8, 1.06, top), density * a_tint.a);
+	return vec4(vec3(clamp(v.r * 0.85 + top * 0.25, 0.0, 1.0)), density * a_tint.a);
 }
 
 // Without the flipbook: two noise reads, eroded as the cloud ages.
@@ -74,8 +95,7 @@ vec4 noise_puff(vec2 c, float a_age, float a_seed, float a_rot, vec4 a_tint, vec
 	// Lit from above: the side toward the sky is brighter, the underside
 	// darker, which reads as volume.
 	float top = clamp(dot(c, up2) * 0.5 + 0.5, 0.0, 1.0);
-	float light = mix(0.58, 1.04, top) * (0.85 + 0.3 * n2);
-	return vec4(a_tint.rgb * light, a * a_tint.a);
+	return vec4(vec3(clamp(top * 0.7 + n2 * 0.3, 0.0, 1.0)), a * a_tint.a);
 }
 
 void fragment() {
@@ -85,6 +105,7 @@ void fragment() {
 	}
 	vec2 up2 = normalize(up_view.xy + vec2(0.0001));
 	vec4 puff = use_flipbook ? flipbook_puff(c, age, seed, rot, tint, up2) : noise_puff(c, age, seed, rot, tint, up2);
-	ALBEDO = puff.rgb;
+	// puff.r is its own shading; the colour comes from the dust and the light.
+	ALBEDO = tint.rgb * dust_light(c, puff.r, 1.0 - puff.a, VIEW, sun_view);
 	ALPHA = puff.a;
 }

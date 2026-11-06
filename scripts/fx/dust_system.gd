@@ -5,11 +5,18 @@ extends Node3D
 ## - puff: a burst where a block breaks
 ## - roll: a wall of dust rolling out along the ground after a collapse
 ## - haze: a low veil that lingers over fresh rubble
+## - jet: dust blasting out sideways where a storey is crushed
+## And the dust that settles: the square round a collapse turns pale (a
+## coarse map of how dusty the ground is, read by the floor shader).
 ## - trails behind pieces of building that are falling
 ## Owns the chip system too (gravel and splinters without physics).
 
 const FLOATS := 20  # transform 12, colour 4, custom 4
 const FLIPBOOK := "res://assets/textures/dust_flipbook.png"
+## The ground's dust map: a texel every 2 m over the middle of the map.
+const GROUND_SIZE := 64
+const GROUND_HALF := 64.0
+const GROUND_UPLOAD := 0.3  ## seconds between uploads of the map
 const DUST_COLORS := {
 	Materials.Kind.CONCRETE: Color(0.78, 0.75, 0.7, 0.75),
 	Materials.Kind.WOOD: Color(0.74, 0.64, 0.5, 0.6),
@@ -19,6 +26,7 @@ const DUST_COLORS := {
 
 var chip_system: ChipSystem
 var structures: StructureSet
+var floor_mat: ShaderMaterial  ## the floor's material (see use_floor)
 var capacity := 0
 var active := 0
 var _pos := PackedVector3Array()
@@ -34,6 +42,11 @@ var _buffer := PackedFloat32Array()
 var _multimesh: MultiMesh
 var _budget := 40.0  # puffs that can still go out right now
 var _trail_tick := 0.0
+var _dusty := PackedByteArray()  ## how dusty the ground is, 0..255, a byte a texel
+var _ground_img: Image
+var _ground_tex: ImageTexture
+var _ground_dirty := false
+var _ground_tick := 0.0
 
 
 func _ready() -> void:
@@ -75,6 +88,23 @@ func _ready() -> void:
 	add_child(chip_system)
 
 
+## Lights the dust with the scene's sun: its direction and colour (the
+## sky's blue fills the other side).
+func light_from(sun: DirectionalLight3D) -> void:
+	var mat := _multimesh_material()
+	if mat == null or sun == null:
+		return
+	mat.set_shader_parameter("sun_dir", sun.global_basis.z.normalized())
+	mat.set_shader_parameter("sun_color", sun.light_color)
+
+
+func _multimesh_material() -> ShaderMaterial:
+	for child in get_children():
+		if child is MultiMeshInstance3D and (child as MultiMeshInstance3D).multimesh == _multimesh:
+			return (child as MultiMeshInstance3D).material_override as ShaderMaterial
+	return null
+
+
 static func _noise_texture() -> ImageTexture:
 	var n := FastNoiseLite.new()
 	n.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
@@ -114,6 +144,12 @@ func _spawn(
 
 
 func _process(delta: float) -> void:
+	_ground_tick += delta
+	if _ground_dirty and _ground_tick >= GROUND_UPLOAD:
+		_ground_tick = 0.0
+		_ground_dirty = false
+		_ground_img.set_data(GROUND_SIZE, GROUND_SIZE, false, Image.FORMAT_R8, _dusty)
+		_ground_tex.update(_ground_img)
 	_budget = minf(_budget + delta * float(Quality.pick(40, 80, 120)), float(Quality.pick(20, 40, 60)))
 	_trail_tick += delta
 	if _trail_tick > 0.12 and structures:
@@ -166,9 +202,50 @@ func _process(delta: float) -> void:
 	_multimesh.buffer = _buffer
 
 
+## Settles dust on the floor drawn with `mat` from now on (a clean floor:
+## a world loaded earlier may have left its dust on the shared material).
+func use_floor(mat: ShaderMaterial) -> void:
+	floor_mat = mat
+	_ground_img = null
+	_dusty.clear()
+	if floor_mat:
+		floor_mat.set_shader_parameter("ground_dust", null)
+
+
+## Dust settling on the ground round `at`: up to `amount` (1 = fully
+## covered) within `radius` metres, less towards the edge.
+func settle(at: Vector3, radius: float, amount: float) -> void:
+	if floor_mat == null:
+		return
+	if _ground_img == null:
+		_dusty.resize(GROUND_SIZE * GROUND_SIZE)
+		_dusty.fill(0)
+		_ground_img = Image.create_from_data(GROUND_SIZE, GROUND_SIZE, false, Image.FORMAT_R8, _dusty)
+		_ground_tex = ImageTexture.create_from_image(_ground_img)
+		floor_mat.set_shader_parameter("ground_dust", _ground_tex)
+		floor_mat.set_shader_parameter(
+			"dust_rect", Vector4(-GROUND_HALF, -GROUND_HALF, GROUND_HALF * 2.0, GROUND_HALF * 2.0)
+		)
+	var scale := GROUND_SIZE / (GROUND_HALF * 2.0)
+	var c := Vector2(at.x + GROUND_HALF, at.z + GROUND_HALF) * scale
+	var r := maxf(radius * scale, 1.0)
+	var add := amount * 255.0
+	for y in range(maxi(int(c.y - r), 0), mini(int(c.y + r) + 1, GROUND_SIZE)):
+		var row := y * GROUND_SIZE
+		var dy := (y + 0.5 - c.y) / r
+		for x in range(maxi(int(c.x - r), 0), mini(int(c.x + r) + 1, GROUND_SIZE)):
+			var dx := (x + 0.5 - c.x) / r
+			var f := 1.0 - sqrt(dx * dx + dy * dy)
+			if f > 0.0:
+				_dusty[row + x] = mini(_dusty[row + x] + int(add * f * f * (3.0 - 2.0 * f)), 255)
+	_ground_dirty = true
+
+
 ## A dust cloud of roughly `radius` metres where something broke.
 func puff(at: Vector3, radius: float, kind: int, amount := 10) -> void:
 	var col: Color = DUST_COLORS.get(kind, DUST_COLORS[Materials.Kind.CONCRETE])
+	if at.y < 6.0:
+		settle(at, radius * 3.5, 0.08)
 	var n := clampi(int(amount / 5.0), 1, 4)
 	for k in n:
 		var dir := Vector3(randf_range(-1, 1), randf_range(0.0, 0.8), randf_range(-1, 1))
@@ -183,7 +260,8 @@ func puff(at: Vector3, radius: float, kind: int, amount := 10) -> void:
 func roll(at: Vector3, radius: float, strength := 1.0) -> void:
 	var col: Color = DUST_COLORS[Materials.Kind.CONCRETE]
 	col.a *= clampf(0.55 + strength * 0.45, 0.3, 1.0)
-	var ground := _ground_below(at)
+	settle(at, radius * 3.0, 0.55 * strength)
+	var ground_y := _ground_below(at)
 	var n := int(Quality.pick(6, 10, 14) * clampf(strength, 0.4, 1.0))
 	for k in n:
 		var a := TAU * (k + randf() * 0.6) / n
@@ -197,7 +275,7 @@ func roll(at: Vector3, radius: float, strength := 1.0) -> void:
 			size * 0.35,
 			randf_range(5.0, 7.5),
 			col,
-			ground,
+			ground_y,
 			0.9
 		)
 	# A taller column at the centre.
@@ -210,15 +288,36 @@ func roll(at: Vector3, radius: float, strength := 1.0) -> void:
 			size * 0.25,
 			6.0,
 			col,
-			ground,
+			ground_y,
 			0.6
+		)
+
+
+## Dust blasting out sideways (a storey crushed flat pushes its air out
+## through the windows): a few puffs shot along `dir`, quickly braked.
+func jet(at: Vector3, dir: Vector3, radius: float, speed := 8.0) -> void:
+	var col: Color = DUST_COLORS[Materials.Kind.CONCRETE]
+	var out := Vector3(dir.x, 0.0, dir.z).normalized()
+	for k in int(Quality.pick(2, 3, 4)):
+		var v := out + Vector3(randf_range(-0.25, 0.25), randf_range(0.0, 0.35), randf_range(-0.25, 0.25))
+		var size := radius * randf_range(0.8, 1.3)
+		_spawn(
+			at + out * radius * 0.5 * k,
+			v.normalized() * speed * randf_range(0.7, 1.1),
+			size,
+			size * 0.9,
+			randf_range(2.5, 3.8),
+			col,
+			-INF,
+			2.4
 		)
 
 
 ## A thin veil that lingers low over fresh rubble.
 func haze(at: Vector3, radius: float) -> void:
 	var col: Color = DUST_COLORS[Materials.Kind.CONCRETE] * Color(1, 1, 1, 0.45)
-	var ground := _ground_below(at)
+	var ground_y := _ground_below(at)
+	settle(at, radius * 1.8, 0.2)
 	for k in 3:
 		var off := Vector3(randf_range(-1, 1), 0, randf_range(-1, 1)) * radius
 		_spawn(
@@ -228,7 +327,7 @@ func haze(at: Vector3, radius: float) -> void:
 			radius * 0.08,
 			randf_range(8.0, 11.0),
 			col,
-			ground,
+			ground_y,
 			0.4
 		)
 
