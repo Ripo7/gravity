@@ -42,6 +42,10 @@ func _ready() -> void:
 			# Two cascades instead of four: the city is drawn twice less.
 			sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
 	RenderingServer.directional_shadow_atlas_set_size(int(Quality.pick(1024, 2048, 4096)), true)
+	# Carved joints: one read on phones, a few steps in browsers, more here.
+	for mat: Variant in [world.structures.material, world.debris.material]:
+		if mat is ShaderMaterial:
+			(mat as ShaderMaterial).set_shader_parameter("parallax_steps", int(Quality.pick(0, 6, 12)))
 	var env := world.get_node_or_null("WorldEnvironment") as WorldEnvironment
 	if env and env.environment and Quality.tier() == Quality.Tier.LOW:
 		env.environment = env.environment.duplicate()

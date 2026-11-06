@@ -181,7 +181,7 @@ class Graph:
 def stone(size):
     g = Graph("stone")
     vec, w = g.torus(size[0] / TAU, size[1] / TAU)
-    tone, mortar = g.brick(4, 6, 0.018, 0.35, 0.5)
+    tone, mortar = g.brick(4, 6, 0.011, 0.3, 0.5)
     grain = g.noise(vec, w, 2.2, 6.0, 0.6)
     pits = g.voronoi(vec, w, 9.0)
     base = g.ramp(grain, [(0.25, (0.55, 0.5, 0.42)), (0.7, (0.74, 0.68, 0.58))])

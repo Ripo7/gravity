@@ -134,6 +134,23 @@ func _facade_any(
 	)
 
 
+## A moulded piece on a facade (ShapeLibrary: "string", "sill", "cap",
+## "corona", "crown"): the same span as _facade_box, turned so its profile
+## faces out (local x along the facade, z outward).
+func _facade_piece(
+	side: int, u0: float, u1: float, y0: float, y1: float, o0: float, o1: float, shape: String, mult := 0.6
+) -> void:
+	var origin := _facade_point(side, 0.0, 0.0, 0.0)
+	var along := _facade_point(side, 1.0, 0.0, 0.0) - origin
+	var outward := _facade_point(side, 0.0, 0.0, 1.0) - origin
+	var a := _facade_point(side, u0, y0, o0)
+	var b := _facade_point(side, u1, y1, o1)
+	var size := Vector3(absf(u1 - u0), y1 - y0, absf(o1 - o0))
+	var basis := Basis(along, Vector3.UP, outward)
+	var stone := Materials.Finish.TRAVERTINE
+	_box((a + b) * 0.5, size, stone, mult, Materials.Kind.CONCRETE, basis, false, shape)
+
+
 func _facade_point(side: int, u: float, y: float, o: float) -> Vector3:
 	match side:
 		0:
@@ -267,15 +284,15 @@ func _facade_storey(side: int, s: int) -> void:
 func _window_dressing(side: int, s: int, c: float, ww: float, sill: float, head: float) -> void:
 	var stone := Materials.Finish.TRAVERTINE
 	if s == 0:
-		_facade_box(side, c - ww * 0.5 - 0.15, c + ww * 0.5 + 0.15, sill - 0.18, sill, 0.0, 0.18, stone, 0.6)
+		_facade_piece(side, c - ww * 0.5 - 0.15, c + ww * 0.5 + 0.15, sill - 0.18, sill, 0.0, 0.18, "sill")
 		return
-	_facade_box(side, c - ww * 0.5 - 0.25, c + ww * 0.5 + 0.25, sill, sill + 0.15, 0.0, 0.24, stone, 0.6)
+	_facade_piece(side, c - ww * 0.5 - 0.25, c + ww * 0.5 + 0.25, sill, sill + 0.15, 0.0, 0.24, "sill")
 	var cap_w := ww * 0.5 + 0.3
 	if side == 0 and s == 1:
 		for sx: float in [-1.0, 1.0]:
 			var ju := c + sx * (ww * 0.5 + 0.1)
 			_facade_box(side, ju - 0.1, ju + 0.1, sill + 0.15, head, 0.0, 0.14, stone, 0.6)
-	_facade_box(side, c - cap_w, c + cap_w, head, head + 0.22, 0.0, 0.26, stone, 0.6)
+	_facade_piece(side, c - cap_w, c + cap_w, head, head + 0.22, 0.0, 0.26, "cap")
 	if not (side == 0 and s == 1):
 		return
 	var k := int(roundf((c + W * 0.5) / (W / BAYS_FRONT) - 0.5))
@@ -305,7 +322,7 @@ func _string_courses(side: int) -> void:
 		for k in pieces:
 			var a := -u + k * length / pieces
 			var b := -u + (k + 1) * length / pieces
-			_facade_box(side, a, b, y + 0.15, y + SLAB, 0.0, 0.22, Materials.Finish.TRAVERTINE, 0.7)
+			_facade_piece(side, a, b, y + 0.15, y + SLAB, 0.0, 0.22, "string", 0.7)
 
 
 ## Stone quoins up the corners of the rendered storeys, long and short in
@@ -703,13 +720,13 @@ func _cornice() -> void:
 		for k in pieces:
 			var a := -cu + k * cl / pieces
 			var b := -cu + (k + 1) * cl / pieces
-			_facade_box(side, a, b, y + 0.35, y + 0.85, -WT, 1.15, stone, 0.8)
+			_facade_piece(side, a, b, y + 0.35, y + 0.85, -WT, 1.15, "corona", 0.8)
 		var mu := u + 1.25 if side < 2 else D * 0.5 - WT
 		var ml := mu * 2.0
 		for k in pieces:
 			var a := -mu + k * ml / pieces
 			var b := -mu + (k + 1) * ml / pieces
-			_facade_box(side, a, b, y + 0.85, y + 1.05, -WT, 1.25, stone, 0.6)
+			_facade_piece(side, a, b, y + 0.85, y + 1.05, -WT, 1.25, "crown")
 	# Courtyard cornice on the inner edge of the top floor.
 	var ix := AX + CT * 0.5
 	var iz := AZ + CT * 0.5
