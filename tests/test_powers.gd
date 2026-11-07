@@ -1,5 +1,5 @@
 extends TestCase
-## The three powers, health and damage.
+## The powers, health and damage.
 
 const GAME := preload("res://scenes/game.tscn")
 const FAR := Vector3(55, 0.05, 55)  # empty corner of the sandbox
@@ -143,7 +143,7 @@ func test_shield_button_raises_it_at_once() -> void:
 	await _unload()
 
 
-func test_shield_is_a_tall_curved_shell_that_blocks() -> void:
+func test_shield_is_a_shell_in_front_that_blocks() -> void:
 	await _load()
 	var p := world.player
 	p.global_position = FAR
@@ -154,32 +154,43 @@ func test_shield_is_a_tall_curved_shell_that_blocks() -> void:
 	var shields := get_tree().get_nodes_in_group("ice_shield")
 	check_eq(shields.size(), 1, "one shield")
 	var shield := shields[0] as IceShield
-	check(shield.global_position.distance_to(p.global_position) < 0.5, "centred on the player")
-	# Rays from the player hit ice ahead, to the sides and overhead-front,
-	# but not behind: a curved shell, open at the back.
+	check(shield.global_position.distance_to(p.global_position) < 0.5, "raised from the player's feet")
+	# Rays from the player hit ice ahead and a little to each side, and
+	# up over the front, but not to the sides or behind: a shell in front,
+	# that leaves you most of your view.
 	var space := world.get_world_3d().direct_space_state
 	var head := p.global_position + Vector3(0, 1.5, 0)
 	var hits := {}
-	for dir_name: String in ["ahead", "left", "right", "up_front", "behind"]:
+	for dir_name: String in ["ahead", "left_front", "right_front", "up_front", "left", "right", "behind"]:
 		var d: Vector3 = {
 			"ahead": Vector3(0, 0, -1),
-			"left": Vector3(-1, 0, 0),
-			"right": Vector3(1, 0, 0),
-			"up_front": Vector3(0, 1.4, -1).normalized(),
+			"left_front": Vector3(0, 0, -1).rotated(Vector3.UP, deg_to_rad(20.0)),
+			"right_front": Vector3(0, 0, -1).rotated(Vector3.UP, deg_to_rad(-20.0)),
+			"up_front": Vector3(0, 0.8, -1).normalized(),
+			"left": Vector3(0, 0, -1).rotated(Vector3.UP, deg_to_rad(50.0)),
+			"right": Vector3(0, 0, -1).rotated(Vector3.UP, deg_to_rad(-50.0)),
 			"behind": Vector3(0, 0, 1),
 		}[dir_name]
 		var q := PhysicsRayQueryParameters3D.create(head, head + d * 8.0, DebrisSystem.LAYER_STRUCTURES)
 		q.exclude = [p.get_rid()]
 		var hit := space.intersect_ray(q)
 		hits[dir_name] = not hit.is_empty() and hit["collider"] == shield
-	check(hits["ahead"] and hits["left"] and hits["right"], "wraps around the front (%s)" % hits)
-	check(hits["up_front"], "curves up over the front")
-	check(not hits["behind"], "open at the back")
-	# Taller than you.
+	check(hits["ahead"] and hits["left_front"] and hits["right_front"], "covers the front (%s)" % hits)
+	check(hits["up_front"], "rises over the front")
+	check(not (hits["left"] or hits["right"] or hits["behind"]), "open from 50 degrees aside (%s)" % hits)
+	# Taller than you, and shallow: it stands well ahead of you, not around.
 	var q := PhysicsRayQueryParameters3D.create(
-		FAR + Vector3(0, 4.2, 0), FAR + Vector3(0, 4.2, -6.0), DebrisSystem.LAYER_STRUCTURES
+		FAR + Vector3(0, 2.5, 0), FAR + Vector3(0, 2.5, -6.0), DebrisSystem.LAYER_STRUCTURES
 	)
-	check(not space.intersect_ray(q).is_empty(), "reaches over 4 m")
+	check(not space.intersect_ray(q).is_empty(), "reaches over 2.5 m")
+	var near := INF
+	var far := -INF
+	for a: float in [-0.5, -0.25, 0.0, 0.25, 0.5]:
+		for e: float in [0.0, 0.5, 1.0]:
+			var ahead := -shield.shell_point(a * shield.arc, e, false).z
+			near = minf(near, ahead)
+			far = maxf(far, ahead)
+	check(near > 0.6 and far - near < 1.2, "a shallow shell %.1f to %.1f m ahead" % [near, far])
 	var i := world.debris.spawn(
 		Transform3D(Basis(), FAR + Vector3(0, 1.5, -8)), Vector3.ONE * 0.8, Vector3(0, 0, 20)
 	)
@@ -192,6 +203,56 @@ func test_shield_is_a_tall_curved_shell_that_blocks() -> void:
 	check(not is_instance_valid(shield), "shattered")
 	await get_tree().create_timer(1.5).timeout
 	check_eq(p.health, Player.MAX_HEALTH, "its shards do not hurt you")
+	await _unload()
+
+
+func test_shockwave_throws_what_is_ahead_and_spares_you() -> void:
+	await _load()
+	var p := world.player
+	p.global_position = FAR
+	p.rotation.y = 0.0  # looking toward -z
+	await frames(3)
+	var d := world.debris
+	var ahead := d.spawn(Transform3D(Basis(), FAR + Vector3(0, 0.4, -5)), Vector3.ONE * 0.5, Vector3.ZERO)
+	var behind := d.spawn(Transform3D(Basis(), FAR + Vector3(0, 0.4, 5)), Vector3.ONE * 0.5, Vector3.ZERO)
+	var aside := d.spawn(Transform3D(Basis(), FAR + Vector3(6, 0.4, -2)), Vector3.ONE * 0.5, Vector3.ZERO)
+	await frames(40)
+	var was := [d.position_of(ahead), d.position_of(behind), d.position_of(aside)]
+	var c := p.power
+	check(c.cast_now(PowerDefs.Power.SHOCKWAVE), "it goes off")
+	check_eq(c.selected, PowerDefs.Power.VORTEX, "the cast button still opens black holes")
+	check(not c.is_ready(PowerDefs.Power.SHOCKWAVE), "on cooldown")
+	check(c.is_ready(PowerDefs.Power.VORTEX), "the black hole is not")
+	await get_tree().create_timer(0.6).timeout
+	var moved: Vector3 = d.position_of(ahead) - was[0]
+	check(moved.z < -2.0, "the piece ahead was thrown away (%s)" % moved)
+	check(d.position_of(behind).distance_to(was[1]) < 0.3, "not the one behind")
+	check(d.position_of(aside).distance_to(was[2]) < 0.3, "nor the one to the side")
+	check_eq(p.health, Player.MAX_HEALTH, "it does not hurt you")
+	await _unload()
+
+
+func test_shockwave_punches_through_a_wall_close_up() -> void:
+	await _load()
+	var s := world.structures
+	# The block of the palace front nearest the square, about chest high.
+	var target := -1
+	for i in s.segment_count():
+		var at := s.transform_of(i).origin
+		if s.is_alive(i) and at.x > -12.0 and at.x < 12.0 and at.y > 1.0 and at.y < 2.5:
+			if target < 0 or at.z > s.transform_of(target).origin.z:
+				target = i
+	check(target >= 0, "found the wall")
+	var wall := s.transform_of(target).origin
+	var p := world.player
+	p.global_position = Vector3(wall.x, 0.05, wall.z + 3.5)
+	p.rotation.y = 0.0
+	await frames(5)
+	var standing := s.alive_count
+	check(p.power.cast_now(PowerDefs.Power.SHOCKWAVE), "it goes off")
+	await get_tree().create_timer(0.6).timeout
+	check(not s.is_alive(target), "the block in front of you broke")
+	check(standing - s.alive_count >= 3, "a hole, not one block (%d)" % (standing - s.alive_count))
 	await _unload()
 
 
@@ -278,7 +339,7 @@ func test_something_dropping_on_the_shield_wears_it() -> void:
 		return
 	var before := shield.hp
 	# A heavy slab falls straight onto the front of the shell from above.
-	var top := shield.global_transform * shield.shell_point(0.0, deg_to_rad(55.0), true)
+	var top := shield.global_transform * shield.shell_point(0.0, 0.8, true)
 	world.debris.spawn(
 		Transform3D(Basis(), top + Vector3(0, 4.0, 0)), Vector3(1.2, 0.6, 1.2), Vector3(0, -12, 0)
 	)

@@ -4,7 +4,7 @@ extends Control
 ## the K.O. word, F3 stats and the touch controls. No score.
 
 ## Touch: where each slot sits around the cast button (degrees, y down).
-const SLOT_ANGLES := [168.0, 212.0]
+const SLOT_ANGLES := [150.0, 190.0, 230.0]
 
 @export var world: GameWorld
 
@@ -15,7 +15,7 @@ var _stats: Label
 var _pause_button: Button
 var _hurt_flash := 0.0
 var _hurt_dir := 0.0
-var _denied := [0.0, 0.0]
+var _denied: Array[float] = [0.0, 0.0, 0.0]
 var _shown_health := 100.0
 var _flash: ColorRect
 var _last_hurt_sound := 0
@@ -105,7 +105,7 @@ func _process(delta: float) -> void:
 	if show_stats and world:
 		_stats.text = stats_text(world)
 	_hurt_flash = move_toward(_hurt_flash, 0.0, real * 1.6)
-	for k in 2:
+	for k in _denied.size():
 		_denied[k] = move_toward(_denied[k], 0.0, real * 3.0)
 	# A full-screen pass costs fill rate on phones: only while it shows.
 	_flash.visible = _hurt_flash > 0.0
@@ -184,7 +184,7 @@ func _draw_health() -> void:
 func _draw_powers() -> void:
 	var p := world.player.power
 	var font := UiTheme.bold()
-	for k in 2:
+	for k in PowerDefs.NAMES.size():
 		var r := power_slot_rect(k, size, _touch_layout())
 		var slot := r.size.x
 		var shake := Vector2(sin(Time.get_ticks_msec() / 25.0) * 4.0 * _denied[k], 0)
@@ -247,7 +247,7 @@ static func power_slot_rect(k: int, view: Vector2, is_touch: bool) -> Rect2:
 		return Rect2(c - Vector2.ONE * slot * 0.5, Vector2(slot, slot))
 	var size := 64.0
 	var gap := 40.0
-	var total := size * 2 + gap
+	var total := size * PowerDefs.NAMES.size() + gap * (PowerDefs.NAMES.size() - 1)
 	var x0 := (view.x - total) * 0.5
 	return Rect2(Vector2(x0 + k * (size + gap), view.y - size - 34.0), Vector2(size, size))
 
@@ -270,6 +270,11 @@ func _draw_icon(power: int, c: Vector2, r: float, col: Color) -> void:
 			draw_arc(c + Vector2(0, r * 0.7), r * 1.1, PI * 1.05, PI * 1.95, 24, col, r * 0.3, true)
 			draw_circle(c + Vector2(0, r * 0.25), r * 0.17, col)
 			draw_line(c + Vector2(0, r * 0.4), c + Vector2(0, r * 0.75), col, 2.5)
+		PowerDefs.Power.SHOCKWAVE:
+			# Waves going out from a point, to the right.
+			draw_circle(c - Vector2(r * 0.75, 0), r * 0.17, col)
+			for j in 3:
+				draw_arc(c - Vector2(r * 0.75, 0), r * (0.55 + 0.42 * j), -0.75, 0.75, 12, col, 2.5, true)
 
 
 static func _flash_material() -> ShaderMaterial:
