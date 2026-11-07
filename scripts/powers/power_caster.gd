@@ -1,9 +1,10 @@
 class_name PowerCaster
 extends Node3D
-## The player's two powers. Cast (click, RT, violet button) opens a black
-## hole where you aim. Shield (right click, E, LT/LB/RB, its touch slot)
-## raises a curved shell of black ice around your front at once. Each power
-## has its own cooldown. A faint marker shows where the black hole would land.
+## The player's powers. Cast (click, RT, violet button) opens a black hole
+## where you aim. Shield (right click, E, LT/LB/RB, its touch slot) raises a
+## shell of black ice in front of you at once. Shock wave (F, X, its touch
+## slot) blasts the air out along where you look at once. Each power has its
+## own cooldown. A faint marker shows where the black hole would land.
 
 signal cast(power: int)
 signal denied(power: int)
@@ -12,7 +13,7 @@ const MARK_ALPHA := 0.28
 
 var selected := PowerDefs.Power.VORTEX
 ## Seconds left before each power can be cast again.
-var cooldown_left := [0.0, 0.0]
+var cooldown_left: Array[float] = [0.0, 0.0, 0.0]
 var auto_input := false  ## true when a script (demo, tests) drives the caster
 var touch_held := false  ## set by TouchControls while the cast button is held
 ## Set by TouchControls on finger down: a tap shorter than a frame still casts.
@@ -32,7 +33,7 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	for k in 2:
+	for k in cooldown_left.size():
 		if cooldown_left[k] > 0.0:
 			cooldown_left[k] = maxf(cooldown_left[k] - delta, 0.0)
 			if cooldown_left[k] == 0.0:
@@ -56,6 +57,8 @@ func _read_input() -> void:
 		return
 	if Input.is_action_just_pressed("shield") and _pointer_ready():
 		cast_power(PowerDefs.Power.SHIELD)
+	if Input.is_action_just_pressed("shockwave") and _pointer_ready():
+		cast_power(PowerDefs.Power.SHOCKWAVE)
 	# The click that grabs the mouse (or resumes) must not also cast: the
 	# mouse button only counts once it has been up with the pointer held.
 	var captured := Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
@@ -80,10 +83,10 @@ func _pointer_ready() -> bool:
 	return captured or not Input.get_connected_joypads().is_empty()
 
 
-## Picks the power the cast button fires. The shield goes up right away
-## instead: it is never the selected power.
+## Picks the power the cast button fires. The shield and the shock wave go
+## off right away instead: they are never the selected power.
 func select(power: int) -> void:
-	if power == PowerDefs.Power.SHIELD:
+	if PowerDefs.is_instant(power):
 		cast_power(power)
 		return
 	if power == selected:
@@ -122,16 +125,29 @@ func cast_power(power: int) -> bool:
 			world.cast_vortex(target)
 		PowerDefs.Power.SHIELD:
 			world.cast_shield(shield_base())
+		PowerDefs.Power.SHOCKWAVE:
+			_cast_shockwave(world)
 	cooldown_left[power] = PowerDefs.cooldown(power)
 	cast.emit(power)
 	return true
 
 
-## Selects (unless it is the shield) and casts `power` (scripts, tests).
+## Selects (unless it goes off at once) and casts `power` (scripts, tests).
 func cast_now(power: int) -> bool:
-	if power != PowerDefs.Power.SHIELD:
+	if not PowerDefs.is_instant(power):
 		selected = power
 	return cast_power(power)
+
+
+## Out of your hands (a little below and ahead of your eyes), along where
+## you look.
+func _cast_shockwave(world: GameWorld) -> void:
+	var cam := get_viewport().get_camera_3d()
+	var player := _player()
+	var dir := -cam.global_basis.z if cam else -global_basis.z
+	var eye := cam.global_position if cam else global_position
+	var feet := player.global_position.y if player else eye.y - 1.6
+	world.cast_shockwave(eye + dir * 0.6 + Vector3.DOWN * 0.25, dir, feet)
 
 
 # --- Aiming --------------------------------------------------------------------

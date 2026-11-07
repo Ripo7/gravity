@@ -445,6 +445,33 @@ func pull(center: Vector3, radius: float, reach: float, strength: float, swirl: 
 		c.slow_time = 0.0
 
 
+## A shock wave's front, from `near` to `far` metres out from `origin` in
+## the cone round `dir`, throws the falling pieces it passes away: each
+## block it reaches is given up to `speed` m/s (fading with distance).
+func push(origin: Vector3, dir: Vector3, cos_half: float, near: float, far: float, speed: float) -> void:
+	for c in clusters:
+		var xf := c.transform()
+		if xf.origin.distance_to(origin) > far + c.extent():
+			continue
+		var impulse := Vector3.ZERO
+		var torque := Vector3.ZERO
+		for k in c.members.size():
+			var p := xf * c.offsets[k].origin
+			var off := p - origin
+			var d := off.length()
+			if d <= near or d > far or (d > 0.5 and off.dot(dir) < d * cos_half):
+				continue
+			var j := off / maxf(d, 0.01) * speed * Shockwave.strength(d) * c.masses[k]
+			impulse += j
+			torque += (p - xf.origin).cross(j)
+		if impulse == Vector3.ZERO:
+			continue
+		PhysicsServer3D.body_apply_central_impulse(c.body, impulse)
+		PhysicsServer3D.body_apply_torque_impulse(c.body, torque)
+		PhysicsServer3D.body_set_state(c.body, PhysicsServer3D.BODY_STATE_SLEEPING, false)
+		c.slow_time = 0.0
+
+
 ## A piece resting or leaning on things bears down on them with its weight,
 ## shared out as its contacts push (Jolt's impulses only give the shares):
 ##   - the first standing piece it leans on may be pushed over whole (a

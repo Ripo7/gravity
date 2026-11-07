@@ -17,11 +17,20 @@ climb.
 1. **Black hole** – a black ball opens where you aim. Everything inside its
    radius is torn loose and orbits it fast; there is no explosion. The band
    just outside the radius (red ring) is not pulled but takes damage –
-   including you. Pieces of building falling near it are dragged in.
-2. **Shield** – not aimed: pressing its button makes a tall, curved shell of
-   black ice (close to a half dome, but lumpy) burst out of the ground around
-   your front. It stops debris and falling pieces until it breaks; its shards
-   never hurt you.
+   including you. Pieces of building falling near it are dragged in. It
+   opens as the air rushes in (a shock wave closing on a point the ball
+   swells out of); a disc of dust and streaks of grit spiral into it; it
+   closes by shrinking to a point that flashes and sends a shock wave out.
+2. **Shield** – not aimed: pressing its button makes a shell of black ice
+   (about 2.8 m across and 3 m high, lumpy) burst out of the ground 2.3 m in
+   front of you, gently curved and leaning back a little, open to the sides.
+   It stops debris and falling pieces until it breaks; its shards never hurt
+   you.
+3. **Shock wave** – not aimed: a blast of air out of your hands along where
+   you look, 16 m long in a 30° cone. Loose pieces and falling pieces are
+   thrown away from you, dust is blown off, and standing blocks take a hit
+   that fades with distance: close up it punches through a wall, far off it
+   only knocks loose what was barely holding.
 
 **Rules:** you are fragile. Anything heavy that hits you (debris, stones,
 collapsing floors), the black hole's band and hard landings hurt; health
@@ -37,11 +46,12 @@ respawn at the start. No score, no counter: the HUD shows only your health.
 | Jump / sprint | Space / Shift | A / L3 |
 | Black hole | Left mouse | RT |
 | Shield | Right mouse, E, 2 | LT, LB, RB |
+| Shock wave | F, 3 | X |
 | Restart · pause · stats | R · Esc · F3 | Back · Start |
 
 **Phones and tablets** (landscape): left thumb moves, drag on the right to
-aim, the violet button opens a black hole, the shield button next to it
-raises the shield, arrow to jump, II to pause.
+aim, the violet button opens a black hole, the shield and shock wave
+buttons next to it set those off at once, arrow to jump, II to pause.
 
 ## Play builds
 
@@ -125,7 +135,8 @@ cost as little of it as possible:
 | The square: flagstones, travertine bands and kerbs, the plain beyond, the haze | `shaders/floor.gdshader`, `materials/environment.tres` |
 | K.O. and respawn | `scripts/game/level_run.gd`, `scripts/game/game_state.gd` |
 | Powers: tuning, cooldowns, aiming | `scripts/powers/power_defs.gd`, `scripts/powers/power_caster.gd` |
-| Black hole / black ice shield | `scripts/powers/vortex.gd`, `ice_shield.gd` |
+| Black hole / black ice shield / shock wave | `scripts/powers/vortex.gd`, `ice_shield.gd`, `shockwave.gd` |
+| Shock waves you can see, the black hole's dust | `scripts/fx/blast_wave.gd`, `shaders/shock_wave.gdshader`, `shaders/dust_swirl.gdshader`, `shaders/vortex_motes.gdshader` |
 | Health and what hurts | `scripts/player/player.gd`, `scripts/powers/hazards.gd` |
 | Menu (live attract-mode backdrop) | `scenes/menu.tscn`, `scripts/ui/main_menu.gd` |
 | Structural physics: loads and shear, creak-and-hold, floor-by-floor pancake collapses | `scripts/destruction/structure_set.gd`, `sphere_grid.gd`, `structure_mesh.gd` |

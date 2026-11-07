@@ -113,7 +113,7 @@ func test_touch_controls_move_look_and_cast() -> void:
 	tc._on_drag(_drag(1, Vector2(1000, 400), Vector2(-100, 0)))
 	check(p.rotation.y > yaw, "drag left turns left")
 	# The violet button opens a black hole; the shield slot raises the
-	# shield at once.
+	# shield at once, the shock wave slot sets it off.
 	var casts: Array[int] = []
 	p.power.cast.connect(func(pw: int) -> void: casts.append(pw))
 	tc._on_touch(_touch(2, tc.charge_center(), true))
@@ -126,10 +126,25 @@ func test_touch_controls_move_look_and_cast() -> void:
 	tc._on_touch(_touch(3, shield_slot, false))
 	check_eq(casts.size(), 2, "tapping the shield slot raises it")
 	check_eq(casts[-1], PowerDefs.Power.SHIELD, "the shield")
-	# The slots sit right next to the cast button.
-	for k in 2:
-		var d := Hud.power_slot_rect(k, tc.size, true).get_center().distance_to(tc.charge_center())
+	var wave_slot := Hud.power_slot_rect(PowerDefs.Power.SHOCKWAVE, tc.size, true).get_center()
+	tc._on_touch(_touch(3, wave_slot, true))
+	tc._on_touch(_touch(3, wave_slot, false))
+	check_eq(casts[-1], PowerDefs.Power.SHOCKWAVE, "tapping the shock wave slot sets it off")
+	# The slots sit right next to the cast button, apart from each other and
+	# from the jump button.
+	for k in PowerDefs.NAMES.size():
+		var r := Hud.power_slot_rect(k, tc.size, true)
+		var d := r.get_center().distance_to(tc.charge_center())
 		check(d < tc.size.y * 0.25, "slot %d next to the cast button" % k)
+		check(
+			r.get_center().distance_to(tc.jump_center()) > tc.jump_radius() * 1.4 + r.size.x * 0.5 + 6.0,
+			"clear of jump"
+		)
+		for j in k:
+			check(
+				not r.grow(6).intersects(Hud.power_slot_rect(j, tc.size, true).grow(6)),
+				"slots %d, %d apart" % [j, k]
+			)
 	# Releasing the stick stops movement input.
 	tc._on_touch(_touch(0, Vector2(300, 560), false))
 	check_eq(p.touch_move, Vector2.ZERO, "stick released")

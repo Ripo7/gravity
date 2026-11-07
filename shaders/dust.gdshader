@@ -107,5 +107,7 @@ void fragment() {
 	vec4 puff = use_flipbook ? flipbook_puff(c, age, seed, rot, tint, up2) : noise_puff(c, age, seed, rot, tint, up2);
 	// puff.r is its own shading; the colour comes from the dust and the light.
 	ALBEDO = tint.rgb * dust_light(c, puff.r, 1.0 - puff.a, VIEW, sun_view);
-	ALPHA = puff.a;
+	// Thinner right in front of the eyes: standing in a cloud you still see
+	// through it, instead of a wall of dust filling the screen.
+	ALPHA = puff.a * mix(0.25, 1.0, smoothstep(1.0, 4.5, length(VERTEX)));
 }

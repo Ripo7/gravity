@@ -245,6 +245,14 @@ func cast_vortex(at: Vector3) -> Vortex:
 	return v
 
 
+## A shock wave from `at` along `dir`; `ground`: the floor under the caster.
+func cast_shockwave(at: Vector3, dir: Vector3, ground: float) -> Shockwave:
+	var wave := Shockwave.new()
+	wave.setup(self, at, dir, ground)
+	add_child(wave)
+	return wave
+
+
 func cast_shield(base: Transform3D) -> IceShield:
 	var shield := IceShield.new()
 	shield.setup(self, base)

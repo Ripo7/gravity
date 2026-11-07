@@ -166,8 +166,9 @@ func _probe() -> void:
 
 
 ## Plays the level with a scripted list of steps and reports what happened.
-## Steps (separated by ";"): v/p/s [+ @x,y,z target], "w<seconds>" to wait,
-## "m<x,y,z>" to teleport there, "a@x,y,z" to look there, "c@<box>" to cut.
+## Steps (separated by ";"): v/s/o (black hole, shield, shock wave) [+ @x,y,z
+## target], "w<seconds>" to wait, "m<x,y,z>" to teleport there, "a@x,y,z" to
+## look there, "c@<box>" to cut.
 func _play() -> void:
 	if options.has("from"):
 		player.global_position = _vec(options["from"])
@@ -177,7 +178,7 @@ func _play() -> void:
 	await _wait(0.6)
 	await _shot("00_start")
 	var k := 0
-	var codes := {"v": PowerDefs.Power.VORTEX, "s": PowerDefs.Power.SHIELD}
+	var codes := {"v": PowerDefs.Power.VORTEX, "s": PowerDefs.Power.SHIELD, "o": PowerDefs.Power.SHOCKWAVE}
 	for spec: String in String(options.get("steps", "")).split(";", false):
 		var kind := spec.substr(0, 1)
 		if kind == "w":

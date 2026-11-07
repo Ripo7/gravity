@@ -482,6 +482,39 @@ func tear_clusters(center: Vector3, radius: float) -> void:
 	falls.tear(center, radius)
 
 
+## A shock wave's front throws the falling pieces it passes away (see
+## Falls.push).
+func push_clusters(
+	origin: Vector3, dir: Vector3, cos_half: float, near: float, far: float, speed: float
+) -> void:
+	falls.push(origin, dir, cos_half, near, far, speed)
+
+
+## A shock wave's front, from `near` to `far` metres out from `origin` in
+## the cone round `dir`: every standing block there takes `damage`, fading
+## with distance (Shockwave.strength). Returns how many broke or came loose.
+func blast(origin: Vector3, dir: Vector3, cos_half: float, near: float, far: float, damage: float) -> int:
+	var hits := 0
+	for i in _query(origin, far + 2.0):
+		var d := _surface_distance(i, origin)
+		if d <= near or d > far:
+			continue
+		# In the cone if the part of it nearest the cone's axis is: a long
+		# block is hit even when its middle is off to the side.
+		var axis := origin + dir * maxf((_xform[i].origin - origin).dot(dir), 0.0)
+		var half := _size[i] * 0.5
+		var nearest := _xform[i] * (_xform[i].affine_inverse() * axis).clamp(-half, half)
+		var off := nearest - origin
+		var length := off.length()
+		if length > 0.5 and off.dot(dir) < length * cos_half:
+			continue
+		var before := _state[i]
+		_damage(i, damage * Shockwave.strength(d), origin)
+		if _state[i] != before:
+			hits += 1
+	return hits
+
+
 ## A black hole drags the falling pieces near it in and round (see Falls.pull).
 func pull_clusters(
 	center: Vector3, radius: float, reach: float, strength: float, swirl: float, dt: float
@@ -545,7 +578,13 @@ func _damage(i: int, dmg: float, from: Vector3) -> void:
 	var light := _load[i] < _mass[i] * 3.0
 	if light and dmg >= _max_health[i] * Materials.prop(_kind[i], "dislodge"):
 		var away := (_xform[i].origin - from).normalized()
-		_dislodge(i, away * minf(dmg, 8.0) * 0.8 * Materials.prop(_kind[i], "blast_response"))
+		# Violet only when a black hole knocked it loose.
+		_dislodge(
+			i,
+			away * minf(dmg, 8.0) * 0.8 * Materials.prop(_kind[i], "blast_response"),
+			Vector3.ZERO,
+			_power_tint
+		)
 		return
 	_write_instance(i, _xform[i])
 	_dirty_groups[_group[i]] = true  # weaker block: loads may now exceed it
@@ -593,7 +632,7 @@ func _shatter(
 
 ## Block `i` comes loose as debris: whole if small, cracked into at most
 ## `keep` (else the usual number of) shards if big or long.
-func _dislodge(i: int, velocity: Vector3, spin := Vector3.ZERO, tint := 0.5, keep := 0) -> void:
+func _dislodge(i: int, velocity: Vector3, spin := Vector3.ZERO, tint := 0.0, keep := 0) -> void:
 	if _kind[i] == Materials.Kind.GLASS:
 		_shatter(i, _xform[i].origin + velocity, 0.0)
 		return
