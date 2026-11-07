@@ -78,8 +78,8 @@ func test_cut_on_the_palace_side_the_tower_falls_onto_the_palace() -> void:
 	_cut_the_foot()
 	var pieces := 0
 	# Counted in physics steps: a slow machine must not see less of the fall.
-	for t in 48:
-		await frames(10)
+	for t in 480:
+		await frames(1)
 		pieces = maxi(pieces, s.cluster_count())
 	check(pieces >= 3, "it snapped into sections as it went over (%d pieces at once)" % pieces)
 	# Blocks gone up the palace (its upper storeys and roof): the tower came
