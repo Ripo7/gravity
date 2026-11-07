@@ -18,6 +18,7 @@ extends RefCounted
 const IMPACT_DV := 3.5  ## m/s change in one step that counts as a hit
 const IMPACT_MIN_SPEED := 4.5  ## m/s; slower contacts are just settling
 const CLUSTER_MAX_AGE := 9.0
+const CHUNK_VOLUME := 13.0
 ## Big falling pieces of building feel heavier: they fall a bit slower.
 const CLUSTER_GRAVITY := 0.72
 ## A falling block of at least this many pieces crushes the storey that
@@ -76,7 +77,9 @@ const CRAWL_TIME := 0.8
 var clusters: Array[FallingCluster] = []
 ## Most pieces falling at once (more break off: the smallest comes apart).
 var max_clusters := int(Quality.pick(16, 22, 30))
-## Blocks in a chunk (phones: fewer, bigger chunks).
+## Blocks in a chunk at least (phones: fewer, bigger chunks), and up to
+## three times that many small ones (stones), so that a chunk holds about
+## CHUNK_VOLUME m^3 whatever the piece is laid in.
 var chunk_blocks := int(Quality.pick(10, 8, 7))
 
 var _set: StructureSet
@@ -169,8 +172,6 @@ func add(blocks: PackedInt32Array, chunks := PackedInt32Array()) -> FallingClust
 	for i in blocks:
 		xforms.append(_set._xform[i])
 		masses.append(_set._mass[i])
-		# Stones of one block fit flush: a gap between them is an edge a
-		# player riding a falling floor would catch on (and shove it aside).
 		shapes.append(_set._box_shape(_set._size[i] * 0.995))
 	var heavy := CLUSTER_GRAVITY if blocks.size() >= PANCAKE_MIN else 1.0
 	var c := FallingCluster.build(blocks, xforms, masses, shapes, _set.get_world_3d().space, heavy)
@@ -180,7 +181,13 @@ func add(blocks: PackedInt32Array, chunks := PackedInt32Array()) -> FallingClust
 	if chunks.size() == blocks.size() and kinds.size() > 1:
 		c.chunk = chunks
 	else:
-		c.carve(_set._neighbors, mini(chunk_blocks, maxi(blocks.size() / 3, 2)))
+		var volume := 0.0
+		for i in blocks:
+			var z := _set._size[i]
+			volume += z.x * z.y * z.z
+		var each := roundi(CHUNK_VOLUME * blocks.size() / maxf(volume, 0.01))
+		each = clampi(each, chunk_blocks, chunk_blocks * 3)
+		c.carve(_set._neighbors, mini(each, maxi(blocks.size() / 3, 2)))
 	# Its boxes are drawn by a mesh of its own from now on (see draw).
 	for i in blocks:
 		if _set.is_box(i):
@@ -473,6 +480,7 @@ func _bear_down(c: FallingCluster, xf: Transform3D, delta: float) -> void:
 			pushes[key] = pushes.get(key, Vector3.ZERO) + j
 			where[key] = state.get_contact_collider_position(k)
 	c.lean_time = c.lean_time + PRESS_TICK if not pushes.is_empty() else 0.0
+
 	if c.lean_time < LEAN_TIME or total <= 0.0:
 		return
 	# What its contacts carry of its weight now (kg): nothing in free fall,

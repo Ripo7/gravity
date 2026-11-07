@@ -219,12 +219,12 @@ After anything changes, each structure is re-checked:
 5. **What falls crumbles.** A piece that comes away is not a rigid lump
    of blocks: every big block in it becomes the stones it is laid in
    (`scripts/destruction/masonry.gd`): a wall in courses of staggered stones
-   through its thickness (1 x 1.9 m on phones, 0.7 x 1.1 m on desktop), a
-   floor or a roof in rows of slabs; columns, carved pieces and small
+   through its thickness (1 x 1.9 m), a floor or a roof in rows of slabs
+   (2 m); columns, carved pieces and small
    blocks stay whole, and so does the block you stand on. The stones keep
    the pattern they had standing (the shader lays it from where they stood)
-   and show their joints. The piece is cut in chunks of 7 to 10 stones
-   along ragged lines (a random flood through its stones from seeds spread
+   and show their joints. The piece is cut in chunks of about 13 m³ (7 to
+   30 stones) along ragged lines (a random flood through its stones from seeds spread
    over it), and it comes apart chunk by chunk. A tall piece (a tower) cracks across along those
    lines each time it has turned 11° more; tumbling or falling fast, a
    piece sheds the stones sticking out of it; a hard landing crushes the
@@ -289,9 +289,9 @@ their capacity.
   stones, which never stand: the statics keep checking the blocks only.
 - Showcase (`--mode=showcase --prof --seed=1..3`, native build on a
   2-core Linux VM), physics ms per step while things are moving, interleaved
-  with the version before the stones and heaps: phone settings 4.8–5.5 mean
-  (worst second 9.3–9.6) against 4.4–4.8 (8.0–8.8), browser settings
-  8.4–8.7 (14.7–15.1) against 6.8–7.3 (12.0–12.7). More pieces stay awake
+  with the version before the stones and heaps: phone settings 4.2–6.0 mean
+  (worst second 7.6–10.5) against 4.5–5.0 (7.4–8.5), browser settings
+  7.2–8.2 (12.0–14.8) against 6.4–6.8 (10.9–12.9). More pieces stay awake
   a while on the heaps, and a falling tower is a thousand stones.
 - CI fails if the browser-settings showcase averages more than 12 ms per
   busy step (`tools/perf_gate.py`). `godot -- --mode=bench` still measures

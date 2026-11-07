@@ -12,11 +12,12 @@ extends RefCounted
 ## Round pieces (columns), carved ones, the cells of a cracked wall, wood,
 ## metal and glass stay whole: they are pieces already.
 
-## Stone sizes by tier (low, medium, high), metres: course height, stone
-## length, side of a floor's slabs. Phones keep a little more per stone.
-const COURSE := Vector3(1.0, 0.8, 0.7)
-const LENGTH := Vector3(1.9, 1.25, 1.1)
-const SLAB := Vector3(2.0, 1.4, 1.2)
+## Stone sizes, metres: course height, stone length, side of a floor's
+## slabs. The same on every tier: smaller stones on desktop made a toppling
+## tower too soft to crush the palace (it wore away against it instead).
+const COURSE := 1.0
+const LENGTH := 1.9
+const SLAB := 2.0
 ## A wall thicker than this is laid in more than one leaf (m).
 const LEAF := 1.3
 ## Joints wander by this share of a stone's length (no two courses alike).
@@ -27,9 +28,6 @@ const SHORTEST := 0.35
 ## Stones made so far (tests, stats).
 var stones_made := 0
 var _set: StructureSet
-var _course := 0.8
-var _length := 1.25
-var _slab := 1.4
 var _rng := RandomNumberGenerator.new()
 ## Pairs of stones (positions in the last layout) that touch.
 var _pairs := PackedInt32Array()
@@ -37,9 +35,6 @@ var _pairs := PackedInt32Array()
 
 func _init(structures: StructureSet) -> void:
 	_set = structures
-	_course = float(Quality.pick(COURSE.x, COURSE.y, COURSE.z))
-	_length = float(Quality.pick(LENGTH.x, LENGTH.y, LENGTH.z))
-	_slab = float(Quality.pick(SLAB.x, SLAB.y, SLAB.z))
 	_rng.seed = 9173
 
 
@@ -101,9 +96,9 @@ func layout(size: Vector3) -> Array[AABB]:
 	var starts := PackedInt32Array()  # first stone of each row
 	if size.min_axis_index() == 1:
 		var b := 2 - a  # across it
-		var across := _cuts(size[b], _slab, false)
+		var across := _cuts(size[b], SLAB, false)
 		for r in across.size() - 1:
-			var along := _cuts(size[a], _slab, r % 2 == 1)
+			var along := _cuts(size[a], SLAB, r % 2 == 1)
 			rows.append(along)
 			starts.append(out.size())
 			for k in along.size() - 1:
@@ -122,11 +117,11 @@ func layout(size: Vector3) -> Array[AABB]:
 	var leaves := PackedFloat32Array([0.0, size[through]])
 	if size[through] > LEAF:
 		leaves = _cuts(size[through], LEAF, false)
-	var courses := _cuts(size.y, _course, false)
+	var courses := _cuts(size.y, COURSE, false)
 	var per := leaves.size() - 1
 	for c in courses.size() - 1:
 		for l in per:
-			var along := _cuts(size[a], _length, (c + l) % 2 == 1)
+			var along := _cuts(size[a], LENGTH, (c + l) % 2 == 1)
 			rows.append(along)
 			starts.append(out.size())
 			for k in along.size() - 1:

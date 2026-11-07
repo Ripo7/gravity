@@ -64,13 +64,22 @@ func test_cut_on_the_palace_side_the_tower_falls_onto_the_palace() -> void:
 	var d := world.debris
 	_look(Vector3(-6, 0.05, 34), Vector3(-14, 12, -3))
 	var palace := PackedInt32Array()  # its blocks as built (cracking adds cells)
+	var tower := _tower()
+	var built := Vector2.ZERO  # the tower's blocks as built: volume, count
 	for i in s.segment_count():
-		if s.transform_of(i).origin.x > -17.2:
+		var p := s.transform_of(i).origin
+		if p.x > -17.2:
 			palace.append(i)
+		elif absf(p.x - tower.x) < 4.5 and absf(p.z - tower.z) < 4.5:
+			var z := s.size_of(i)
+			built += Vector2(z.x * z.y * z.z, 1)
+	# A big piece: a hundred of its blocks as built (it falls laid in stones).
+	var big := 100.0 * built.x / built.y
 	_cut_the_foot()
 	var pieces := 0
-	for t in 16:
-		await get_tree().create_timer(0.5).timeout
+	# Counted in physics steps: a slow machine must not see less of the fall.
+	for t in 48:
+		await frames(10)
 		pieces = maxi(pieces, s.cluster_count())
 	check(pieces >= 3, "it snapped into sections as it went over (%d pieces at once)" % pieces)
 	# Blocks gone up the palace (its upper storeys and roof): the tower came
@@ -92,10 +101,10 @@ func test_cut_on_the_palace_side_the_tower_falls_onto_the_palace() -> void:
 				var z := s.size_of(i)
 				v += z.x * z.y * z.z
 			whole = maxf(whole, v)
-		if whole < 250.0:
+		if whole < big:
 			break
-		await get_tree().create_timer(0.5).timeout
-	check(whole < 250.0, "no big piece of it was left leaning on the palace (%.0f m^3)" % whole)
+		await frames(30)
+	check(whole < big, "no big piece of it was left leaning on the palace (%.0f m^3)" % whole)
 	var rubble := 0
 	var ruin := AABB(Vector3(-32, -1, -16), Vector3(32, 30, 28))
 	for i in d.capacity:

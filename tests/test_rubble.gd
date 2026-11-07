@@ -73,13 +73,13 @@ func test_pieces_and_the_player_stand_on_a_heap() -> void:
 		r.deposit(SPOT, 1.0, Color(0.6, 0.5, 0.4))
 	for k in 240:
 		r._flow(1000)
-	await get_tree().create_timer(2.5).timeout  # the heap's collision follows
+	await frames(150)  # the heap's collision follows
 	var top := r.height_at(SPOT)
 	var d := world.debris
 	# Dropped gently (a hard landing would break it).
 	var i := d.spawn(Transform3D(Basis(), SPOT + Vector3(0, top + 0.5, 0)), Vector3(0.4, 0.3, 0.4))
 	world.player.global_position = SPOT + Vector3(1.0, top + 1.5, 0.5)
-	await get_tree().create_timer(2.0).timeout
+	await frames(120)
 	var low := r.height_at(d.position_of(i))
 	check(d.is_active(i), "the piece is still there")
 	check(d.position_of(i).y > low - 0.3, "the piece rests on the heap, not under it")
@@ -111,7 +111,7 @@ func test_what_breaks_stays_on_the_ground() -> void:
 			and absf(p.z - tower.z) < 4.5
 		):
 			s.break_segment(i)
-	await get_tree().create_timer(10.0).timeout
+	await frames(600)  # 10 s of physics, however slow the machine
 	var standing := 0.0
 	var falling := 0.0
 	for i in s.segment_count():

@@ -76,7 +76,9 @@ static func build(
 		PhysicsServer3D.body_set_param(c.body, PhysicsServer3D.BODY_PARAM_GRAVITY_SCALE, gravity)
 	# A big piece touches a lot at once (its foot in rubble, its side on a
 	# wall): it needs to hear about all of it to bear down where it leans.
-	PhysicsServer3D.body_set_max_contacts_reported(c.body, 24 if blocks.size() < 30 else 96)
+	# A tower laid in stones touches the ground with hundreds of them.
+	var contacts := 24 if blocks.size() < 30 else (96 if blocks.size() < 300 else 256)
+	PhysicsServer3D.body_set_max_contacts_reported(c.body, contacts)
 	PhysicsServer3D.body_set_param(c.body, PhysicsServer3D.BODY_PARAM_FRICTION, 0.8)
 	PhysicsServer3D.body_set_collision_layer(c.body, DebrisSystem.LAYER_DEBRIS)
 	PhysicsServer3D.body_set_collision_mask(
