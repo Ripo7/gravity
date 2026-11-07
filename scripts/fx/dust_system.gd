@@ -255,6 +255,22 @@ func puff(at: Vector3, radius: float, kind: int, amount := 10) -> void:
 		)
 
 
+## A gust out of `origin` in the cone round `dir` (cos of its half angle),
+## from `near` to `far` metres out: the dust there is given `speed` m/s
+## more away from `origin`, less the farther out (Shockwave.strength).
+func blow(origin: Vector3, dir: Vector3, cos_half: float, near: float, far: float, speed: float) -> void:
+	if active == 0:
+		return
+	for i in capacity:
+		if _life[i] <= 0.0:
+			continue
+		var off := _pos[i] - origin
+		var d := off.length()
+		if d <= near or d > far or (d > 0.5 and off.dot(dir) < d * cos_half):
+			continue
+		_vel[i] += off / maxf(d, 0.01) * speed * maxf(Shockwave.strength(d), 0.15)
+
+
 ## A wall of dust rolling out along the ground from a collapse at `at`.
 ## `radius` sets how big; `strength` (0..1) how thick.
 func roll(at: Vector3, radius: float, strength := 1.0) -> void:

@@ -27,6 +27,7 @@ var _bindings := {
 		_button(JOY_BUTTON_LEFT_SHOULDER),
 		_button(JOY_BUTTON_RIGHT_SHOULDER),
 	],
+	"shockwave": [_key(KEY_F), _key(KEY_3), _button(JOY_BUTTON_X)],
 	"reset_arena": [_key(KEY_R), _button(JOY_BUTTON_BACK)],
 	"toggle_debug": [_key(KEY_F3)],
 	"release_mouse": [_key(KEY_ESCAPE), _button(JOY_BUTTON_START)],

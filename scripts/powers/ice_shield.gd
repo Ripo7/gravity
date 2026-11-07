@@ -1,23 +1,27 @@
 class_name IceShield
 extends AnimatableBody3D
-## Shield power: a curved shell of black ice, close to a half dome but
-## lumpy and uneven, bursts out of the ground around the front of the
-## player. It blocks debris and falling pieces until it has taken too many
-## hits (or melts away), then shatters into black ice shards.
+## Shield power: a shell of black ice, lumpy and uneven, bursts out of the
+## ground in front of the player: a slice of a wide curve, bent across and
+## leaning back a little at the top, open to the sides and behind. It blocks
+## debris and falling pieces until it has taken too many hits (or melts
+## away), then shatters into black ice shards.
 
 const SHADER := preload("res://shaders/ice_shield.gdshader")
 const RISE_TIME := 0.3
 ## Hits slower than this (m/s, toward the shell) do not wear it down.
 const HIT_MIN_SPEED := 3.0
-## Mesh grid (around, up) and collision panels (around, up).
-const MESH_GRID := Vector2i(18, 9)
-const PANELS := Vector2i(8, 4)
-## The top stops short of closing over the player's head.
-const TOP_ELEVATION := deg_to_rad(76.0)
+## Mesh grid (across, up) and collision panels (across, up).
+const MESH_GRID := Vector2i(12, 8)
+const PANELS := Vector2i(5, 3)
 
-var radius := 2.7
-var height := 4.8
-var arc := deg_to_rad(200.0)
+## Radius of the curve, height and how much of the curve it covers.
+var radius := 3.2
+var height := 3.0
+var arc := deg_to_rad(52.0)
+## Centre of the curve (local): behind the player, so the front of the
+## shell stands SHIELD_AHEAD in front of them.
+var center := Vector3.ZERO
+var lean := 0.4
 var hp := 300.0
 var max_hp := 300.0
 var _world: GameWorld
@@ -40,6 +44,8 @@ func setup(world: GameWorld, base: Transform3D) -> void:
 	radius = PowerDefs.SHIELD_RADIUS
 	height = PowerDefs.SHIELD_HEIGHT
 	arc = deg_to_rad(PowerDefs.SHIELD_ARC)
+	lean = PowerDefs.SHIELD_LEAN
+	center = Vector3(0, 0, radius - PowerDefs.SHIELD_AHEAD)
 	max_hp = PowerDefs.SHIELD_HP
 	hp = max_hp
 	# `base` is the player's feet, -Z the way they look.
@@ -64,40 +70,49 @@ func _ready() -> void:
 	_area.collision_mask = DebrisSystem.LAYER_DEBRIS
 	var sensor := CollisionShape3D.new()
 	var sphere := SphereShape3D.new()
-	sphere.radius = maxf(radius, height) + 2.0
+	sphere.radius = maxf(radius * sin(arc * 0.5), height * 0.5) + 2.5
 	sensor.shape = sphere
+	sensor.position = shell_point(0.0, 0.5, false)
 	_area.add_child(sensor)
 	add_child(_area)
 	_area.body_shape_entered.connect(_on_body_entered)
 	_area.body_shape_exited.connect(_on_body_exited)
 	Sfx.play("ice_rise", _rest.origin, 3.0, 0.75)
 	if _world and _world.dust:
-		_world.dust.puff(_rest.origin + _rest.basis.z * -radius, radius * 0.8, Materials.Kind.CONCRETE, 18)
+		_world.dust.puff(_rest * shell_point(0.0, 0.0, false), 1.8, Materials.Kind.CONCRETE, 14)
 
 
-## Point on the shell at azimuth `a` (0 = straight ahead) and elevation `e`,
-## with smooth lumps so it is never a perfect dome.
+## Point on the shell at `a` across (0 = straight ahead, an angle around
+## the centre of its curve) and `e` up (0 ground .. 1 full height), with
+## smooth lumps so it is never a perfect curve.
 func shell_point(a: float, e: float, lumpy := true) -> Vector3:
-	var r := radius
+	var r := radius - lean * e * e
 	var h := height
 	if lumpy:
-		var lump := sin(a * 3.0 + _phase.x) * 0.07 + sin(e * 4.0 + a * 2.0 + _phase.y) * 0.05
+		var lump := sin(a * 7.0 + _phase.x) * 0.025 + sin(e * 5.0 + a * 4.0 + _phase.y) * 0.02
 		r *= 1.0 + lump
-		h *= _phase.z * (1.0 + 0.6 * lump) if e > 0.5 else 1.0 + 0.4 * lump
-	var flat := Vector3(sin(a), 0, -cos(a))
-	return flat * r * cos(e) + Vector3.UP * h * sin(e)
+		h *= _phase.z * (1.0 + 2.0 * lump) if e > 0.5 else 1.0 + lump
+	return center + Vector3(sin(a), 0, -cos(a)) * r + Vector3.UP * h * e
 
 
 ## Outward normal of the (smooth) shell at `a`, `e`.
 func shell_normal(a: float, e: float) -> Vector3:
-	var p := shell_point(a, e, false)
-	return Vector3(p.x / (radius * radius), p.y / (height * height), p.z / (radius * radius)).normalized()
+	var across := shell_point(a + 0.01, e, false) - shell_point(a - 0.01, e, false)
+	var up := shell_point(a, e + 0.01, false) - shell_point(a, e - 0.01, false)
+	return up.cross(across).normalized()
+
+
+## Across angle, height fraction and distance from the axis of the curve
+## of local point `q`.
+func _shell_coords(q: Vector3) -> Vector3:
+	var rel := q - center
+	return Vector3(atan2(rel.x, -rel.z), clampf(q.y / height, 0.0, 1.0), Vector2(rel.x, rel.z).length())
 
 
 func _top(a: float) -> float:
 	# A ragged upper edge: higher in the middle, broken toward the sides.
 	var side := absf(a) / (arc * 0.5)
-	return TOP_ELEVATION * (1.0 - 0.35 * side * side) + sin(a * 5.0 + _phase.x) * 0.06
+	return 1.0 - 0.16 * side * side + sin(a * 9.0 + _phase.x) * 0.03
 
 
 func _build_mesh() -> void:
@@ -115,7 +130,7 @@ func _build_mesh() -> void:
 			var p := shell_point(a, e)
 			# Facets: jitter the inner vertices a little.
 			if j > 0 and j < ne and i > 0 and i < na:
-				p += Vector3(_rng.randf_range(-1, 1), _rng.randf_range(-1, 1), _rng.randf_range(-1, 1)) * 0.09
+				p += Vector3(_rng.randf_range(-1, 1), _rng.randf_range(-1, 1), _rng.randf_range(-1, 1)) * 0.07
 			col.append(p)
 		grid.append(col)
 	for i in na:
@@ -130,6 +145,7 @@ func _build_mesh() -> void:
 	mi.mesh = st.commit()
 	_mat = ShaderMaterial.new()
 	_mat.shader = SHADER
+	_mat.set_shader_parameter("center", center)
 	mi.material_override = _mat
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	add_child(mi)
@@ -153,10 +169,12 @@ func _build_panels() -> void:
 			var n := shell_normal(a, e)
 			var along := Vector3(cos(a), 0, sin(a))
 			var up := n.cross(along).normalized()
+			along = up.cross(n)
 			var lo := shell_point(a, e - de * 0.5, false)
 			var hi := shell_point(a, e + de * 0.5, false)
+			var r := radius - lean * e * e
 			var size := Vector3(
-				radius * cos(e) * da * 1.15 + 0.2, lo.distance_to(hi) * 1.1 + 0.15, PowerDefs.SHIELD_THICKNESS
+				r * da * 1.15 + 0.2, lo.distance_to(hi) * 1.1 + 0.15, PowerDefs.SHIELD_THICKNESS
 			)
 			var box := BoxShape3D.new()
 			box.size = size
@@ -197,15 +215,15 @@ func hit(amount: float) -> void:
 
 
 ## True when world point `p` is on the outer side of the shell, within its
-## arc: things there that fly inward hit the ice.
+## width: things there that fly inward hit the ice.
 func is_outside(p: Vector3) -> bool:
 	var q := global_transform.affine_inverse() * p
 	if q.y < -0.5 or q.y > height + 1.0:
 		return false
-	var a := atan2(q.x, -q.z)
-	if absf(a) > arc * 0.5 + 0.2:
+	var c := _shell_coords(q)
+	if absf(c.x) > arc * 0.5 + 0.15:
 		return false
-	return Vector3(q.x / radius, q.y / height, q.z / radius).length() > 0.8
+	return c.z > radius - lean * c.y * c.y - 0.45
 
 
 func _on_body_entered(rid: RID, body: Node, _bs: int, _ls: int) -> void:
@@ -232,11 +250,10 @@ func _check_hits() -> void:
 		var src := _source_point(rid, body)
 		if src == Vector3.INF or not is_outside(src):
 			continue
-		var q := global_transform.affine_inverse() * src
-		var e := Vector3(q.x / radius, maxf(q.y, 0.0) / height, q.z / radius)
-		if e.length() > 1.45:
+		var c := _shell_coords(global_transform.affine_inverse() * src)
+		if c.z > radius - lean * c.y * c.y + 1.6:
 			continue  # not at the shell yet
-		var n := global_basis * e.normalized()
+		var n := global_basis * shell_normal(c.x, c.y)
 		var v: Vector3 = motion["velocity"]
 		var closing := -v.dot(n)
 		if closing < HIT_MIN_SPEED:
@@ -275,6 +292,6 @@ func shatter() -> void:
 				_world.debris.spawn(shard, piece.size * 0.95, kick, spin, 0.3, 1.0, Materials.Kind.ICE)
 		if _world.dust:
 			_world.dust.chips(
-				global_position + Vector3.UP * height * 0.4, radius, Materials.Kind.ICE, 6.0, 30
+				global_transform * shell_point(0.0, 0.4, false), 1.8, Materials.Kind.ICE, 6.0, 30
 			)
 	queue_free()

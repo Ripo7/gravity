@@ -91,7 +91,7 @@ func _release_all() -> void:
 func _on_touch(e: InputEventScreenTouch) -> void:
 	if e.pressed:
 		_last[e.index] = e.position
-		for k in 2:
+		for k in PowerDefs.NAMES.size():
 			if Hud.power_slot_rect(k, size, true).grow(6).has_point(e.position):
 				player.power.select(k)
 				queue_redraw()

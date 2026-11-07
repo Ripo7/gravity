@@ -8,8 +8,10 @@ uniform vec3 violet : source_color = vec3(0.55, 0.24, 1.0);
 uniform float damage = 0.0;
 uniform float flash = 0.0;
 
+uniform vec3 center = vec3(0.0);  // axis of the shell's curve (local)
+
 varying vec3 lp;
-varying vec3 outward;  // away from the dome centre, view space
+varying vec3 outward;  // away from the axis of the curve, view space
 
 vec2 hash22(vec2 p) {
 	p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
@@ -34,7 +36,7 @@ float edge(vec2 x) {
 
 void vertex() {
 	lp = VERTEX;
-	outward = normalize((MODELVIEW_MATRIX * vec4(VERTEX.x, VERTEX.y * 0.5, VERTEX.z, 0.0)).xyz);
+	outward = normalize((MODELVIEW_MATRIX * vec4(VERTEX.x - center.x, 0.0, VERTEX.z - center.z, 0.0)).xyz);
 }
 
 void fragment() {

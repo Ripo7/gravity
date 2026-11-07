@@ -9,14 +9,29 @@ extends Node3D
 ## once small they become grains of a cloud swirling round the core (no
 ## physics: see GrainCloud). When it closes, the spinning pieces spill out
 ## and the cloud bursts into dust and gravel.
+## It opens by drawing the air in (a shock wave closing on a point that
+## swells into the ball), specks of dust wind in along a spiral while it
+## lives, and it closes by shrinking to a point that flashes and sends a
+## shock wave out.
 
 signal closed
 
 const HALO_SHADER := preload("res://shaders/black_hole.gdshader")
 const DISC_SHADER := preload("res://shaders/accretion.gdshader")
+const MOTES_SHADER := preload("res://shaders/vortex_motes.gdshader")
+const SWIRL_SHADER := preload("res://shaders/dust_swirl.gdshader")
+const FLASH_SHADER := preload("res://shaders/flash.gdshader")
 const HALO := 2.4  ## halo radius / core radius
 const DISC := 3.6  ## accretion disc radius / core radius
 const FADE := 0.6
+## It opens with a shock wave closing on a point for IMPLODE seconds; the
+## ball then swells out of it. In its last COLLAPSE seconds it shrinks to a
+## point; then a flash.
+const IMPLODE := 0.3
+const COLLAPSE := 0.3
+const FLASH_TIME := 0.35
+## The disc's tilt, so it reads as a disc (the motes wind in its plane).
+const TILT := 0.28
 const TICK := 0.1  ## seconds between damage passes
 const RELEASE_SPIN := 0.25  ## share of orbit speed kept when it bursts
 ## Flung pieces pass through each other this long (s): the disc packs them
@@ -46,6 +61,14 @@ var _ring_inner: MeshInstance3D
 var _ring_outer: MeshInstance3D
 var _light: OmniLight3D
 var _inflow: CPUParticles3D
+var _motes: MultiMeshInstance3D
+var _motes_mat: ShaderMaterial
+var _flash: MeshInstance3D
+var _flash_mat: ShaderMaterial
+var _swirl: MeshInstance3D
+var _swirl_mat: ShaderMaterial
+var _turn := 0.0
+var _closed := false
 var _pull_started := false
 var _flung := PackedInt32Array()
 var _spread_until := 0.0
@@ -88,8 +111,52 @@ func _ready() -> void:
 	add_child(_light)
 	_inflow = Fx.make_inflow(r * 0.7, 160)
 	add_child(_inflow)
+	_swirl = _accretion(0.0)
+	_swirl_mat = ShaderMaterial.new()
+	_swirl_mat.shader = SWIRL_SHADER
+	_swirl_mat.set_shader_parameter("violet", Palette.VIOLET)
+	_swirl.material_override = _swirl_mat
+	_motes = _make_motes(int(Quality.pick(220, 320, 450)))
+	_flash_mat = ShaderMaterial.new()
+	_flash_mat.shader = FLASH_SHADER
+	_flash_mat.set_shader_parameter("tint", Palette.VIOLET_HOT)
+	_flash = Fx.sphere(1.0, _flash_mat, 24)
+	_flash.visible = false
+	add_child(_flash)
+	# It opens by drawing the air in: a shock wave closing on the point
+	# the ball swells out of.
+	BlastWave.spawn(self, global_transform, r + PowerDefs.VORTEX_BAND + 1.5, 0.3, IMPLODE, Palette.VIOLET_HOT)
 	Sfx.play("orb", center, 2.0, 0.85)
 	_update_visuals()
+
+
+## Specks of dust winding in along a spiral, in the plane of the disc (all
+## their motion is in their shader).
+func _make_motes(count: int) -> MultiMeshInstance3D:
+	var quad := QuadMesh.new()
+	quad.size = Vector2.ONE
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_custom_data = true
+	mm.mesh = quad
+	mm.instance_count = count
+	for i in count:
+		mm.set_instance_transform(i, Transform3D.IDENTITY)
+		mm.set_instance_custom_data(i, Color(randf(), randf(), randf(), randf()))
+	_motes_mat = ShaderMaterial.new()
+	_motes_mat.shader = MOTES_SHADER
+	_motes_mat.set_shader_parameter("radius", PowerDefs.VORTEX_RADIUS)
+	_motes_mat.set_shader_parameter("core", PowerDefs.VORTEX_CORE)
+	_motes_mat.set_shader_parameter("hot", Palette.VIOLET_HOT)
+	var mi := MultiMeshInstance3D.new()
+	mi.multimesh = mm
+	mi.material_override = _motes_mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var reach := PowerDefs.VORTEX_RADIUS * 1.4
+	mi.custom_aabb = AABB(-Vector3.ONE * reach, Vector3.ONE * reach * 2.0)
+	mi.rotation = Vector3(TILT, 0.0, 0.0)
+	add_child(mi)
+	return mi
 
 
 ## A flat swirling ring around the core, tilted so it reads as a disc.
@@ -108,7 +175,7 @@ func _accretion(yaw: float) -> MeshInstance3D:
 	mi.mesh = disc
 	mi.material_override = m
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	mi.rotation = Vector3(0.28, yaw, 0.0)
+	mi.rotation = Vector3(TILT, yaw, 0.0)
 	add_child(mi)
 	return mi
 
@@ -139,6 +206,8 @@ func _physics_process(delta: float) -> void:
 	_t += delta
 	_update_visuals()
 	var over := _t >= PowerDefs.VORTEX_SPINUP + PowerDefs.VORTEX_DURATION
+	if over and not _closed:
+		_close()
 	if over and _pull_started and (caught > 0 or (_cloud and _cloud.accepting)):
 		_release()
 	if not _flung.is_empty() and _t >= _spread_until:
@@ -262,6 +331,24 @@ func _grind(debris: DebrisSystem, i: int, delta: float, may_crack: bool) -> bool
 	return false
 
 
+## It has shrunk to a point: a flash, and a shock wave goes out.
+func _close() -> void:
+	_closed = true
+	BlastWave.spawn(
+		self,
+		global_transform,
+		0.6,
+		PowerDefs.VORTEX_RADIUS + PowerDefs.VORTEX_BAND + 3.0,
+		0.55,
+		Palette.VIOLET_HOT
+	)
+	var cam := get_viewport().get_camera_3d() as CameraShake
+	if cam:
+		cam.add_trauma(0.25 * clampf(1.0 - cam.global_position.distance_to(center) / 50.0, 0.1, 1.0))
+	if caught == 0 and not (_cloud and _cloud.accepting):
+		Sfx.play("burst", center, -2.0, 1.15)  # nothing to fling: the wave alone
+
+
 ## The storm ends in a burst: everything it held is flung outward (faster
 ## from near the core), with a little lift and some of its swirl.
 func _release() -> void:
@@ -341,9 +428,14 @@ func _update_visuals() -> void:
 	var r := PowerDefs.VORTEX_RADIUS
 	var spin := PowerDefs.VORTEX_SPINUP
 	var end := spin + PowerDefs.VORTEX_DURATION
-	var grow := ease(clampf(_t / spin, 0.0, 1.0), 0.4)
-	var fade := 1.0 - clampf((_t - end) / FADE, 0.0, 1.0)
-	var k := grow * fade
+	# It opens out of a point once the air has rushed in, swelling past its
+	# size and settling back...
+	var b := clampf((_t - IMPLODE) / (spin - IMPLODE + 0.15), 0.0, 1.0)
+	var grow := maxf(1.0 + 2.70158 * pow(b - 1.0, 3.0) + 1.70158 * pow(b - 1.0, 2.0), 0.0)
+	# ...and closes by shrinking to a point, faster and faster.
+	var c := clampf((_t - end + COLLAPSE) / COLLAPSE, 0.0, 1.0)
+	var k := grow * (1.0 - c * c)
+	var shown := minf(k, 1.0)
 	var pulse := 1.0 + sin(_t * 17.0) * 0.03
 	var core := PowerDefs.VORTEX_CORE * k * pulse
 	_core.scale = Vector3.ONE * maxf(core, 0.001)
@@ -351,10 +443,37 @@ func _update_visuals() -> void:
 	_disc.scale = Vector3(core * DISC, 1, core * DISC)
 	_disc2.scale = Vector3(core * DISC * 0.8, 1, core * DISC * 0.8)
 	# The second, fainter disc is the far side bent over the top by the lens.
-	(_disc2.material_override as ShaderMaterial).set_shader_parameter("intensity", 0.35)
-	(_disc.material_override as ShaderMaterial).set_shader_parameter("intensity", k)
-	_ring_inner.scale = Vector3(r, 1, r) * maxf(k, 0.01)
-	_ring_outer.scale = Vector3.ONE * (r + PowerDefs.VORTEX_BAND) * maxf(k, 0.01)
+	(_disc2.material_override as ShaderMaterial).set_shader_parameter("intensity", 0.35 * shown)
+	(_disc.material_override as ShaderMaterial).set_shader_parameter("intensity", shown)
+	_ring_inner.scale = Vector3(r, 1, r) * maxf(shown, 0.01)
+	_ring_outer.scale = Vector3.ONE * (r + PowerDefs.VORTEX_BAND) * maxf(shown, 0.01)
 	_ring_outer.scale.y = 1.0
-	_light.light_energy = 3.0 * k
-	_inflow.emitting = fade > 0.5
+	_inflow.emitting = _t < end - COLLAPSE
+	_motes.visible = _t < end
+	# The dust disc turns faster and faster as it closes, drawn into the core.
+	_turn += get_physics_process_delta_time() * (2.5 + 14.0 * c)
+	var swirl := r * 1.05 * (0.35 + 0.65 * shown) * (1.0 - c * c)
+	_swirl.visible = _t < end
+	_swirl.scale = Vector3(swirl * 2.0, 1, swirl * 2.0)
+	_swirl_mat.set_shader_parameter("turn", _turn)
+	_swirl_mat.set_shader_parameter("intensity", clampf(_t / spin, 0.0, 1.0))
+	_swirl_mat.set_shader_parameter("inner", clampf(core * 1.15 / maxf(swirl, 0.01), 0.05, 0.6))
+	_motes_mat.set_shader_parameter("now", _t)
+	_motes_mat.set_shader_parameter("amount", clampf(_t / (spin * 1.6), 0.0, 1.0))
+	_motes_mat.set_shader_parameter("collapse", c)
+	# A spark where it is born; a flash where it closes.
+	var flash := 0.0
+	var size := 0.0
+	if _t < IMPLODE + 0.12:
+		# Brighter as the air closes on it, a pop as the ball comes out.
+		var g := clampf(_t / IMPLODE, 0.0, 1.0)
+		flash = 0.4 + 0.6 * g * g if _t < IMPLODE else 1.0 - (_t - IMPLODE) / 0.12
+		size = lerpf(0.25, 1.1, g * g)
+	elif _t >= end and _t < end + FLASH_TIME:
+		var f := (_t - end) / FLASH_TIME
+		flash = 1.0 - f * f
+		size = lerpf(0.4, 1.7, 1.0 - pow(1.0 - minf(f * 3.0, 1.0), 3.0))
+	_flash.visible = flash > 0.0
+	_flash.scale = Vector3.ONE * maxf(size, 0.01)
+	_flash_mat.set_shader_parameter("intensity", flash)
+	_light.light_energy = 3.0 * shown + 14.0 * flash
