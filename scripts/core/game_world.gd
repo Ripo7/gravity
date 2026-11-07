@@ -17,6 +17,8 @@ signal vortex_opened(vortex: Vortex)
 @export var attract := false
 
 var level: Level
+## The heaps of rubble on the ground (what broke and is no longer a piece).
+var rubble: RubbleField
 ## Path of the level scene that was loaded.
 var level_file := ""
 var blasts_total := 0
@@ -120,12 +122,17 @@ func _dress_floor(footprints: Array[Vector4]) -> void:
 	mat.set_shader_parameter("plinth_count", count)
 
 
-## Dust, chips, camera shake and sound for breaks and collapses.
+## Dust, chips, rubble heaps, camera shake and sound for breaks and collapses.
 func _connect_juice() -> void:
+	rubble = RubbleField.new()
+	rubble.name = "Rubble"
+	add_child(rubble)
+	debris.rubble = rubble
 	if dust:
 		dust.structures = structures
 		structures.dust = dust
 		debris.chips = dust.chip_system
+		dust.chip_system.rubble = rubble
 	var rebar := RebarSystem.new()
 	add_child(rebar)
 	structures.rebar = rebar

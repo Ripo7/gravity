@@ -346,6 +346,6 @@ func chips_box(
 
 func _ground_below(at: Vector3) -> float:
 	var q := PhysicsRayQueryParameters3D.create(at + Vector3.UP * 0.5, at + Vector3.DOWN * 60.0)
-	q.collision_mask = DebrisSystem.LAYER_WORLD | DebrisSystem.LAYER_STRUCTURES
+	q.collision_mask = DebrisSystem.LAYER_WORLD | DebrisSystem.LAYER_STRUCTURES | DebrisSystem.LAYER_RUBBLE
 	var hit := get_world_3d().direct_space_state.intersect_ray(q)
 	return (hit["position"] as Vector3).y if not hit.is_empty() else 0.0

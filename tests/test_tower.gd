@@ -81,10 +81,21 @@ func test_cut_on_the_palace_side_the_tower_falls_onto_the_palace() -> void:
 		if not s.is_alive(i) and s.transform_of(i).origin.y > 8.0:
 			lost += 1
 	check(lost >= 10, "it came down on the palace's west wing (%d blocks gone up there)" % lost)
-	var whole := 0
-	for c in s.falls.clusters:
-		whole = maxi(whole, c.members.size())
-	check(whole < 100, "no big piece of it was left leaning on the palace (%d blocks)" % whole)
+	# What is left of it standing on its foot or leaning on the palace
+	# crumbles within a couple of seconds more.
+	var whole := INF
+	for t in 5:
+		whole = 0.0
+		for c in s.falls.clusters:
+			var v := 0.0
+			for i in c.members:
+				var z := s.size_of(i)
+				v += z.x * z.y * z.z
+			whole = maxf(whole, v)
+		if whole < 250.0:
+			break
+		await get_tree().create_timer(0.5).timeout
+	check(whole < 250.0, "no big piece of it was left leaning on the palace (%.0f m^3)" % whole)
 	var rubble := 0
 	var ruin := AABB(Vector3(-32, -1, -16), Vector3(32, 30, 28))
 	for i in d.capacity:

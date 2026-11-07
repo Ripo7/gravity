@@ -144,7 +144,12 @@ func _update_aim() -> void:
 	var from := cam.global_position
 	var dir := -cam.global_basis.z
 	var q := PhysicsRayQueryParameters3D.create(from, from + dir * PowerDefs.RANGE)
-	q.collision_mask = DebrisSystem.LAYER_WORLD | DebrisSystem.LAYER_STRUCTURES | DebrisSystem.LAYER_DEBRIS
+	q.collision_mask = (
+		DebrisSystem.LAYER_WORLD
+		| DebrisSystem.LAYER_STRUCTURES
+		| DebrisSystem.LAYER_DEBRIS
+		| DebrisSystem.LAYER_RUBBLE
+	)
 	# Aim through yourself and your own shields.
 	var skip: Array[RID] = []
 	var player := _player()

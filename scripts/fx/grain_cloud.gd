@@ -5,7 +5,8 @@ extends Node3D
 ## the shaders move every grain and every puff from the moment it was
 ## caught, so the cloud is two draw calls and a uniform update per frame.
 ## When the hole closes, the grains are flung out and fade into the dust,
-## the dust billows out, and part of the grains lands as gravel.
+## the dust billows out, and part of the grains lands as gravel, which
+## takes all that was ground down to the rubble heaps where it lands.
 
 const SHADER := preload("res://shaders/grain.gdshader")
 const DUST_SHADER := preload("res://shaders/grain_dust.gdshader")
@@ -56,7 +57,7 @@ var _dust_capacity := 0
 var _dust_next := 0
 var _dust_used := 0
 var _dirty := false
-var _sources := {}  # finish key -> [kind, seed, grains]: what to drop as gravel
+var _sources := {}  # finish key -> [kind, seed, grains, m^3]: what to drop as gravel
 
 
 ## The cloud of the black hole that `at` is inside, if one is grinding there.
@@ -128,21 +129,23 @@ func _add_layer(mm: MultiMesh, m: ShaderMaterial) -> void:
 
 ## Turns debris piece `i` into grains (it leaves the physics for good).
 func add_piece(debris: DebrisSystem, i: int) -> void:
-	var n := clampi(int(debris.volume_of(i) / GRAIN_VOLUME), 8, 90)
-	add(debris.position_of(i), debris.size_of(i), debris.kind_of(i), debris.seed_of(i), n)
+	var vol := debris.volume_of(i)
+	var n := clampi(int(vol / GRAIN_VOLUME), 8, 90)
+	add(debris.position_of(i), debris.size_of(i), debris.kind_of(i), debris.seed_of(i), n, vol)
 	debris.despawn(i)
 
 
-## Adds `n` grains of a piece of `size` at `at`.
-func add(at: Vector3, size: Vector3, kind: int, seed_value: float, n: int) -> void:
+## Adds `n` grains of a piece of `size` at `at`, `volume` m^3 of material.
+func add(at: Vector3, size: Vector3, kind: int, seed_value: float, n: int, volume := 0.0) -> void:
 	if capacity == 0:
 		return
 	var col := color_of(kind, seed_value)
 	var key := Materials.finish_of(seed_value) * Materials.KIND_SLOTS + kind
 	if _sources.has(key):
 		_sources[key][2] += n
+		_sources[key][3] += volume
 	else:
-		_sources[key] = [kind, seed_value, n]
+		_sources[key] = [kind, seed_value, n, volume]
 	var r := PowerDefs.VORTEX_RADIUS
 	var spread := size * 0.5
 	for k in n:
@@ -228,17 +231,20 @@ func release(world: GameWorld) -> void:
 	var chips := world.debris.chips if world.debris else null
 	if chips == null:
 		return
-	# About one chip of gravel for every six grains, with the right finishes.
+	# About one chip of gravel for every six grains, with the right finishes;
+	# the chips take what was ground down to where they land.
 	for key: int in _sources:
 		var src: Array = _sources[key]
-		var left := mini(int(src[2]) / 6, 160)
+		var total := maxi(mini(int(src[2]) / 6, 160), 1)
+		var left := total
 		while left > 0:
 			var a := randf() * TAU
 			var dir := Vector3(cos(a), 0, sin(a))
 			var at := center + dir * randf_range(PowerDefs.VORTEX_CORE, r * 0.9)
 			var n := mini(left, 6)
 			var kick := dir * randf_range(4.0, 9.0) + Vector3.UP * 2.0
-			chips.burst(at, Vector3.ONE * 0.6, int(src[0]), n, 2.5, kick, float(src[1]))
+			var carry := float(src[3]) * n / total
+			chips.burst(at, Vector3.ONE * 0.6, int(src[0]), n, 2.5, kick, float(src[1]), 1.0, carry)
 			left -= n
 
 

@@ -3,10 +3,12 @@ extends Node3D
 ## Gravel and splinters: hundreds of tiny irregular chips per collapse with
 ## no physics bodies at all. Each chip flies on a simple arc, bounces once
 ## on the surface below the break, then lies there for a long while (the
-## gravel of the rubble field). When the pool fills up, the oldest resting
-## chips shrink away; a chip in flight is never taken back (a burst that
-## finds no room is just smaller). Only flying chips cost anything per
-## frame; one draw call for all of them.
+## gravel on the rubble). When the pool fills up, the oldest resting chips
+## shrink away; a chip in flight is never taken back (a burst that finds no
+## room is just smaller). A burst can carry more broken material than its
+## chips show: each chip takes its share along and leaves it on the rubble
+## heap where it lands (see RubbleField). Only flying chips cost anything
+## per frame; one draw call for all of them.
 
 const GRAVITY := 18.0
 const FADE := 0.8
@@ -18,6 +20,7 @@ const SOFT_BUDGET := 0.75
 
 var capacity := 0
 var active := 0
+var rubble: RubbleField  ## where carried material is left (set by the world)
 var _pos := PackedVector3Array()
 var _vel := PackedVector3Array()
 var _size := PackedVector3Array()
@@ -27,6 +30,8 @@ var _spin := PackedFloat32Array()
 var _floor := PackedFloat32Array()
 var _life := PackedFloat32Array()
 var _origin := PackedVector3Array()  # where the burst came from
+var _carry := PackedFloat32Array()  ## m^3 of rubble a chip leaves where it lands
+var _carry_color := PackedColorArray()
 var _state := PackedByteArray()  # 0 free, 1 flying, 2 bounced, 3 resting
 var _flying := PackedInt32Array()
 var _free := PackedInt32Array()
@@ -49,6 +54,9 @@ func _ready() -> void:
 	_floor.resize(capacity)
 	_life.resize(capacity)
 	_origin.resize(capacity)
+	_carry.resize(capacity)
+	_carry.fill(0.0)
+	_carry_color.resize(capacity)
 	_state.resize(capacity)
 	_state.fill(0)
 	_free.resize(capacity)
@@ -77,7 +85,9 @@ func _ready() -> void:
 
 ## Throws `count` chips out of a box of `size` centred on `at`. `kick` is
 ## the velocity the pieces inherit, `speed` how hard chips spray out;
-## `scale` makes them bigger (the rubble of a big break).
+## `scale` makes them bigger (the rubble of a big break). `carry` m^3 of
+## broken material go along, shared out between the chips, and pile up
+## where they land.
 func burst(
 	at: Vector3,
 	size: Vector3,
@@ -86,17 +96,44 @@ func burst(
 	speed := 4.0,
 	kick := Vector3.ZERO,
 	seed_value := -1.0,
-	scale := 1.0
+	scale := 1.0,
+	carry := 0.0
 ) -> void:
 	count = mini(count, capacity / 6)
-	if count <= 0:
+	var thrown := PackedInt32Array()
+	if count > 0:
+		thrown = _throw(at, size, kind, count, speed, kick, seed_value, scale)
+	if carry <= 0.0:
 		return
+	var tone := RubbleField.color_of(kind, maxf(seed_value, 0.0))
+	if thrown.is_empty():
+		# Nothing to carry it: it drops where it broke.
+		if rubble:
+			rubble.deposit(at, carry, tone)
+		return
+	for i in thrown:
+		_carry[i] = carry / thrown.size()
+		_carry_color[i] = tone
+
+
+func _throw(
+	at: Vector3,
+	size: Vector3,
+	kind: int,
+	count: int,
+	speed: float,
+	kick: Vector3,
+	seed_value: float,
+	scale: float
+) -> PackedInt32Array:
+	var thrown := PackedInt32Array()
 	var floor_y := _floor_below(at)
 	var shade := randf_range(0.85, 1.05)
 	for k in count:
 		var i := _take()
 		if i < 0:
 			break  # every chip is in the air: this burst is smaller
+		thrown.append(i)
 		var p := (
 			at
 			+ Vector3(
@@ -125,7 +162,9 @@ func burst(
 		_buffer[o + 14] = fposmod(chip_seed + randf() * 0.5, 1.0)
 		_buffer[o + 15] = 0.0
 		_buffer[o + 16] = Materials.custom(kind, 0.0, chip_seed)
+		_carry[i] = 0.0
 		_write(i, 1.0)
+	return thrown
 
 
 ## A free slot, else the chip that has been lying still the longest (it
@@ -160,7 +199,7 @@ func _chip_size(kind: int) -> Vector3:
 
 func _floor_below(at: Vector3) -> float:
 	var q := PhysicsRayQueryParameters3D.create(at, at + Vector3.DOWN * 60.0)
-	q.collision_mask = DebrisSystem.LAYER_WORLD | DebrisSystem.LAYER_STRUCTURES
+	q.collision_mask = DebrisSystem.LAYER_WORLD | DebrisSystem.LAYER_STRUCTURES | DebrisSystem.LAYER_RUBBLE
 	var hit := get_world_3d().direct_space_state.intersect_ray(q)
 	return (hit["position"] as Vector3).y if not hit.is_empty() else 0.0
 
@@ -192,6 +231,10 @@ func _process(delta: float) -> void:
 					v = Vector3.ZERO
 					_state[i] = 3
 					_rested.append(i)
+					if _carry[i] > 0.0:
+						if rubble:
+							rubble.deposit(p, _carry[i], _carry_color[i])
+						_carry[i] = 0.0
 		_vel[i] = v
 		_pos[i] = p
 		_angle[i] += _spin[i] * delta

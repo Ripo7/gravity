@@ -3,7 +3,10 @@ extends RefCounted
 ## How StructureSet draws its blocks: one MultiMesh of boxes, one of
 ## cylinders (columns) and one per carved piece (ShapeLibrary), all with the
 ## block shader, one row of floats per block (layout: shaders/block.gdshader).
-## Wall cells are drawn by WallCells.
+## A falling piece of building draws its boxes (stones, mostly) with a
+## MultiMesh of its own, laid out in the piece's body space once and moved
+## as one: a frame costs one transform per piece, not one per stone (see
+## body_mesh). Wall cells are drawn by WallCells.
 
 const FLOATS := 20  # 12 transform + 4 colour + 4 custom
 ## Finishes of wall panels: no chamfer.
@@ -22,12 +25,15 @@ var pieces: Array[MultiMesh] = []  ## per ShapeLibrary piece (index - 1)
 var _buffer := PackedFloat32Array()
 var _rbuffer := PackedFloat32Array()
 var _pbuffers: Array[PackedFloat32Array] = []
-var _row := PackedFloat32Array()
 var _dirty := false
+var _parent: Node3D
+var _material: Material
+var _spare: Array[MultiMeshInstance3D] = []  ## body meshes not in use
 
 
 func _init(parent: Node3D, material: Material) -> void:
-	_row.resize(FLOATS)
+	_parent = parent
+	_material = material
 	boxes = _make(parent, material, bevelled_box(), "StructureMesh")
 	# Columns: a unit cylinder, enough sides to read round up close.
 	var cyl := CylinderMesh.new()
@@ -63,7 +69,8 @@ func resize(box_count: int, round_count: int, piece_counts: PackedInt32Array) ->
 ## Draws block `i` (at `round_slot` in the column mesh, or in carved piece
 ## `piece`'s if that is > 0, when the slot is >= 0; its box slot then stays
 ## empty). `custom` is Materials.custom; `hit` where it was first hit (unit
-## space + 1, zero if never).
+## space + 1, zero if never), or, `falling`, where it stood (its pattern
+## stays as it was).
 func write(
 	i: int,
 	round_slot: int,
@@ -73,40 +80,55 @@ func write(
 	shade: float,
 	seed_value: float,
 	custom: float,
-	hit: Vector3
+	hit: Vector3,
+	falling := false
 ) -> void:
-	var b := xf.basis
-	_row[0] = b.x.x * size.x
-	_row[1] = b.y.x * size.y
-	_row[2] = b.z.x * size.z
-	_row[3] = xf.origin.x
-	_row[4] = b.x.y * size.x
-	_row[5] = b.y.y * size.y
-	_row[6] = b.z.y * size.z
-	_row[7] = xf.origin.y
-	_row[8] = b.x.z * size.x
-	_row[9] = b.y.z * size.y
-	_row[10] = b.z.z * size.z
-	_row[11] = xf.origin.z
-	_row[12] = shade
-	# Round: patterns wrap round it (1 = fluted shaft, 0.75 = turned piece).
-	_row[13] = 0.0
-	if round_slot >= 0:
-		_row[13] = 1.0 if piece == 0 else (0.75 if ShapeLibrary.is_turned(piece) else 0.0)
-	_row[14] = fposmod(seed_value, 1.0)
-	# Chamfer (metres): trim and carved stone, not the wall panels (their
-	# edges meet the next panel in one plane and would show as grooves).
-	var fin := Materials.finish_of(seed_value)
-	_row[15] = 0.0 if fin in WALL_FINISHES else 0.025
-	_row[16] = custom
-	_row[17] = hit.x
-	_row[18] = hit.y
-	_row[19] = hit.z
 	var dst := _target(round_slot, piece)
 	var o := (round_slot if round_slot >= 0 else i) * FLOATS
-	for k in FLOATS:
-		dst[o + k] = _row[k]
+	fill_row(dst, o, xf, size, shade, seed_value, custom, hit, falling)
+	if round_slot >= 0:
+		# Round: patterns wrap round it (1 = fluted shaft, 0.75 = turned piece).
+		dst[o + 13] = 1.0 if piece == 0 else (0.75 if ShapeLibrary.is_turned(piece) else 0.0)
 	_dirty = true
+
+
+## Writes the row of a box at `xf` into `dst` at `o` (see write).
+static func fill_row(
+	dst: PackedFloat32Array,
+	o: int,
+	xf: Transform3D,
+	size: Vector3,
+	shade: float,
+	seed_value: float,
+	custom: float,
+	hit: Vector3,
+	falling: bool
+) -> void:
+	var b := xf.basis
+	dst[o] = b.x.x * size.x
+	dst[o + 1] = b.y.x * size.y
+	dst[o + 2] = b.z.x * size.z
+	dst[o + 3] = xf.origin.x
+	dst[o + 4] = b.x.y * size.x
+	dst[o + 5] = b.y.y * size.y
+	dst[o + 6] = b.z.y * size.z
+	dst[o + 7] = xf.origin.y
+	dst[o + 8] = b.x.z * size.x
+	dst[o + 9] = b.y.z * size.y
+	dst[o + 10] = b.z.z * size.z
+	dst[o + 11] = xf.origin.z
+	dst[o + 12] = shade
+	dst[o + 13] = 0.0
+	dst[o + 14] = fposmod(seed_value, 1.0)
+	# Chamfer (metres): trim and carved stone, not the wall panels (their
+	# edges meet the next panel in one plane and would show as grooves).
+	# Falling, every stone shows its edges; plus 0.5 tells the shader so.
+	var fin := Materials.finish_of(seed_value)
+	dst[o + 15] = 0.525 if falling else (0.0 if fin in WALL_FINISHES else 0.025)
+	dst[o + 16] = custom
+	dst[o + 17] = hit.x
+	dst[o + 18] = hit.y
+	dst[o + 19] = hit.z
 
 
 func clear(i: int, round_slot: int, piece: int) -> void:
@@ -115,6 +137,51 @@ func clear(i: int, round_slot: int, piece: int) -> void:
 	for k in FLOATS:
 		dst[o + k] = 0.0
 	_dirty = true
+
+
+## A MultiMesh of boxes for a falling piece, its rows `rows` (body space,
+## `count` of them, within `bounds`): the caller moves the node with the
+## body. Give it back with free_body_mesh.
+func body_mesh(rows: PackedFloat32Array, count: int, bounds: AABB) -> MultiMeshInstance3D:
+	var mmi: MultiMeshInstance3D = _spare.pop_back() if not _spare.is_empty() else null
+	if mmi == null:
+		mmi = MultiMeshInstance3D.new()
+		mmi.name = "FallingPiece"
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.use_colors = true
+		mm.use_custom_data = true
+		mm.mesh = boxes.mesh
+		mmi.multimesh = mm
+		mmi.material_override = _material
+		_parent.add_child(mmi)
+	refill(mmi, rows, count, bounds)
+	mmi.visible = true
+	return mmi
+
+
+## New rows for a falling piece's mesh (it lost some of its blocks).
+func refill(mmi: MultiMeshInstance3D, rows: PackedFloat32Array, count: int, bounds: AABB) -> void:
+	var mm := mmi.multimesh
+	if mm.instance_count < count:
+		mm.instance_count = maxi(count, mm.instance_count * 2)
+	var full := rows
+	if count < mm.instance_count:
+		full = rows.duplicate()
+		full.resize(mm.instance_count * FLOATS)
+		for k in range(count * FLOATS, full.size()):
+			full[k] = 0.0
+	mm.buffer = full
+	mm.visible_instance_count = count
+	mm.custom_aabb = bounds
+
+
+func free_body_mesh(mmi: MultiMeshInstance3D) -> void:
+	if mmi == null:
+		return
+	mmi.visible = false
+	mmi.multimesh.visible_instance_count = 0
+	_spare.append(mmi)
 
 
 func _target(round_slot: int, piece: int) -> PackedFloat32Array:

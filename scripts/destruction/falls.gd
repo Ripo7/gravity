@@ -60,8 +60,10 @@ const STONE_VOLUME := 0.06
 const PEEL_SPEED := 5.0
 const PEEL_SPIN := 0.8
 const PEEL_PER_TICK := 2
-## A piece at rest falls apart this many chunks a frame.
+## A piece at rest falls apart this many chunks a frame, from the top (see
+## _crumble).
 const CRUMBLE_CHUNKS := 2
+const CRUMBLE_LOOK := 0.25
 ## A piece that has crept slower than SETTLE_SPEED (m/s) for SETTLE_TIME
 ## seconds has come to rest (lying across rubble or a ruin): it comes apart.
 ## So does a piece that has landed and only crawls on (slower than
@@ -88,6 +90,7 @@ func _init(structures: StructureSet) -> void:
 func clear() -> void:
 	for c in clusters:
 		PhysicsServer3D.free_rid(c.body)
+		_set._mesh.free_body_mesh(c.mesh)
 	clusters.clear()
 
 
@@ -166,6 +169,8 @@ func add(blocks: PackedInt32Array, chunks := PackedInt32Array()) -> FallingClust
 	for i in blocks:
 		xforms.append(_set._xform[i])
 		masses.append(_set._mass[i])
+		# Stones of one block fit flush: a gap between them is an edge a
+		# player riding a falling floor would catch on (and shove it aside).
 		shapes.append(_set._box_shape(_set._size[i] * 0.995))
 	var heavy := CLUSTER_GRAVITY if blocks.size() >= PANCAKE_MIN else 1.0
 	var c := FallingCluster.build(blocks, xforms, masses, shapes, _set.get_world_3d().space, heavy)
@@ -176,8 +181,49 @@ func add(blocks: PackedInt32Array, chunks := PackedInt32Array()) -> FallingClust
 		c.chunk = chunks
 	else:
 		c.carve(_set._neighbors, mini(chunk_blocks, maxi(blocks.size() / 3, 2)))
+	# Its boxes are drawn by a mesh of its own from now on (see draw).
+	for i in blocks:
+		if _set.is_box(i):
+			_set._clear_instance(i)
 	clusters.append(c)
 	return c
+
+
+## Moves each falling piece's mesh to where its body is now, and draws its
+## other blocks there (once a rendered frame).
+func draw() -> void:
+	for c in clusters:
+		var xf := c.transform()
+		if not c.dressed:
+			_dress(c)
+		c.mesh.transform = xf
+		for k in c.others:
+			_set._write_instance(c.members[k], xf * c.offsets[k])
+
+
+## Lays out the boxes of falling piece `c` in its mesh, in its body space.
+func _dress(c: FallingCluster) -> void:
+	var rows := PackedFloat32Array()
+	rows.resize(c.members.size() * StructureMesh.FLOATS)
+	var n := 0
+	var bounds := AABB()
+	c.others.clear()
+	for k in c.members.size():
+		var i := c.members[k]
+		if not _set.is_box(i):
+			c.others.append(k)
+			continue
+		_set.falling_row(rows, n * StructureMesh.FLOATS, i, c.offsets[k])
+		var r := _set._size[i].length() * 0.5
+		var box := AABB(c.offsets[k].origin - Vector3.ONE * r, Vector3.ONE * r * 2.0)
+		bounds = box if n == 0 else bounds.merge(box)
+		n += 1
+	rows.resize(n * StructureMesh.FLOATS)
+	if c.mesh == null:
+		c.mesh = _set._mesh.body_mesh(rows, n, bounds)
+	else:
+		_set._mesh.refill(c.mesh, rows, n, bounds)
+	c.dressed = true
 
 
 ## Takes the blocks at positions `ks` (in c.members) out of falling cluster
@@ -251,6 +297,8 @@ func _fly_on(
 ## shatters around `hit`.
 func dissolve(c: FallingCluster, hit: Vector3, severity: float) -> void:
 	clusters.erase(c)
+	_set._mesh.free_body_mesh(c.mesh)
+	c.mesh = null
 	var xf: Transform3D = PhysicsServer3D.body_get_state(c.body, PhysicsServer3D.BODY_STATE_TRANSFORM)
 	var v: Vector3 = PhysicsServer3D.body_get_state(c.body, PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY)
 	var w: Vector3 = PhysicsServer3D.body_get_state(c.body, PhysicsServer3D.BODY_STATE_ANGULAR_VELOCITY)
@@ -305,9 +353,7 @@ func update(delta: float) -> void:
 		c.age += delta
 		var xf: Transform3D = PhysicsServer3D.body_get_state(c.body, PhysicsServer3D.BODY_STATE_TRANSFORM)
 		if c.crumbling:
-			_crumble(c, xf)
-			if clusters.has(c):
-				_draw(c, xf)
+			_crumble(c, xf, delta)
 			continue
 		var v: Vector3 = PhysicsServer3D.body_get_state(c.body, PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY)
 		var asleep: bool = PhysicsServer3D.body_get_state(c.body, PhysicsServer3D.BODY_STATE_SLEEPING)
@@ -350,12 +396,6 @@ func update(delta: float) -> void:
 		c.crumbling = (
 			c.crumbling or c.slow_time > SETTLE_TIME or c.crawl_time > CRAWL_TIME or (asleep and c.age > 0.5)
 		)
-		_draw(c, xf)
-
-
-func _draw(c: FallingCluster, xf: Transform3D) -> void:
-	for k in c.members.size():
-		_set._write_instance(c.members[k], xf * c.offsets[k])
 
 
 ## A black hole at `center` drags the falling pieces within `reach` toward
@@ -458,7 +498,7 @@ func _bear_down(c: FallingCluster, xf: Transform3D, delta: float) -> void:
 						6,
 						2.0
 					)
-				_set.debris.despawn(piece)
+				_set.debris.bury(piece)
 				gave += 1
 			continue
 		if not c.leaned:
@@ -694,19 +734,34 @@ func _peel(c: FallingCluster, xf: Transform3D, v: Vector3, w: Vector3, delta: fl
 
 
 ## A piece at rest falls apart from the top, a few chunks a frame, into
-## stones, shards and gravel: a heap, not blocks.
-func _crumble(c: FallingCluster, xf: Transform3D) -> void:
+## stones, shards and gravel: a heap, not blocks. Which chunks are on top,
+## and whether what is left still holds together, is looked at again every
+## CRUMBLE_LOOK seconds (a big piece is hundreds of stones).
+func _crumble(c: FallingCluster, xf: Transform3D, delta: float) -> void:
 	if c.members.size() < 3:
 		dissolve(c, Vector3.ZERO, 0.0)
 		return
-	var tops := {}  # chunk -> highest block centre
-	for k in c.members.size():
-		tops[c.chunk[k]] = maxf(tops.get(c.chunk[k], -INF), (xf * c.offsets[k].origin).y)
-	var ids := tops.keys()
-	ids.sort_custom(func(a: int, b: int) -> bool: return tops[a] > tops[b])
+	c.crumble_look -= delta
+	if c.crumble_look <= 0.0 or c.crumble_order.is_empty():
+		c.crumble_look = CRUMBLE_LOOK
+		_regroup(c)
+		if not clusters.has(c) or c.members.size() < 3:
+			return
+		var tops := {}  # chunk -> highest block centre
+		for k in c.members.size():
+			tops[c.chunk[k]] = maxf(tops.get(c.chunk[k], -INF), (xf * c.offsets[k].origin).y)
+		var order := tops.keys()
+		order.sort_custom(func(a: int, b: int) -> bool: return tops[a] < tops[b])
+		c.crumble_order = PackedInt32Array(order)  # highest last
 	var ks := PackedInt32Array()
-	for q: int in ids.slice(0, CRUMBLE_CHUNKS):
-		ks.append_array(c.chunk_members(q))
+	var taken := 0
+	while taken < CRUMBLE_CHUNKS and not c.crumble_order.is_empty():
+		var q := c.crumble_order[c.crumble_order.size() - 1]
+		c.crumble_order.resize(c.crumble_order.size() - 1)
+		var members := c.chunk_members(q)
+		if not members.is_empty():
+			ks.append_array(members)
+			taken += 1
 	if ks.size() > c.members.size() - 3:
 		dissolve(c, Vector3.ZERO, 0.0)
 		return
@@ -719,13 +774,12 @@ func _crumble(c: FallingCluster, xf: Transform3D) -> void:
 		var slump := Vector3(r.x, 0, r.z).normalized() * randf_range(0.2, 0.8)
 		_loosen(i, v + slump, Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5), keep)
 		centre += _set._xform[i].origin
-	if _set.dust:
+	if _set.dust and not blocks.is_empty():
 		_set.dust.puff(centre / blocks.size(), 1.5, _set._kind[blocks[0]], 6)
-	_regroup(c)
 
 
-## Block `i` leaves a falling piece as rubble, moving at `vel`: a stone
-## stays whole, a bigger block breaks into shards and gravel.
+## Block `i` leaves a falling piece as rubble, moving at `vel`: a small
+## stone stays whole, a bigger block breaks into shards and gravel.
 func _loosen(i: int, vel: Vector3, spin: Vector3, keep := 0) -> void:
 	var size := _set._size[i]
 	if size.x * size.y * size.z < STONE_VOLUME:

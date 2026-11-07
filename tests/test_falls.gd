@@ -93,7 +93,12 @@ func test_a_falling_piece_comes_apart_bit_by_bit_into_rubble() -> void:
 	var start: int = falling.size() - (Engine.get_physics_frames() - int(landed[0]))
 	var right_after := falling[clampi(start + 1, 0, falling.size() - 1)]
 	check(right_after > 0, "it did not all come apart in the step it landed")
-	check_eq(falling[falling.size() - 1], 0, "but it is all rubble now")
+	# A last small piece may still rock on the rubble a moment.
+	for k in 120:
+		if s.cluster_count() == 0:
+			break
+		await get_tree().physics_frame
+	check_eq(s.cluster_count(), 0, "but it is all rubble now")
 	var shards := 0
 	for i in d.capacity:
 		if d.is_active(i) and d.shard_of(i) >= 0:

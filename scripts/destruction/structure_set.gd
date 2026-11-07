@@ -12,8 +12,10 @@ extends Node3D
 ##   - Loads flow top-down from each block to the blocks it rests on. A
 ##     block carrying more than its capacity is crushed, which moves its load
 ##     onto its neighbours, so collapses spread floor by floor.
-## Falling clusters crack, crumble and break up chunk by chunk, and damage
-## whatever they hit (see Falls).
+## What falls is laid in stones (see Masonry): a block that comes away with
+## a falling piece becomes the stones it is made of. Falling clusters crack,
+## crumble and break up chunk by chunk, and damage whatever they hit (see
+## Falls).
 
 signal shattered(at: Vector3, size: Vector3, kind: int)
 signal cluster_released(at: Vector3, count: int, toppled: bool)
@@ -67,6 +69,7 @@ var alive_count := 0
 var walls: WallCells  ## walls, floors and roofs that crack open in place
 var footing: Footing  ## tipping, and how far blocks can hang from their neighbours
 var falls: Falls  ## the pieces of building falling as one body, and what they do
+var masonry: Masonry  ## the stones the blocks turn into when they fall
 
 var _state := PackedByteArray()
 var _xform: Array[Transform3D] = []  # global rest transform
@@ -113,17 +116,20 @@ var _alive_mass := 0.0
 var _built_mass := 0.0
 var _whole_max := float(Quality.pick(WHOLE_MAX_VOLUME.x, WHOLE_MAX_VOLUME.y, WHOLE_MAX_VOLUME.z))
 var _hit := PackedVector3Array()  ## where each block was hit (unit space + 1)
+var _stone := PackedByteArray()  ## 1 for a stone of a block (see add_stones)
 var _anchored_by := {}
 
 
 func _init() -> void:
 	falls = Falls.new(self)
+	masonry = Masonry.new(self)
 
 
 func _exit_tree() -> void:
 	falls.clear()
 	for rid in _bodies:
-		PhysicsServer3D.free_rid(rid)
+		if rid.is_valid():
+			PhysicsServer3D.free_rid(rid)
 	for rid: RID in _shape_cache.values():
 		PhysicsServer3D.free_rid(rid)
 	_bodies.clear()
@@ -218,6 +224,7 @@ func add_block(
 	_piece.append(0)
 	_shade.append(shade)
 	_hit.append(Vector3.ZERO)
+	_stone.append(0)
 	_health.append(hp)
 	_max_health.append(hp)
 	_mass.append(mass)
@@ -244,6 +251,54 @@ func add_block(
 	_alive_mass += mass
 	footing.add(i)
 	return i
+
+
+## The stones of block `parent`, lying at `boxes` in the block's own space:
+## each takes its share of the block's mass and is falling from the start
+## (never part of the statics, so the footing never sees it). Returns their
+## indices. See Masonry.
+func add_stones(parent: int, boxes: Array[AABB]) -> PackedInt32Array:
+	var ids := PackedInt32Array()
+	var g := _group[parent]
+	var to_structure := _group_origin[g].affine_inverse()
+	var whole := _size[parent]
+	var volume := maxf(whole.x * whole.y * whole.z, 1e-6)
+	for box in boxes:
+		var i := _xform.size()
+		var global := _xform[parent] * Transform3D(Basis(), box.get_center())
+		var size := box.size
+		var share := size.x * size.y * size.z / volume
+		_state.append(State.FALLING)
+		_xform.append(global)
+		_local.append((to_structure * global) * AABB(-size * 0.5, size))
+		_size.append(size)
+		_kind.append(_kind[parent])
+		_seed.append(_seed[parent])
+		_round.append(-1)
+		_piece.append(0)
+		_shade.append(_shade[parent])
+		_hit.append(Vector3.ZERO)
+		_stone.append(1)
+		_health.append(_health[parent])
+		_max_health.append(_max_health[parent])
+		_mass.append(_mass[parent] * share)
+		_capacity.append(_capacity[parent] * share)
+		_shear_cap.append(_shear_cap[parent] * share)
+		_load.append(0.0)
+		_group.append(g)
+		_grounded.append(0)
+		_neighbors.append(PackedInt32Array())
+		_supporters.append(PackedInt32Array())
+		_support_area.append(PackedFloat32Array())
+		_bodies.append(RID())
+		ids.append(i)
+	return ids
+
+
+## Block `i`, falling, has been replaced by its stones: it is gone.
+func replace_by_stones(i: int) -> void:
+	_state[i] = State.GONE
+	_clear_instance(i)
 
 
 ## Links blocks `a` and `b` as touching; `area` > 0 if `b` holds `a` up.
@@ -828,7 +883,13 @@ func _release(comp: PackedInt32Array, toppled: bool) -> int:
 		PhysicsServer3D.body_set_space(_bodies[i], RID())
 	# Rubble resting on what now falls must fall with it.
 	debris.thaw_box(bounds.grow(1.0))
-	var c := falls.add(comp)
+	# The block you stand on stays whole while it carries you down (the
+	# joints of a floor laid in slabs would catch your feet and shove it).
+	var world := GameWorld.of(self)
+	var feet := AABB()
+	if world and world.player:
+		feet = AABB(world.player.global_position - Vector3(0.6, 0.6, 0.6), Vector3(1.2, 1.0, 1.2))
+	var c := falls.add(masonry.loosen(comp, feet))
 	c.toppled = toppled
 	if toppled:
 		# Nudge it over its weakest edge so it visibly leans before it goes.
@@ -845,6 +906,12 @@ func _release(comp: PackedInt32Array, toppled: bool) -> int:
 # --- Frame ---------------------------------------------------------------------
 
 
+## Once a rendered frame: the falling pieces are drawn where they are now.
+func _process(_delta: float) -> void:
+	falls.draw()
+	_mesh.flush()
+
+
 func _physics_process(delta: float) -> void:
 	falls.update(delta)
 	_update_pending(delta)
@@ -854,7 +921,6 @@ func _physics_process(delta: float) -> void:
 		_dirty_groups.clear()
 		for g: int in groups:
 			_settle_group(g, true)
-	_mesh.flush()
 	if walls:
 		walls.flush()
 
@@ -886,13 +952,36 @@ func _write_instance(i: int, xf: Transform3D) -> void:
 		walls.write(i, xf, damage)
 		return
 	var custom := Materials.custom(_kind[i], damage, _seed[i])
-	_mesh.write(i, _round[i], _piece[i], xf, _size[i], _shade[i], _seed[i], custom, _hit[i])
+	if _state[i] == State.FALLING:
+		# Its pattern goes with it, laid as where it stood.
+		_mesh.write(i, _round[i], _piece[i], xf, _size[i], _shade[i], _seed[i], custom, _stood(i), true)
+	else:
+		_mesh.write(i, _round[i], _piece[i], xf, _size[i], _shade[i], _seed[i], custom, _hit[i])
+
+
+## The row of falling box `i` at `xf` (body space) into `rows` at `o` (see
+## Falls: a falling piece draws its boxes itself).
+func falling_row(rows: PackedFloat32Array, o: int, i: int, xf: Transform3D) -> void:
+	var damage := 1.0 - clampf(_health[i] / _max_health[i], 0.0, 1.0)
+	var custom := Materials.custom(_kind[i], damage, _seed[i])
+	StructureMesh.fill_row(rows, o, xf, _size[i], _shade[i], _seed[i], custom, _stood(i), true)
+
+
+## Where block `i` stood (world): its pattern is laid from there.
+func _stood(i: int) -> Vector3:
+	return _group_origin[_group[i]] * _local[i].get_center()
+
+
+## True for a block drawn as a plain box (not a column, a carved piece or
+## a wall cell).
+func is_box(i: int) -> bool:
+	return _round[i] < 0 and _piece[i] == 0 and not (walls and walls.is_cell(i))
 
 
 func _clear_instance(i: int) -> void:
 	if walls and walls.is_cell(i):
 		walls.clear(i)
-	else:
+	elif _stone[i] == 0:
 		_mesh.clear(i, _round[i], _piece[i])
 
 
@@ -902,8 +991,8 @@ func _rebuild_multimesh() -> void:
 	var n := _xform.size()
 	_mesh.resize(n, _round_count, _piece_counts)
 	for i in n:
-		if _state[i] == State.GONE:
-			_clear_instance(i)
-		else:
+		if _state[i] == State.STATIC:
 			_write_instance(i, _xform[i])
+		elif _stone[i] == 0 and not (walls and walls.is_cell(i)):
+			_mesh.clear(i, _round[i], _piece[i])
 	_mesh.flush()

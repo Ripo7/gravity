@@ -10,7 +10,7 @@ height = 1.8
 
 [node name="Player" type="CharacterBody3D"]
 collision_layer = 8
-collision_mask = 7
+collision_mask = 23
 floor_snap_length = 0.3
 script = ExtResource("1_player")
 

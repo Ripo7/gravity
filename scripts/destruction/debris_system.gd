@@ -7,7 +7,9 @@ extends Node3D
 ## overhead. Bodies are created once and pooled. Above a soft budget the
 ## pieces out of sight go first and the smallest looking ones shrink away
 ## over a second; when the pool runs dry anyway, the piece the player would
-## miss least makes room. Nothing pops out of existence in front of them.
+## miss least makes room. Nothing pops out of existence in front of them,
+## and nothing that broke is lost: what leaves the pool, and what is too
+## small to be a piece, ends up on the rubble heaps (RubbleField).
 
 ## A big piece broke up on a hard landing.
 signal piece_broke(at: Vector3, size: Vector3, kind: int, speed: float)
@@ -33,6 +35,9 @@ const LAYER_WORLD := 1
 const LAYER_STRUCTURES := 2
 const LAYER_DEBRIS := 4
 const LAYER_PLAYER := 8
+## The rubble heaps (RubbleField): pieces and the player stand on them, a
+## falling piece of building ploughs into them.
+const LAYER_RUBBLE := 16
 const KILL_Y := -40.0
 const FLOATS_PER_INSTANCE := 20  # 12 transform + 4 colour + 4 custom
 const TINT_DECAY := 0.6  # violet glow fades per second
@@ -104,6 +109,7 @@ var crumbled_in_view := 0
 var active_count := 0
 var frozen_count := 0
 var chips: ChipSystem  ## where tiny shards go (set by the world)
+var rubble: RubbleField  ## where what leaves the pool piles up (set by the world)
 ## Fraction of capacity kept before the oldest pieces start shrinking away;
 ## lowered by the adaptive quality when the frame rate drops.
 var soft_budget := 0.8
@@ -249,7 +255,7 @@ func _build_pool() -> void:
 		PhysicsServer3D.body_add_shape(body, shape)
 		PhysicsServer3D.body_set_collision_layer(body, LAYER_DEBRIS)
 		PhysicsServer3D.body_set_collision_mask(
-			body, LAYER_WORLD | LAYER_STRUCTURES | LAYER_DEBRIS | LAYER_PLAYER
+			body, LAYER_WORLD | LAYER_STRUCTURES | LAYER_DEBRIS | LAYER_PLAYER | LAYER_RUBBLE
 		)
 		PhysicsServer3D.body_set_param(body, PhysicsServer3D.BODY_PARAM_LINEAR_DAMP, 0.05)
 		PhysicsServer3D.body_set_param(body, PhysicsServer3D.BODY_PARAM_ANGULAR_DAMP, 0.6)
@@ -450,7 +456,7 @@ func _shatter_chunks(
 	# What does not become a body crumbles: one burst of gravel per third of
 	# the block (along its length).
 	var axis := size.max_axis_index()
-	var rubble := PackedFloat32Array([0.0, 0.0, 0.0])
+	var leftover := PackedFloat32Array([0.0, 0.0, 0.0])
 	var spots: Array[AABB] = [AABB(), AABB(), AABB()]
 	for p in vols.size():
 		var c := chunks[where[p]]
@@ -469,12 +475,12 @@ func _shatter_chunks(
 				bodies -= 1
 				continue
 		var third := clampi(int((c.get_center()[axis] / size[axis] + 0.5) * 3.0), 0, 2)
-		spots[third] = c if rubble[third] == 0.0 else spots[third].merge(c)
-		rubble[third] += vols[p]
+		spots[third] = c if leftover[third] == 0.0 else spots[third].merge(c)
+		leftover[third] += vols[p]
 	for t in 3:
-		if rubble[t] > 0.0:
+		if leftover[t] > 0.0:
 			var at := block * spots[t].get_center()
-			gravel(at, spots[t].size, kind, rubble[t], 2.0 + push, inherit, seed_value)
+			gravel(at, spots[t].size, kind, leftover[t], 2.0 + push, inherit, seed_value)
 	return out
 
 
@@ -569,7 +575,9 @@ func _place(
 		_multimesh.visible_instance_count = i + 1
 
 
-func despawn(i: int) -> void:
+## Takes piece `i` out of the pool; what rested on it is woken (unless
+## `wake` is false: it was buried under the rubble heap, so was all round it).
+func despawn(i: int, wake := true) -> void:
 	if i < 0 or i >= capacity or not _active[i]:
 		return
 	PhysicsServer3D.body_set_space(_bodies[i], RID())
@@ -580,7 +588,7 @@ func despawn(i: int) -> void:
 		frozen_count -= 1
 		PhysicsServer3D.body_set_mode(_bodies[i], PhysicsServer3D.BODY_MODE_RIGID)
 	# What rested on it must be free to fall now.
-	if frozen_count > 0:
+	if frozen_count > 0 and wake:
 		var r := _size[i].length() * 0.5 + 0.2
 		var p := _pos[i]
 		thaw_box(AABB(p - Vector3(r, r * 0.5, r), Vector3(r * 2.0, r * 1.5 + 0.6, r * 2.0)), 0.4)
@@ -642,7 +650,7 @@ func set_storm(i: int, on: bool) -> void:
 	_storm[i] = v
 	if on:
 		_storm_since[i] = _clock
-	var mask := LAYER_WORLD | LAYER_STRUCTURES | LAYER_PLAYER
+	var mask := LAYER_WORLD | LAYER_STRUCTURES | LAYER_PLAYER | LAYER_RUBBLE
 	if not on:
 		mask |= LAYER_DEBRIS
 	PhysicsServer3D.body_set_collision_mask(_bodies[i], mask)
@@ -828,19 +836,32 @@ func _split_shard(i: int, kids: Array, extra: Vector3, keep := 0) -> PackedInt32
 
 
 ## A piece too small to be a body: grains of a black hole's cloud when one
-## spins here, gravel chips on the ground otherwise (as many as its volume
-## makes).
+## spins here, gravel chips otherwise (a few, bigger for a big lot), which
+## take it all along and leave it on the rubble heap where they land.
 func gravel(
 	at: Vector3, size: Vector3, kind: int, volume: float, speed: float, kick: Vector3, seed_value: float
 ) -> void:
 	var count := clampi(int(round(volume / CHIP_VOLUME)), 2, 14)
 	var cloud := GrainCloud.find(get_tree(), at) if is_inside_tree() else null
 	if cloud:
-		cloud.add(at, size, kind, seed_value, count * 3)
+		cloud.add(at, size, kind, seed_value, count * 3, volume)
 	elif chips:
 		# The rubble of a big break: bigger stones, not just more gravel.
+		# The chips take all of it to the heap (they only last a while).
 		var scale := clampf(pow(volume / (count * CHIP_VOLUME), 1.0 / 3.0), 1.0, 2.0)
-		chips.burst(at, size, kind, count, speed, kick, seed_value, scale)
+		chips.burst(at, size, kind, count, speed, kick, seed_value, scale, volume)
+	elif rubble:
+		rubble.deposit(at, volume, RubbleField.color_of(kind, seed_value))
+
+
+## Piece `i` leaves the pool for the rubble heap under it: all of it, even
+## when it has shrunk away (it went into the heap). `wake`: see despawn.
+func bury(i: int, wake := true) -> void:
+	if not is_active(i):
+		return
+	if rubble:
+		rubble.deposit(_pos[i], volume_of(i), RubbleField.color_of(_kind[i], _seed[i]))
+	despawn(i, wake)
 
 
 ## How many new pieces (up to `want`) the pool can take right now without
@@ -873,7 +894,7 @@ func _take_slot() -> int:
 				continue
 			var i := int(key & ((1 << _SLOT_BITS) - 1))
 			if _unseen(key) or _born[i] >= _clock:
-				despawn(i)  # nobody saw it (out of sight, or not drawn yet)
+				bury(i)  # nobody saw it (out of sight, or not drawn yet)
 			else:
 				_crumble(i)
 			recycled_total += 1
@@ -883,13 +904,13 @@ func _take_slot() -> int:
 
 
 ## Piece `i`, which the player may see, leaves the pool by crumbling into
-## gravel where it is (what is left of it, if it was shrinking away).
+## gravel where it is (all of it: a piece shrinking away goes to the heap).
 func _crumble(i: int) -> void:
 	crumbled_in_view += 1
 	var left := _fade[i] / FADE_TIME if _fade[i] > 0.0 else 1.0
 	var at := transform_of(i).origin
 	var kick := velocity_of(i)
-	var vol := volume_of(i) * left * left * left
+	var vol := volume_of(i)
 	var size := _size[i] * left
 	var seed_value := _seed[i]
 	var kind := _kind[i]
@@ -981,7 +1002,7 @@ func _enforce_budget() -> void:
 		var age := _clock - _born[i]
 		if _unseen(key):
 			if age >= drop_age:
-				despawn(i)
+				bury(i)
 				dropped += 1
 				if dropped >= DROP_PER_FRAME:
 					break  # the rest next frame, before anything in view
@@ -1012,7 +1033,7 @@ func _physics_process(delta: float) -> void:
 			_fade[i] -= delta
 			if _fade[i] <= 0.0:
 				_fade[i] = 0.0001  # keep the counter consistent in despawn
-				despawn(i)
+				bury(i)
 				continue
 		if asleep and not tinted and not fading:
 			if lifetime > 0.0 and _clock - _born[i] > lifetime:
@@ -1073,11 +1094,17 @@ func _check_landing(i: int, at: Vector3) -> void:
 ## resting ones awake and costing time (putting them to sleep does not
 ## help: awake neighbours wake them right back). Every sweep, the pieces
 ## that were still at this sweep and the previous one are frozen instead.
+## A loose piece the rubble heap has grown over (all of it under the heap's
+## surface) joins the heap.
 func _settle_still_pieces() -> void:
 	var still := PackedInt32Array()
+	var heap := rubble != null and rubble.volume > 0.0
 	for i in capacity:
 		if not _active[i] or _frozen[i] or _storm[i] or _fade[i] > 0.0:
 			_quiet[i] = 0
+			continue
+		if heap and _pos[i].y + _size[i].length() * 0.5 < rubble.height_at(_pos[i]):
+			bury(i, false)
 			continue
 		var body := _bodies[i]
 		var lin: Vector3 = PhysicsServer3D.body_get_state(body, PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY)
@@ -1121,15 +1148,6 @@ func thaw(i: int) -> void:
 	PhysicsServer3D.body_set_param(body, PhysicsServer3D.BODY_PARAM_MASS, _mass[i])
 	PhysicsServer3D.body_set_state(body, PhysicsServer3D.BODY_STATE_SLEEPING, false)
 	_sleeping[i] = 0
-
-
-## Active pieces whose centre is inside `box`.
-func pieces_in(box: AABB) -> PackedInt32Array:
-	var out := PackedInt32Array()
-	for i in capacity:
-		if _active[i] and box.has_point(_pos[i]):
-			out.append(i)
-	return out
 
 
 func is_frozen(i: int) -> bool:
