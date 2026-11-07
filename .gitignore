@@ -1,0 +1,15 @@
+# Godot
+.godot/
+*.import
+!icon.svg.import
+/build/
+/android/
+export_credentials.cfg
+*.translation
+
+# Tooling
+__pycache__/
+.venv/
+node_modules/
+/out/
+.vercel
