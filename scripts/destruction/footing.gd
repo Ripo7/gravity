@@ -70,8 +70,13 @@ func _init(structures: StructureSet) -> void:
 	_set = structures
 
 
-## Registers block `i` (just added to the set).
+## Registers block `i` (just added to the set). Indices skipped since the
+## last one are stones of falling masonry (see StructureSet.add_stones): the
+## footing never looks at them, they only keep their place.
 func add(i: int) -> void:
+	if _reach.size() < i:
+		for arr: Variant in [_reach, _slack, _beam, _dist, _from, _root, _center, _foot, _bottom, _far]:
+			arr.resize(i)
 	var s := _set
 	var size := s._size[i]
 	var a := s._local[i]

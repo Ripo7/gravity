@@ -9,7 +9,8 @@ arcaded courtyard, a loggia, a deep cornice, a tile roof) and its brick
 campanile (45 m to the cross) at one corner, alone on a paved square.
 Beyond the square, only the plain fading into the haze. Walk in through the
 portal and across the courtyard; cut the foot of the tower and it falls on
-the palace.
+the palace, comes apart stone by stone, and leaves a heap of rubble you can
+climb.
 
 **Powers** (each with its own cooldown):
 
@@ -83,6 +84,13 @@ cost as little of it as possible:
 - Only big pieces are physics bodies. Gravel, splinters and glass shards are
   chips with no collision (an arc, one bounce on the surface below, rest),
   and they stay on the ground as the rubble field's gravel.
+- Nothing that breaks is lost, though the pool of pieces is small: what it
+  lets go of, and every lot of gravel, piles up in rubble heaps on the
+  ground. A heap is a grid of heights (a point a metre over the square)
+  drawn by one MultiMesh of 8 m tiles whose shader lifts each vertex and
+  draws the stones; pieces and the player stand on it through a height map
+  per tile, rebuilt at most every 2 s when it has grown 20 cm (a height map
+  changing under resting pieces keeps them awake).
 - What the black hole grinds down becomes grains of a cloud swirling round
   it: thousands of grains moved entirely by their shader (one draw call, no
   physics), flung out as dust and gravel when it closes.
@@ -121,7 +129,9 @@ cost as little of it as possible:
 | Health and what hurts | `scripts/player/player.gd`, `scripts/powers/hazards.gd` |
 | Menu (live attract-mode backdrop) | `scenes/menu.tscn`, `scripts/ui/main_menu.gd` |
 | Structural physics: loads and shear, creak-and-hold, floor-by-floor pancake collapses | `scripts/destruction/structure_set.gd`, `sphere_grid.gd`, `structure_mesh.gd` |
-| Falling pieces: sections of a toppling tower, bearing down, impacts, black-hole tearing | `scripts/destruction/falls.gd`, `falling_cluster.gd` |
+| Falling pieces: sections of a toppling tower, bearing down, impacts, black-hole tearing; each drawn by a mesh of its own, moved as one | `scripts/destruction/falls.gd`, `falling_cluster.gd` |
+| Masonry: the stones a big block becomes when it falls (staggered courses through a wall, rows of slabs in a floor) | `scripts/destruction/masonry.gd` |
+| Rubble heaps: what broke and is no longer a piece, piled at the slope rubble stands at | `scripts/destruction/rubble_field.gd`, `shaders/rubble.gdshader` |
 | Footing: toppling (also above a cut course), and how far a block can hang from its neighbours or bridge a gap before it comes away | `scripts/destruction/footing.gd` |
 | Walls, floors and roofs that crack open in place (cells cut in Blender) | `scripts/destruction/wall_cells.gd` |
 | Loose pieces: pooled server bodies + one MultiMesh; resting rubble freezes into static bodies until disturbed | `scripts/destruction/debris_system.gd` |
@@ -132,7 +142,7 @@ cost as little of it as possible:
 | Dust puffs: a billowing cloud built in Blender (a Geometry Nodes volume churned by 4D noise) and rendered with Cycles into a 64-frame flipbook the dust plays by age (`python3 tools/make_smoke.py`, about 5 min) | `tools/make_smoke.py`, `assets/textures/dust_flipbook.png`, `shaders/dust.gdshader` |
 | Carved depth: parallax occlusion over the baked height map (joints, bosses, pores; one read on phones, 6 steps in browsers, 12 on desktop) and chamfered edges on trim stone (a bevelled box mesh whose chamfer stays a few cm whatever the block's size) | `shaders/block.gdshader`, `scripts/destruction/structure_mesh.gd` |
 | Surface textures baked in Blender: stone, brick, plaster, travertine, marble and roof tiles built from nodes and baked (Cycles) into seamless colour, relief, roughness and joint maps (`python3 tools/make_textures.py`) | `tools/make_textures.py`, `assets/textures/` |
-| Gravel and glass shards without physics (one bounce, rest, fade) | `scripts/fx/chip_system.gd` |
+| Gravel and glass shards without physics (one bounce, rest, fade; they carry broken material to the heaps) | `scripts/fx/chip_system.gd` |
 | Dust clouds, rolling dust walls, jets out of crushed storeys (one noise texture, one draw call), lit by the sun; the dust that settles on the square | `scripts/fx/dust_system.gd`, `shaders/dust.gdshader`, `shaders/floor.gdshader` |
 | Sky: gradient, sun halo, clouds baked in Blender (`python3 tools/make_sky.py`); light, haze and grading | `shaders/sky.gdshader`, `tools/make_sky.py`, `assets/textures/sky_clouds.png`, `materials/environment.tres`, `scenes/game.tscn` |
 | The black hole's cloud of grains (moved by the shader) | `scripts/fx/grain_cloud.gd`, `shaders/grain.gdshader` |
@@ -207,9 +217,15 @@ After anything changes, each structure is re-checked:
    until enough supports are lost; then the most overloaded blocks crush, a
    few per frame, and the collapse spreads floor by floor.
 5. **What falls crumbles.** A piece that comes away is not a rigid lump
-   of blocks: it is cut in chunks of 7 to 10 blocks along ragged lines (a
-   random flood through its blocks from seeds spread over it), and it comes
-   apart chunk by chunk. A tall piece (a tower) cracks across along those
+   of blocks: every big block in it becomes the stones it is laid in
+   (`scripts/destruction/masonry.gd`): a wall in courses of staggered stones
+   through its thickness (1 x 1.9 m), a floor or a roof in rows of slabs
+   (2 m); columns, carved pieces and small
+   blocks stay whole, and so does the block you stand on. The stones keep
+   the pattern they had standing (the shader lays it from where they stood)
+   and show their joints. The piece is cut in chunks of about 13 m³ (7 to
+   30 stones) along ragged lines (a random flood through its stones from seeds spread
+   over it), and it comes apart chunk by chunk. A tall piece (a tower) cracks across along those
    lines each time it has turned 11° more; tumbling or falling fast, a
    piece sheds the stones sticking out of it; a hard landing crushes the
    part that struck and damages what it hit (heavier hits harder, so towers
@@ -219,7 +235,8 @@ After anything changes, each structure is re-checked:
    storey). Along every crack about half the rim crumbles into stones,
    shards, gravel and dust. A piece that has come to rest, or that only
    crawls on after landing, falls apart from the top in a few frames
-   (`scripts/destruction/falls.gd`).
+   (`scripts/destruction/falls.gd`). A falling piece ploughs into the rubble
+   heaps instead of resting on them.
 6. **Falling pieces bear down.** A piece resting or leaning on things puts
    its weight on them, shared out as its contacts push: a standing block
    gives way when that is more than it can carry or hold (crushed whole,
@@ -247,7 +264,9 @@ After anything changes, each structure is re-checked:
 
 `tests/test_tower.gd` is the reference physics test: the tower, cut at its
 foot on the palace side, must snap, come down on the palace and crush its
-west wing, and leave its rubble there.
+west wing, and leave its rubble there. `tests/test_rubble.gd` checks that
+what came down is still there to see (pieces, falling stones and heaps: over
+85% of the volume that broke).
 
 Blocks keep their damage between blasts (shown as cracks), which lowers
 their capacity.
@@ -265,13 +284,15 @@ their capacity.
   rather than push a visible piece out. Gravel chips are never taken back
   in flight; the oldest resting ones shrink away first. On web, pieces also
   expire after 240 s.
-- The palace and the tower start with about 1,730 blocks (static bodies,
-  one MultiMesh per kind).
+- The palace and the tower start with about 1,780 blocks (static bodies,
+  one MultiMesh per kind); what falls of them becomes up to a few thousand
+  stones, which never stand: the statics keep checking the blocks only.
 - Showcase (`--mode=showcase --prof --seed=1..3`, native build on a
-  2-core Linux VM), physics ms per step while things are moving: phone
-  settings 4.4–4.7 mean (worst second 6.4–8.3), browser settings 6.0–6.1
-  (11.4–11.9), desktop 10.2–11.1 (19.1–20.2). Since the tower crushes the
-  palace instead of crumbling beside it, its act costs more than it did.
+  2-core Linux VM), physics ms per step while things are moving, interleaved
+  with the version before the stones and heaps: phone settings 4.2–6.0 mean
+  (worst second 7.6–10.5) against 4.5–5.0 (7.4–8.5), browser settings
+  7.2–8.2 (12.0–14.8) against 6.4–6.8 (10.9–12.9). More pieces stay awake
+  a while on the heaps, and a falling tower is a thousand stones.
 - CI fails if the browser-settings showcase averages more than 12 ms per
   busy step (`tools/perf_gate.py`). `godot -- --mode=bench` still measures
   raw body counts by hand.

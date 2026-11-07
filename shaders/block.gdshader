@@ -1,9 +1,11 @@
 shader_type spatial;
 // Every block and piece of debris, all materials, in one draw call.
 // Per-instance COLOR: r = shade, g = unused,
-// b = random seed, a = violet glow from the power.
+// b = random seed, a = violet glow from the power (debris) or the chamfer
+// (blocks; plus 0.5 while the block falls).
 // INSTANCE_CUSTOM.r = finish * 5 + material kind + damage * 0.9 (cracks); .gba = where it was
-// hit, in the block's unit space + 1 (0 = never hit): cracks spread from there.
+// hit, in the block's unit space + 1 (0 = never hit): cracks spread from there. A
+// falling block has where it stood there instead: its pattern goes with it.
 // Patterns are procedural in the block's own space (scaled to metres), so
 // they stay put on moving debris and need no textures.
 
@@ -66,6 +68,8 @@ varying vec3 hit_at;  // metres in block space; x > 90 when never hit
 varying float world_y;
 varying float outer;  // 0 on fresh fracture faces
 varying float static_cell;  // 1 for a standing cell of a cracked wall (WallCells)
+varying float falling;  // 1 for a block (or a stone of one) falling
+varying vec3 stood;  // where a falling block stood (world)
 
 float hash(vec3 p) {
 	p = fract(p * 0.3183099 + 0.1);
@@ -347,7 +351,8 @@ void vertex() {
 	// the edge on the flagged axes (bits 1, 2, 4 = x, y, z), whatever the
 	// block's size.
 	int inset = int(UV2.x + 0.5);
-	float chamfer = chunky ? 0.0 : min(COLOR.a, bevel);
+	falling = !chunky && COLOR.a > 0.25 ? 1.0 : 0.0;
+	float chamfer = chunky ? 0.0 : min(COLOR.a - falling * 0.5, bevel);
 	if (inset > 0 && chamfer > 0.0) {
 		vec3 half_m = scale * 0.5;
 		float c = min(chamfer, 0.3 * min(half_m.x, min(half_m.y, half_m.z)));
@@ -363,7 +368,8 @@ void vertex() {
 	tint = chunky ? COLOR.a : 0.0;  // standing blocks: COLOR.a is their chamfer
 	damage = clamp(fract(INSTANCE_CUSTOM.r + 0.001) / 0.9, 0.0, 1.0);
 	vec3 h = INSTANCE_CUSTOM.gba;
-	hit_at = (!chunky && (h.x + h.y + h.z) > 0.0) ? (h - 1.0) * scale : vec3(99.0);
+	hit_at = (!chunky && falling < 0.5 && (h.x + h.y + h.z) > 0.0) ? (h - 1.0) * scale : vec3(99.0);
+	stood = falling > 0.5 ? h : vec3(0.0);
 	world_y = (MODEL_MATRIX * vec4(VERTEX, 1.0)).y;
 	world_p = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 }
@@ -495,9 +501,10 @@ void fragment() {
 	}
 
 	// Finishes (Materials.Finish): what the printers copied. Static blocks
-	// use world space so courses and joints run on across blocks; debris
-	// uses its own space so the pattern stays on the piece.
-	vec3 q = solid ? world_p : local_pos + seed * 7.0;
+	// use world space so courses and joints run on across blocks; a falling
+	// one keeps the world space it stood in (its stones fit as they did);
+	// debris uses its own space so the pattern stays on the piece.
+	vec3 q = solid ? (falling > 0.5 ? local_pos + stood : world_p) : local_pos + seed * 7.0;
 	vec2 fuv = face.y > 0.5 ? q.xz : vec2(face.x > 0.5 ? q.z : q.x, q.y);
 	float around = 0.0;
 	if (is_round > 0.5 && face.y < 0.5) {
@@ -514,6 +521,11 @@ void fragment() {
 		vec3 wn0 = static_cell > 0.5 ? up_normal : normalize((INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz);
 		vec3 tu = face.x > 0.5 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
 		vec3 tv = face.y > 0.5 ? vec3(0.0, 0.0, 1.0) : vec3(0.0, 1.0, 0.0);
+		if (falling > 0.5) {
+			// Its face's own axes, turned as it turns.
+			tu = normalize((MODEL_MATRIX * vec4(tu, 0.0)).xyz);
+			tv = normalize((MODEL_MATRIX * vec4(tv, 0.0)).xyz);
+		}
 		fuv = carve(fuv, layer, vec3(dot(v, tu), dot(v, tv), abs(dot(v, wn0))), parallax_steps);
 	}
 	if (layer >= 0) {
@@ -544,6 +556,10 @@ void fragment() {
 		vec3 wn = static_cell > 0.5 ? up_normal : normalize((INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz);
 		vec3 tan_u = face.x > 0.5 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
 		vec3 tan_v = face.y > 0.5 ? vec3(0.0, 0.0, 1.0) : vec3(0.0, 1.0, 0.0);
+		if (falling > 0.5) {
+			tan_u = normalize((MODEL_MATRIX * vec4(tan_u, 0.0)).xyz);
+			tan_v = normalize((MODEL_MATRIX * vec4(tan_v, 0.0)).xyz);
+		}
 		vec2 tilt = (detail.rg * 2.0 - 1.0) * relief;
 		vec3 bent = normalize(wn + tan_u * tilt.x + tan_v * tilt.y);
 		NORMAL = normalize((VIEW_MATRIX * vec4(bent, 0.0)).xyz);

@@ -27,8 +27,16 @@ var landed := false  # it hit something hard already
 var turned_at := 0.0  # how far it had turned when it last cracked across (rad)
 var peel_tick := 0.0
 var crumbling := false  # come to rest: it falls apart chunk by chunk
+var crumble_order := PackedInt32Array()  # its chunks, the highest last
+var crumble_look := 0.0  # seconds until it looks again at what is on top
 ## Chunks the shock of a landing will break off: {"time", "chunk", "from", "kick"}.
 var waves: Array[Dictionary] = []
+## Its boxes, drawn in its body space (see Falls.draw), and the positions
+## (in members) of its other blocks, drawn one by one; laid out again
+## whenever it loses blocks.
+var mesh: MultiMeshInstance3D
+var others := PackedInt32Array()
+var dressed := false
 
 var _index := {}  # block -> position in members
 var _index_ok := false
@@ -68,7 +76,9 @@ static func build(
 		PhysicsServer3D.body_set_param(c.body, PhysicsServer3D.BODY_PARAM_GRAVITY_SCALE, gravity)
 	# A big piece touches a lot at once (its foot in rubble, its side on a
 	# wall): it needs to hear about all of it to bear down where it leans.
-	PhysicsServer3D.body_set_max_contacts_reported(c.body, 24 if blocks.size() < 30 else 96)
+	# A tower laid in stones touches the ground with hundreds of them.
+	var contacts := 24 if blocks.size() < 30 else (96 if blocks.size() < 300 else 256)
+	PhysicsServer3D.body_set_max_contacts_reported(c.body, contacts)
 	PhysicsServer3D.body_set_param(c.body, PhysicsServer3D.BODY_PARAM_FRICTION, 0.8)
 	PhysicsServer3D.body_set_collision_layer(c.body, DebrisSystem.LAYER_DEBRIS)
 	PhysicsServer3D.body_set_collision_mask(
@@ -96,6 +106,11 @@ func take_out(ks: PackedInt32Array, xf: Transform3D, where: Array[Transform3D]) 
 	var order := ks.duplicate()
 	order.sort()
 	order.reverse()  # from the end, so the remaining shape indices stay valid
+	# Out of the space while it changes: in it, Jolt rebuilds the whole
+	# shape after every single removal (a tower losing half its stones).
+	var space := PhysicsServer3D.body_get_space(body)
+	if order.size() > 2:
+		PhysicsServer3D.body_set_space(body, RID())
 	for k in order:
 		out.append(members[k])
 		where.append(xf * offsets[k])
@@ -106,8 +121,11 @@ func take_out(ks: PackedInt32Array, xf: Transform3D, where: Array[Transform3D]) 
 		masses.remove_at(k)
 		if k < chunk.size():
 			chunk.remove_at(k)
+	if order.size() > 2:
+		PhysicsServer3D.body_set_space(body, space)
 	_index_ok = false
 	_extent = -1.0
+	dressed = false
 	PhysicsServer3D.body_set_param(body, PhysicsServer3D.BODY_PARAM_MASS, maxf(mass, 1.0))
 	return out
 
@@ -132,9 +150,11 @@ func extent() -> float:
 
 
 ## Cuts it into chunks of about `per_chunk` blocks along ragged lines: seeds
-## spread over it, then a random flood through the blocks from all of them
-## at once (a Voronoi of its blocks with torn edges). At least two chunks
-## from 6 blocks on. Linked by `neighbors` (block -> blocks it touches).
+## spread over it (one in each cell of a grid laid at random over it, sized
+## so there are about as many cells with blocks as chunks wanted), then a
+## random flood through the blocks from all of them at once (a Voronoi of
+## its blocks with torn edges). At least two chunks from 6 blocks on.
+## Linked by `neighbors` (block -> blocks it touches).
 func carve(neighbors: Array[PackedInt32Array], per_chunk: int) -> void:
 	var n := members.size()
 	chunk.resize(n)
@@ -144,21 +164,7 @@ func carve(neighbors: Array[PackedInt32Array], per_chunk: int) -> void:
 		chunk.fill(0)
 		return
 	chunk.fill(-1)
-	var seeds := PackedInt32Array([randi() % n])
-	var far := PackedFloat32Array()
-	far.resize(n)
-	far.fill(INF)
-	while seeds.size() < count:
-		var last := offsets[seeds[seeds.size() - 1]].origin
-		var best := 0
-		var best_d := -1.0
-		for k in n:
-			far[k] = minf(far[k], offsets[k].origin.distance_squared_to(last))
-			var d := far[k] * randf_range(0.6, 1.0)  # uneven chunks
-			if d > best_d:
-				best_d = d
-				best = k
-		seeds.append(best)
+	var seeds := _spread(count)
 	var at := index()
 	var frontier := PackedInt32Array()
 	for q in seeds.size():
@@ -174,11 +180,44 @@ func carve(neighbors: Array[PackedInt32Array], per_chunk: int) -> void:
 			if kn >= 0 and chunk[kn] < 0:
 				chunk[kn] = chunk[k]
 				frontier.append(kn)
-	var next := count
+	var next := seeds.size()
 	for k in n:
 		if chunk[k] < 0:  # cut off from the seeds: a chunk of its own
 			chunk[k] = next
 			next += 1
+
+
+## About `count` members spread over it: a random one in each cell of a grid
+## with a random offset, the cell grown or shrunk until about `count` cells
+## hold blocks.
+func _spread(count: int) -> PackedInt32Array:
+	var n := members.size()
+	var box := AABB(offsets[0].origin, Vector3.ZERO)
+	for off in offsets:
+		box = box.expand(off.origin)
+	var cell := maxf(box.size[box.size.max_axis_index()] / pow(count, 1.0 / 3.0), 0.3)
+	var shift := Vector3(randf(), randf(), randf())
+	var picks := {}
+	for _attempt in 6:
+		picks.clear()
+		for k in n:
+			var key := Vector3i(((offsets[k].origin - box.position) / cell + shift).floor())
+			# Reservoir pick: each block of the cell is as likely to seed it.
+			var seen: Vector2i = picks.get(key, Vector2i(-1, 0))
+			seen.y += 1
+			if randi() % seen.y == 0:
+				seen.x = k
+			picks[key] = seen
+		if picks.size() > count * 1.4:
+			cell *= 1.25
+		elif picks.size() < count * 0.7 and cell > 0.3:
+			cell /= 1.25
+		else:
+			break
+	var out := PackedInt32Array()
+	for v: Vector2i in picks.values():
+		out.append(v.x)
+	return out
 
 
 ## Positions (in members) of the blocks of chunk `q`.
