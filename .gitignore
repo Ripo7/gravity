@@ -2,6 +2,8 @@
 .godot/
 *.import
 !icon.svg.import
+# Imported with mipmaps and VRAM compression (3D textures): keep the settings.
+!addons/kenney_prototype_textures/**/*.import
 /build/
 /android/
 export_credentials.cfg

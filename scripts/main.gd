@@ -1,12 +1,25 @@
 class_name Main
 extends Node3D
-## Starting point for a new concept: a lit floor, a camera, and crates that
+## Starting point for a new concept, in greybox: a dark grid floor, a few
+## light grey blocks (a wall, steps, a ramp, a ledge) and orange crates that
 ## fall where you tap or click. It checks that physics, input (mouse and
-## touch) and the web build work before the real idea goes in.
+## touch) and the web build work before the real idea goes in. Textures:
+## Kenney's prototype textures (CC0), addons/kenney_prototype_textures.
 
 ## Crates kept at once (the oldest goes first).
 const MAX_CRATES := 60
 const CRATE := 0.8
+const TEXTURES := "res://addons/kenney_prototype_textures/"
+## The blockout around the drop zone: centre, size (m), and a tilt about X
+## in degrees for the ramp.
+const BLOCKS := [
+	[Vector3(0, 1.5, -6), Vector3(12, 3, 1), 0.0],  # back wall
+	[Vector3(-5, 0.25, -2.5), Vector3(2, 0.5, 1), 0.0],  # steps of 0.5 m
+	[Vector3(-5, 0.5, -3.5), Vector3(2, 1.0, 1), 0.0],
+	[Vector3(-5, 0.75, -4.5), Vector3(2, 1.5, 1), 0.0],
+	[Vector3(5, 0.95, -2.375), Vector3(2.5, 0.25, 5.2), 22.8],  # ramp up to the ledge
+	[Vector3(5, 1, -5.5), Vector3(2.5, 2, 1.5), 0.0],  # ledge, 2 m high
+]
 
 var camera: Camera3D
 var crates: Array[RigidBody3D] = []
@@ -63,21 +76,21 @@ func _build_world() -> void:
 	env.sky = Sky.new()
 	env.sky.sky_material = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 0.6
+	env.ambient_light_energy = 0.45
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	env.tonemap_exposure = 0.85
 	var world := WorldEnvironment.new()
 	world.environment = env
 	add_child(world)
 
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-50, -30, 0)
-	sun.light_energy = 0.9
+	sun.light_energy = 0.75
 	sun.shadow_enabled = true
 	add_child(sun)
 
-	var floor_mat := StandardMaterial3D.new()
-	floor_mat.albedo_color = Color(0.5, 0.48, 0.45)
-	floor_mat.metallic_specular = 0.05
+	# Laid in world space: a square of the grid is always the same size.
+	var floor_mat := _grid("dark/texture_07.png", 0.25, true)
 	var plane := PlaneMesh.new()
 	plane.size = Vector2(400, 400)
 	plane.material = floor_mat
@@ -90,8 +103,13 @@ func _build_world() -> void:
 	ground.add_child(ground_look)
 	add_child(ground)
 
-	var crate_mat := StandardMaterial3D.new()
-	crate_mat.albedo_color = Color(0.55, 0.36, 0.96)
+	var wall_mat := _grid("light/texture_07.png", 0.25, true)
+	wall_mat.albedo_color = Color(0.62, 0.62, 0.65)  # light grey, not white, in full sun
+	for b: Array in BLOCKS:
+		_block(b[0], b[1], b[2], wall_mat)
+
+	# On the crate itself, so its pattern turns with it.
+	var crate_mat := _grid("orange/texture_08.png", 1.0 / CRATE, false)
 	_mesh = BoxMesh.new()
 	_mesh.size = Vector3.ONE * CRATE
 	_mesh.material = crate_mat
@@ -100,13 +118,47 @@ func _build_world() -> void:
 
 	camera = Camera3D.new()
 	add_child(camera)
-	camera.look_at_from_position(Vector3(0, 5, 9), Vector3(0, 0.5, 0))
+	camera.look_at_from_position(Vector3(0, 5.5, 10), Vector3(0, 0.5, -1))
 
 	var hint := Label.new()
 	hint.text = "Nouveau concept : touche ou clique pour lâcher une caisse"
 	hint.position = Vector2(24, 20)
 	hint.add_theme_font_size_override("font_size", 28)
-	hint.add_theme_color_override("font_color", Color(0.12, 0.1, 0.2))
+	hint.add_theme_color_override("font_color", Color(0.95, 0.95, 0.97))
+	hint.add_theme_color_override("font_outline_color", Color(0.1, 0.1, 0.12))
+	hint.add_theme_constant_override("outline_size", 6)
 	var ui := CanvasLayer.new()
 	ui.add_child(hint)
 	add_child(ui)
+
+
+## A prototype texture laid with triplanar mapping (no UVs needed): `scale`
+## textures per metre, in world space or on the object.
+func _grid(texture: String, scale: float, world: bool) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.albedo_texture = load(TEXTURES + texture)
+	m.uv1_triplanar = true
+	m.uv1_world_triplanar = world
+	m.uv1_scale = Vector3.ONE * scale
+	m.metallic_specular = 0.2
+	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	return m
+
+
+## A static box of the blockout.
+func _block(center: Vector3, size: Vector3, tilt: float, mat: Material) -> void:
+	var body := StaticBody3D.new()
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = size
+	shape.shape = box
+	body.add_child(shape)
+	var mesh := BoxMesh.new()
+	mesh.size = size
+	mesh.material = mat
+	var look := MeshInstance3D.new()
+	look.mesh = mesh
+	body.add_child(look)
+	add_child(body)
+	body.position = center
+	body.rotation_degrees.x = tilt

@@ -9,8 +9,16 @@ as it was on the branch [`archive/gravity`](../../tree/archive/gravity).
 
 ## What is here
 
-- `scenes/main.tscn` + `scripts/main.gd`: a floor, a camera, crates that
-  fall where you tap or click. Replace it with the concept.
+- `scenes/main.tscn` + `scripts/main.gd`: a greybox test scene (dark grid
+  floor, light grey wall, steps and ramp, orange crates that fall where you
+  tap or click). Replace it with the concept.
+- `addons/kenney_prototype_textures/`: [Kenney's prototype
+  textures](https://kenney.nl/assets/prototype-textures) (CC0), 13 patterns
+  in 6 colours, as packaged for Godot by
+  [Calinou](https://github.com/Calinou/kenney-prototype-textures). Lay them
+  with triplanar mapping (see `Main._grid`): no UVs needed, and in world
+  space a grid square is always the same size. Their `.import` files are
+  kept: mipmaps and VRAM compression, as 3D textures need.
 - `tests/`: a small headless test runner; files `tests/test_*.gd`,
   methods `test_*` (they may `await`).
 - `.github/workflows/ci.yml`: lint, tests and a web export on every pull
