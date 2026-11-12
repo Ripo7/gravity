@@ -1,7 +1,8 @@
 class_name Main
 extends Node3D
 ## The test ground, in greybox: a house you can take apart with a shock
-## wave (see Structure for how it breaks), walked around in first person.
+## wave (see Structure for how it breaks) and whose debris you can gather
+## into an orb and throw back at it, walked around in first person.
 ## Textures: Kenney's prototype textures (CC0).
 
 const TEXTURES := "res://addons/kenney_prototype_textures/"
@@ -12,6 +13,7 @@ var dust: Dust
 var chips: Chips
 var clock: PhysicsClock
 var hud: Hud
+var orb: Orb  ## the one being gathered, if any
 ## Where the house stands.
 var house_at := Transform3D(Basis(), Vector3(0, 0, -4))
 ## Milliseconds it took to cut and bond the house.
@@ -39,6 +41,13 @@ func _ready() -> void:
 	add_child(player)
 	player.global_position = house_at * Vector3(0, 0.05, 15)
 	player.fired.connect(cast_shockwave)
+	player.gathering_changed.connect(
+		func(on: bool) -> void:
+			if on:
+				start_orb()
+			else:
+				throw_orb()
+	)
 	var ui := CanvasLayer.new()
 	add_child(ui)
 	hud = Hud.new()
@@ -79,6 +88,26 @@ func cast_shockwave(from: Vector3, direction: Vector3) -> Shockwave:
 	wave.setup(structure, from, direction)
 	add_child(wave)
 	return wave
+
+
+## Starts gathering loose debris into an orb held in front of the player.
+func start_orb() -> Orb:
+	if orb == null or not is_instance_valid(orb) or orb.state != Orb.State.GATHER:
+		orb = Orb.new()
+		orb.setup(structure, player.camera)
+		add_child(orb)
+	return orb
+
+
+## Throws the orb being gathered where the player looks.
+func throw_orb() -> void:
+	if orb != null and is_instance_valid(orb):
+		orb.throw()
+	orb = null
+
+
+func _process(_delta: float) -> void:
+	player.orb_fill = orb.fill() if orb != null and is_instance_valid(orb) else 0.0
 
 
 ## Puts the house back up (starts the scene again).

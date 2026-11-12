@@ -227,10 +227,12 @@ func build(ground := 0.0) -> void:
 	for i in count:
 		if _lo[i].y < ground + TOUCH:
 			anchored[i] = 1
+		# (Put back after adding: a packed array taken out of a dictionary
+		# is a copy.)
 		var cell := Vector3i((centroid[i] / CELL).floor())
-		if not _cells.has(cell):
-			_cells[cell] = PackedInt32Array()
-		(_cells[cell] as PackedInt32Array).append(i)
+		var there: PackedInt32Array = _cells.get(cell, PackedInt32Array())
+		there.append(i)
+		_cells[cell] = there
 	total = count
 	crumb_first.resize(count)
 	crumb_first.fill(-1)
@@ -344,11 +346,11 @@ func shatter(i: int, velocity: Vector3) -> void:
 
 
 ## Something heavy hit the standing building at `at`: about `amount` m3 of
-## it is knocked out there, nearest first, and leaves at `velocity`. The
-## nearest half of it leaves in crumbs.
-func crush(at: Vector3, amount: float, velocity: Vector3) -> void:
+## it is knocked out there, nearest first and no farther than `reach`, and
+## leaves at `velocity`. The nearest half of it leaves in crumbs.
+func crush(at: Vector3, amount: float, velocity: Vector3, reach := 1.6) -> void:
 	var near: Array[Vector2] = []  # (distance to its surface, shard)
-	for i in shards_near(at, 1.6):
+	for i in shards_near(at, reach):
 		if held[i] == 1:
 			near.append(Vector2(maxf(centroid[i].distance_to(at) - radius[i], 0.0), i))
 	near.sort()

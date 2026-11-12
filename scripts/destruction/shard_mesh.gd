@@ -10,7 +10,8 @@ const SHADER := preload("res://shaders/shards.gdshader")
 const TEXTURES := "res://addons/kenney_prototype_textures/"
 ## Texels per row of the two data textures.
 const WIDTH := 256
-## Floats per body: where rest-space points go (xyz, pad) and a rotation.
+## Floats per body: where rest-space points go (xyz), its size (1 unless it
+## is dwindling into an orb) and a rotation.
 const BODY_FLOATS := 8
 ## A face made by a cut is not left flat: its middle is pushed in or out by
 ## up to this share of its size, so it catches the light like broken stone.
@@ -105,6 +106,7 @@ func build(shards: int, bodies: int, hidden_from: int) -> void:
 	_bodies.resize(WIDTH * body_rows * 4)
 	_bodies.fill(0.0)
 	for b in _bodies.size() / BODY_FLOATS:
+		_bodies[b * BODY_FLOATS + 3] = 1.0  # full size
 		_bodies[b * BODY_FLOATS + 7] = 1.0  # no rotation
 	_body_image = Image.create_from_data(WIDTH, body_rows, false, Image.FORMAT_RGBAF, _bodies.to_byte_array())
 	_body_texture = ImageTexture.create_from_image(_body_image)
@@ -132,14 +134,16 @@ func set_slot(shard: int, slot: int) -> void:
 
 
 ## Body `slot` is at `xf`; `origin` is where its own origin was in the whole
-## building (shards keep their place around it).
-func set_body(slot: int, xf: Transform3D, origin: Vector3) -> void:
+## building (shards keep their place around it). `size`: drawn that much
+## smaller around its origin.
+func set_body(slot: int, xf: Transform3D, origin: Vector3, size := 1.0) -> void:
 	var o := slot * BODY_FLOATS
-	var at := xf.origin - xf.basis * origin
+	var at := xf.origin - xf.basis * origin * size
 	var q := xf.basis.get_rotation_quaternion()
 	_bodies[o] = at.x
 	_bodies[o + 1] = at.y
 	_bodies[o + 2] = at.z
+	_bodies[o + 3] = size
 	_bodies[o + 4] = q.x
 	_bodies[o + 5] = q.y
 	_bodies[o + 6] = q.z

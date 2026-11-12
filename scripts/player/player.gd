@@ -1,10 +1,14 @@
 class_name Player
 extends CharacterBody3D
 ## First-person controller (mouse + keyboard, gamepad, touch). The fire
-## button sends a shock wave out of your hands, along where you look.
+## button sends a shock wave out of your hands, along where you look. The
+## gather button, held, draws loose debris into an orb in front of you; let
+## go and the orb is thrown.
 
 ## The shock wave leaves from `from` along `direction`.
 signal fired(from: Vector3, direction: Vector3)
+## The gather button went down (true) or came up.
+signal gathering_changed(on: bool)
 
 const COOLDOWN := 0.9  ## seconds between two shock waves
 const KILL_Y := -25.0
@@ -29,7 +33,11 @@ var input_enabled := true
 var touch_move := Vector2.ZERO
 var touch_jump := false
 var touch_fire := false
+var touch_gather := false  ## held down
 var cooldown_left := 0.0
+var gathering := false
+## How full the orb being gathered is (0 to 1), for the button's ring.
+var orb_fill := 0.0
 var head: Node3D
 var camera: CameraShake
 ## Set by the world, to shove loose pieces aside.
@@ -114,6 +122,10 @@ func _physics_process(delta: float) -> void:
 		if touch_fire:
 			fire()
 	touch_fire = false
+	var hold := input_enabled and (touch_gather or _gather_held())
+	if hold != gathering:
+		gathering = hold
+		gathering_changed.emit(hold)
 	if stick != Vector2.ZERO:
 		# Squared response curve gives fine aim near the centre.
 		look(stick * stick.length() * stick_sensitivity * delta)
@@ -138,6 +150,16 @@ func _physics_process(delta: float) -> void:
 	if global_position.y < KILL_Y:
 		global_transform = _spawn
 		velocity = Vector3.ZERO
+
+
+## The gather key or button is down. (A right click only counts once the
+## mouse is taken, like a left click.)
+func _gather_held() -> bool:
+	if not Input.is_action_pressed("gather"):
+		return false
+	return (
+		Input.mouse_mode == Input.MOUSE_MODE_CAPTURED or not Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT)
+	)
 
 
 ## Stopped by something low while walking: step up onto it.
