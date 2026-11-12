@@ -12,6 +12,9 @@ extends Node
 ## --seed=N makes a run repeatable; --prof prints the cost of the physics
 ## once a second (PROF lines, read by tools/perf_gate.py).
 
+## ms: a physics step longer than this on a desktop is a hitch on a phone.
+const SLOW_STEP := 6.0
+
 var options := {}
 var world: Main
 var player: Player
@@ -59,6 +62,7 @@ func _fire() -> void:
 
 
 func _profile() -> void:
+	world.clock.keep_history = true
 	while true:
 		await _wait(1.0)
 		var p := world.structure.pieces
@@ -192,6 +196,21 @@ func _end(tag: String) -> void:
 			]
 		)
 	)
+	if options.has("prof"):
+		# Every step of the run, sorted: the mean hides the hitches.
+		var steps := world.clock.history.duplicate()
+		steps.sort()
+		var n := steps.size()
+		var slow := 0
+		for ms in steps:
+			if ms > SLOW_STEP:
+				slow += 1
+		print(
+			(
+				"STEPS %d  median %.2f ms  99%% under %.2f ms  slowest %.2f ms  over %.0f ms: %d"
+				% [n, steps[n / 2], steps[n * 99 / 100], steps[n - 1], SLOW_STEP, slow]
+			)
+		)
 	get_tree().quit()
 
 

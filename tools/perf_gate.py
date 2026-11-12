@@ -26,6 +26,7 @@ def main():
 
     secs = []
     done = ""
+    steps = ""
     errors = []
     for line in sys.stdin:
         sys.stdout.write(line)
@@ -34,6 +35,8 @@ def main():
             secs.append((float(m[1]), float(m[2]), int(m[3]), int(m[4])))
         if line.startswith("SHOWCASE_DONE"):
             done = line.strip()
+        if line.startswith("STEPS"):
+            steps = line.strip()
         if "SCRIPT ERROR" in line or line.startswith("ERROR"):
             errors.append(line.strip())
 
@@ -62,7 +65,7 @@ def main():
     if summary:
         with open(summary, "a") as f:
             f.write("### Physics perf gate (showcase, headless)\n\n")
-            f.write(f"`{report}`\n\n{done}\n\n")
+            f.write(f"`{report}`\n\n{done}\n\n{steps}\n\n")
             f.write(("**FAIL**: " + "; ".join(failures)) if failures else "Within limits.")
             f.write("\n")
     for msg in failures:

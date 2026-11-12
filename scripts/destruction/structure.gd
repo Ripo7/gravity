@@ -34,6 +34,9 @@ const WARM_PER_STEP := 6
 ## While whole, a box collides as a few plain blocks of at most this size
 ## (m); the first shard to leave a block turns it into its shards.
 const BLOCK := 2.5
+## When a lot lets go at once it comes off over a few steps, about this many
+## shards per step: making all the bodies in one step is a visible hitch.
+const FALL_PER_STEP := 40
 
 var count := 0
 ## Per shard: where it stands (its centre of mass), size, and its state.
@@ -87,6 +90,10 @@ var _stamp := 0
 var _dirty := false
 var _warm := 0
 var _kicked := PackedInt32Array()
+var _falling: Array[PackedInt32Array] = []  # chunks nothing holds any more, the lowest last
+var _falling_push := PackedVector3Array()
+var _falling_low := PackedFloat32Array()
+var _leaving := PackedByteArray()  # 1 for a shard in _falling
 var _built := false
 # Only while building: every shard's corners and faces in the world.
 var _points: Array[PackedVector3Array] = []
@@ -192,6 +199,7 @@ func build(ground := 0.0) -> void:
 	_index_bonds()
 	held_count = count
 	_mark.resize(count)
+	_leaving.resize(count)
 	mesh.build(count, count + 1)
 	pieces.setup(count)
 	support.setup(self)
@@ -208,6 +216,10 @@ func _physics_process(_delta: float) -> void:
 			break
 		shape_of(_warm)
 		_warm += 1
+	if not _falling.is_empty():
+		# The look waits until all that it found unheld has come off.
+		_drop_some()
+		return
 	if not support.busy:
 		if not _dirty:
 			return
@@ -222,6 +234,7 @@ func _physics_process(_delta: float) -> void:
 			for i in _kicked:
 				_kick[i] = Vector3.ZERO
 			_kicked.clear()
+			_drop_some()
 		Support.WEIGHED:
 			for b in support.overloaded:
 				break_bond(b)
@@ -422,21 +435,56 @@ func _index_bonds() -> void:
 			next[i] += 1
 
 
-## A set of shards that no longer holds comes off: in one piece if it is
-## small, cut in chunks if it is big. It leaves with the push its shards
-## got from the blast that freed it.
+## A set of shards that no longer holds is about to come off: in one piece
+## if it is small, cut in chunks if it is big. It will leave with the push
+## its shards got from the blast that freed it.
 func _let_go(group: PackedInt32Array) -> void:
 	for chunk in _chunks(group):
 		var push := Vector3.ZERO
 		var weight := 0.0
+		var low := INF
 		for i in chunk:
 			push += _kick[i] * mass[i]
 			weight += mass[i]
-		_release(chunk, push / weight * 0.5)
+			low = minf(low, _lo[i].y)
+			_leaving[i] = 1
+		# Kept sorted, the lowest last: what is underneath goes first.
+		var at := _falling.size()
+		while at > 0 and _falling_low[at - 1] < low:
+			at -= 1
+		_falling.insert(at, chunk)
+		_falling_low.insert(at, low)
+		_falling_push.insert(at, push / weight * 0.5)
 
 
-func _chunks(group: PackedInt32Array) -> Array[PackedInt32Array]:
-	if group.size() <= MAX_CHUNK:
+## Some of what waits in _falling comes off, the lowest first.
+func _drop_some() -> void:
+	var left := FALL_PER_STEP
+	while left > 0 and not _falling.is_empty():
+		var chunk: PackedInt32Array = _falling.pop_back()
+		var push := _falling_push[_falling_push.size() - 1]
+		_falling_push.remove_at(_falling_push.size() - 1)
+		_falling_low.remove_at(_falling_low.size() - 1)
+		# A blast may have torn some of it out while it waited.
+		var still := PackedInt32Array()
+		for i in chunk:
+			_leaving[i] = 0
+			if held[i] == 1:
+				still.append(i)
+		if still.is_empty():
+			continue
+		left -= still.size()
+		if still.size() == chunk.size():
+			_release(still, push)
+		else:
+			for part in _chunks(still, true):
+				_release(part, push)
+
+
+## `group` cut in connected chunks of MAX_CHUNK shards at most. A small
+## group is taken to be in one part unless `check`.
+func _chunks(group: PackedInt32Array, check := false) -> Array[PackedInt32Array]:
+	if group.size() <= MAX_CHUNK and not check:
 		return [group]
 	_stamp += 2
 	var todo := _stamp - 1
@@ -514,7 +562,8 @@ func _open(block: int) -> void:
 	PhysicsServer3D.free_rid(_solid[block])
 	_solid[block] = RID()
 	for i in _block_shards[block]:
-		if held[i] == 1:
+		# (Not for a shard about to come off: it would be for a step or two.)
+		if held[i] == 1 and _leaving[i] == 0:
 			var body := _static_body(shape_of(i), Transform3D(Basis(), centroid[i]))
 			_own[i] = body
 			_rid_shard[body] = i

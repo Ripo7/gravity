@@ -48,8 +48,28 @@ jobs:
           # Script errors mean something broke even if the checks passed.
           if grep -q "SCRIPT ERROR" tests.log; then echo "::error::script errors during tests"; exit 1; fi
 
-  export:
-    name: Web export
+  perf:
+    name: Physics perf gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: ~/.godot-ci
+          key: godot-${{ hashFiles('tools/godot_version.env') }}
+      - name: Install Godot
+        run: echo "GODOT=$(tools/install_godot.sh | tail -n1)" >> "$GITHUB_ENV"
+      - name: Import project
+        run: $GODOT --headless --path . --import
+      - name: Take the house apart at phone settings
+        shell: bash
+        run: |
+          set -o pipefail
+          # --fixed-fps: one physics step per frame, as fast as the machine goes.
+          $GODOT --headless --fixed-fps 60 --path . -- --mode=showcase --seed=1 --prof --quality=low 2>&1 \
+            | python3 tools/perf_gate.py --max-busy-ms 8
+
     needs: [test]
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -74,3 +94,29 @@ jobs:
         with:
           name: web
           path: build/web
+
+  web-probe:
+    name: Web probe (headless Chromium)
+    needs: [export]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: web
+          path: build/web
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install --no-save playwright@1.64.1 && npx playwright install --with-deps chromium
+      - name: Build the house and break it in WebGL2
+        shell: bash
+        run: set -o pipefail; node tools/web_probe.mjs build/web probe.png | tee probe.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: web-probe
+          path: |
+            probe.png
+            probe.txt
