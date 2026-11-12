@@ -6,11 +6,16 @@ config_version=5
 [application]
 
 config/name="Concept"
-config/description="Starting point for a new game concept."
+config/description="A destruction sandbox: take a house apart with a shock wave."
 config/version="0.1.0"
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 config/icon="res://icon.svg"
+
+[autoload]
+
+InputSetup="*res://scripts/core/input_setup.gd"
+Launch="*res://scripts/core/launch.gd"
 
 [debug]
 
@@ -29,6 +34,13 @@ window/vsync/vsync_mode=1
 
 pointing/emulate_touch_from_mouse=false
 pointing/emulate_mouse_from_touch=true
+
+[layer_names]
+
+3d_physics/layer_1="world"
+3d_physics/layer_2="structure"
+3d_physics/layer_3="debris"
+3d_physics/layer_4="player"
 
 [physics]
 

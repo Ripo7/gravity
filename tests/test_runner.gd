@@ -1,6 +1,6 @@
 extends Node
 ## Runs every tests/test_*.gd headlessly and exits with the failure count.
-## godot --headless --path . res://tests/test_runner.tscn [-- --only=main]
+## godot --headless --path . res://tests/test_runner.tscn [-- --only=house]
 ## A test fails on a failed check, and also on any script or engine error
 ## logged while it runs (a runtime error stops a test short of its checks).
 
