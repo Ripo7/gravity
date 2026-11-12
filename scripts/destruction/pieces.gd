@@ -17,9 +17,12 @@ const QUIET_TIME := 0.5
 ## strict: a heap settles sooner, when nobody can tell.
 const BUSY := 180
 const HURRY := 1.6
-## A piece that loses the energy of a stop from this speed (m/s) in one
-## step is damaged.
+## A piece of several shards is damaged once it has lost, in hits, the
+## energy of a stop from this speed (m/s): all at once in a hard landing, or
+## bit by bit if it comes down gently (a slab does not survive either).
 const BREAK_SPEED := 2.0
+## A loss smaller than this in a step (J/kg) is not a hit.
+const SCRAPE := 0.05
 ## Energy (J) it takes to crush 1 m3 into loose shards.
 const TOUGHNESS := 7.0e4
 ## Around where a piece is crushed, its bonds crack up to this far (m) per
@@ -70,6 +73,7 @@ var _xf: Array[Transform3D] = []
 var _lin := PackedVector3Array()
 var _ang := PackedVector3Array()
 var _quiet := PackedFloat32Array()
+var _bruise := PackedFloat32Array()  # energy lost in hits since it last broke (J/kg)
 var _serial := PackedInt32Array()
 var _free := PackedInt32Array()
 var _freeze := PackedInt32Array()
@@ -98,6 +102,7 @@ func setup(count: int) -> void:
 	_lin.resize(count)
 	_ang.resize(count)
 	_quiet.resize(count)
+	_bruise.resize(count)
 	_serial.resize(count)
 	_cell.resize(count)
 	_mark.resize(count)
@@ -178,6 +183,7 @@ func spawn(
 	_lin[i] = velocity
 	_ang[i] = spin
 	_quiet[i] = 0.0
+	_bruise[i] = 0.0
 	live += 1
 	awake += 1
 	s.mesh.set_body(i + 1, xf, centre)
@@ -375,10 +381,13 @@ func _moved(state: PhysicsDirectBodyState3D, i: int, serial: int) -> void:
 			if randf() < CRUMBLE_CHANCE * crumble_chance():
 				_hits.append([i, serial])
 		return
-	if lost < 0.5 * BREAK_SPEED * BREAK_SPEED:
+	if lost < SCRAPE:
 		return
 	var n := state.get_contact_count()
 	if n == 0:
+		return
+	_bruise[i] += lost
+	if _bruise[i] < 0.5 * BREAK_SPEED * BREAK_SPEED:
 		return
 	var total := 0.0
 	for k in n:
@@ -394,7 +403,8 @@ func _moved(state: PhysicsDirectBodyState3D, i: int, serial: int) -> void:
 			points.append(state.get_contact_local_position(k))
 			impulses.append(j)
 			owners.append(structure.owner_of(state.get_contact_collider(k)))
-	_hits.append([i, serial, points, impulses, owners, was, lost * mass[i]])
+	_hits.append([i, serial, points, impulses, owners, was, _bruise[i] * mass[i]])
+	_bruise[i] = 0.0
 
 
 ## A piece of several shards hit something hard. The energy it lost crushes
