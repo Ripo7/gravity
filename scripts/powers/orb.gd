@@ -30,11 +30,16 @@ const SWIRL := 3.0
 const DWINDLE := 1.6  ## m from the ball: from there a piece shrinks into it
 const GIVE_UP := 150  ## steps: a piece that has not made it by then is let go
 const CORE := 0.3  ## m: the size it shows before it has swallowed anything
+const INFLOW := 1.4  ## m round the ball: where the streaks of air start from
 const THROW := 26.0  ## m/s
 const FALL := 0.5  ## how much of gravity it feels in flight
 ## m3 of standing wall knocked out per m3 of ball, thrown at THROW.
 const POWER := 1.3
-const SPILL_PER_STEP := 30  ## shards given back per step when it bursts
+## When it bursts, the wall it hit is knocked out and its own shards are
+## given back over a few steps (m3 and shards per step): all in one step
+## would be a hitch.
+const CRUSH_PER_STEP := 1.2
+const SPILL_PER_STEP := 16
 const LIFE := 6.0  ## s in flight before it bursts by itself
 const AIR := Color(0.85, 0.92, 1.0)
 const SHADER := preload("res://shaders/orb.gdshader")
@@ -61,6 +66,7 @@ var _hit_at := Vector3.ZERO
 var _was := Vector3.ZERO  # its velocity before it hit
 var _age := 0.0
 var _burst_radius := 0.0
+var _to_crush := 0.0  # m3 of wall still to knock out
 
 
 func setup(s: Structure, from: Node3D) -> void:
@@ -81,7 +87,7 @@ func _ready() -> void:
 	_mesh.mesh = ball
 	_mesh.material_override = _mat
 	add_child(_mesh)
-	_inflow = Fx.make_inflow(int(Quality.pick(14, 20, 28)), 3.2)
+	_inflow = Fx.make_inflow(int(Quality.pick(14, 20, 28)), CORE + INFLOW)
 	add_child(_inflow)
 	centre = _hold_point()
 	_show()
@@ -288,8 +294,7 @@ func _burst() -> void:
 	_burst_radius = radius()
 	_free_body()
 	if _hit:
-		var hard := clampf(_was.length_squared() / (THROW * THROW), 0.15, 1.3)
-		structure.crush(at, volume * POWER * hard, _was * 0.5, maxf(1.6, _burst_radius + 1.0))
+		_to_crush = volume * POWER * clampf(_was.length_squared() / (THROW * THROW), 0.15, 1.3)
 	state = State.SPILL
 	_mesh.visible = false
 	var ring := BlastWave.spawn(
@@ -304,9 +309,14 @@ func _burst() -> void:
 	burst.emit(at, volume)
 
 
-## The shards it holds come back as loose pieces, thrown on and apart.
+## What it hit is knocked out, and the shards it holds come back as loose
+## pieces, thrown on and apart.
 func _spill() -> void:
 	var p := structure.pieces
+	if _to_crush > 0.0:
+		var now := minf(_to_crush, CRUSH_PER_STEP)
+		_to_crush -= now
+		structure.crush(_hit_at, now, _was * 0.5, maxf(1.6, _burst_radius + 1.0))
 	for n in mini(SPILL_PER_STEP, _held.size()):
 		var m := _held[_held.size() - 1]
 		_held.remove_at(_held.size() - 1)
@@ -317,7 +327,7 @@ func _spill() -> void:
 		var spin := Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * 8.0
 		volume -= structure.volume[m]
 		p.give(m, Transform3D(turned, at), v, spin, true)
-	if _held.is_empty():
+	if _held.is_empty() and _to_crush <= 0.0:
 		queue_free()
 
 
@@ -331,5 +341,10 @@ func _free_body() -> void:
 func _show() -> void:
 	_mesh.global_position = centre
 	_inflow.global_position = centre
+	# (From just around the ball: nearer the eye a streak would fill the view.)
+	var reach := radius() + INFLOW
+	_inflow.emission_sphere_radius = reach
+	_inflow.radial_accel_min = -2.0 * reach / (_inflow.lifetime * _inflow.lifetime)
+	_inflow.radial_accel_max = _inflow.radial_accel_min
 	_mesh.scale = Vector3.ONE * radius() * (1.0 + 0.1 * _pulse)
 	_mat.set_shader_parameter("power", (1.0 if state == State.GATHER else 0.6) + _pulse * 0.8)

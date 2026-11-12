@@ -1,7 +1,7 @@
 # Concept: breaking a house
 
-A first-person destruction test: a small greybox house and one power, a
-shock wave. Walls break into irregular shards where they are hit, and into
+A first-person destruction test: a small greybox house and two powers, a
+shock wave and an orb that gathers the debris to throw it back. Walls break into irregular shards where they are hit, and into
 smaller crumbs where they are hit hardest; what is no longer held up falls,
 and breaks again when it lands. Nothing disappears: the rubble stays and you
 can climb on it.
@@ -19,6 +19,7 @@ The previous project, Gravity, is kept as it was on the branch
 | Move | WASD (by position, so ZQSD on AZERTY) / arrows | left stick |
 | Look | mouse | drag on the right half |
 | Shock wave | left click or F | blue button |
+| Orb | hold right click or E, let go to throw | hold the orange button, let go to throw |
 | Jump | space | small button |
 | Rebuild the house | R | "Reconstruire" |
 
@@ -81,6 +82,16 @@ whose front moves at 45 m/s. It tears out the shards it hits hard enough,
 cracks the bonds of the others, and is mostly stopped by what holds: a wall
 shelters what is behind it, a hole lets it through.
 
+The orb (`scripts/powers/orb.gd`) is held, then thrown. While you hold the
+button, loose pieces within 11 m that it can see (not what is behind a wall)
+rise, wind in and dwindle into a ball in front of you, 14 at a time; each one
+that arrives is taken out of the world and the ball grows by exactly its
+volume, up to 5 m3 (a ball about 2 m across). Let go and it flies to what the
+crosshair points at, through loose debris. Where it hits the ground or the
+house it knocks out 1.3 m3 of wall per m3 of ball, then bursts: every shard
+it swallowed comes back as a piece of its own. Nothing is lost on the way:
+the volume in the ball is counted with the rest.
+
 Quality tiers (`scripts/core/quality.gd`: phone, browser, desktop) change
 the dust, the decorative bits and how many crumbs there can be. The house,
 its shards and what holds are the same everywhere.
@@ -104,8 +115,9 @@ browser as `index.html?mode=...`:
 # A fixed tour that takes the house apart, with the cost of the physics.
 godot --headless --fixed-fps 60 --path . -- --mode=showcase --seed=1 --prof --quality=low \
   | python3 tools/perf_gate.py
-# Your own steps: aim, shock wave, wait, walk forward...
+# Your own steps: aim, shock wave, wait, walk forward, gather, throw...
 godot --path . -- --mode=play --from=-2.5,0.05,4.2 --steps="a@-2.5,1.4,-0.6;o;w2;f0.8;o;w3"
+godot --path . -- --mode=play --from=0,0.05,8.5 --steps="o@-1.5,1.4,2.7;w2;g;w4;a@0,4.2,-0.6;t;w4"
 # How loaded the house is as built (1 = a bond breaks).
 godot --headless --path . -- --mode=check
 ```
@@ -116,11 +128,12 @@ Add `--write-movie out.avi --fixed-fps 30` before `--path` to record a run.
 
 - `tests/`: a small headless runner; files `tests/test_*.gd`, methods
   `test_*` (they may `await`). They cover the cut (volumes, shared faces),
-  what holds and what falls, the shock wave on the house, and the controls.
+  what holds and what falls, the shock wave on the house, the orb, and the
+  controls.
 - `tools/perf_gate.py`: reads a profiled showcase and fails when the
   physics gets too slow.
 - `tools/web_probe.mjs`: loads the web export in headless Chromium, breaks
-  the house and fails on any error (`npm install playwright`, then
+  the house, gathers an orb and throws it, and fails on any error (`npm install playwright`, then
   `node tools/web_probe.mjs build/web shot.png`). WebGL2 is stricter than
   desktop OpenGL: two bugs only showed there.
 - `.github/workflows/ci.yml` runs lint, tests, the perf gate, the web
@@ -147,6 +160,11 @@ once), 8 seeds, twice:
 - the same kind of tour of the archived Gravity (another scene, measured in
   real time, so only an order of magnitude) averaged 5 ms per step while
   things moved.
+
+The orb, same machine and settings (the balcony brought down, 5 m3 gathered
+and thrown at the upper floor, 4 seeds): gathering costs 0.2 to 0.5 ms per
+step; the step it bursts in takes 7.5 to 8.5 ms, then 1.5 to 1.9 ms per step
+while the 200 or so shards it gives back fly and settle.
 
 Not measured: a real phone. The line at the top left is there for that.
 

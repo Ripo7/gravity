@@ -111,6 +111,7 @@ func _play() -> void:
 		elif kind == "g":
 			# The orb button goes down; "t" lets it go.
 			player.touch_gather = true
+			print("GATHER pieces=%d" % world.structure.pieces.live)
 		elif kind == "t":
 			var held: Orb = world.orb
 			var inside := held.volume if held != null and is_instance_valid(held) else 0.0
