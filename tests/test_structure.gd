@@ -81,6 +81,55 @@ func test_what_sticks_out_too_far_snaps_off() -> void:
 	await _end()
 
 
+func test_a_shard_hit_hard_breaks_into_crumbs() -> void:
+	await _begin()
+	s.add_box(Transform3D(Basis(), Vector3(0, 1.5, 0)), Vector3(4, 3, 0.35))
+	s.build()
+	check_eq(s.total, s.count, "no crumbs to begin with")
+	var big := 0
+	for i in s.count:
+		big += int(s.can_crumble(i))
+	check(big > s.count / 2, "most shards are big enough to crumble (%d of %d)" % [big, s.count])
+	# A shard in the middle of the wall.
+	var hit := -1
+	for i in s.count:
+		if s.centroid[i].distance_to(Vector3(0, 1.5, 0)) < 0.6 and s.can_crumble(i):
+			hit = i
+			break
+	check(hit >= 0, "there is a shard in the middle")
+	s.shatter(hit, Vector3(0, 0, -6))
+	await frames(3)
+	var bits := s.crumb_count[hit]
+	check_eq(s.held[hit], 0, "it no longer stands")
+	check(bits >= 2, "it is in several crumbs (%d)" % bits)
+	check_eq(s.pieces.live, bits, "each of them a piece")
+	check_eq(s.total, s.count + bits, "numbered after the shards")
+	var volume := 0.0
+	for c in range(s.crumb_first[hit], s.crumb_first[hit] + bits):
+		volume += s.volume[c]
+	check_near(volume, s.volume[hit], s.volume[hit] * 1e-3, "that add up to the shard")
+	check_near(s.standing_volume() + s.pieces.volume(), s.total_volume, 1e-3, "nothing vanished")
+	await frames(60)
+	check(s.place_of(hit).z < -0.5, "they were thrown through (%.1f m)" % s.place_of(hit).z)
+	check_eq(s.held_count, s.count - 1, "the rest of the wall stands")
+	await _end()
+
+
+func test_crumbs_stop_when_there_is_no_room_left() -> void:
+	await _begin()
+	s.most_crumbs = 14
+	s.add_box(Transform3D(Basis(), Vector3(0, 1.5, 0)), Vector3(4, 3, 0.35))
+	s.build()
+	for i in s.count:
+		s.shatter(i, Vector3(0, 0, -6))
+		await frames(1)
+	check(s.total > s.count, "some crumbs were made (%d)" % (s.total - s.count))
+	check(s.total - s.count <= 14, "never more than there is room for")
+	check_eq(s.held_count, 0, "every shard left all the same")
+	check_near(s.pieces.volume(), s.total_volume, 1e-3, "nothing vanished")
+	await _end()
+
+
 func test_pieces_come_to_rest_and_wake_when_disturbed() -> void:
 	await _begin()
 	s.add_box(Transform3D(Basis(), Vector3(0, 2.5, 0)), Vector3(2, 0.3, 2))
@@ -91,15 +140,17 @@ func test_pieces_come_to_rest_and_wake_when_disturbed() -> void:
 	check(p.live > 3, "it broke up (%d pieces)" % p.live)
 	check_eq(p.awake, 0, "every piece came to rest")
 	check_eq(p.asleep, p.live, "and was frozen")
+	# The piece on top of the heap: nothing lies on it.
 	var first := -1
-	for i in p.alive.size():
-		if p.alive[i] == 1:
+	for i in p.top:
+		if p.alive[i] == 1 and (first < 0 or p.transform_of(i).origin.y > p.transform_of(first).origin.y):
 			first = i
-			break
+	var was := p.transform_of(first).origin.y
 	p.push(first, Vector3(0, 6, 0))
 	await frames(5)
 	check(p.awake >= 1, "a push wakes it")
-	check(p.transform_of(first).origin.y > 0.3, "and it moves")
+	var rose := p.transform_of(first).origin.y - was
+	check(rose > 0.1, "and it moves (up %.2f m)" % rose)
 	await frames(240)
 	check_eq(p.awake, 0, "then rests again")
 	await _end()

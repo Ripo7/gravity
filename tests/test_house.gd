@@ -54,12 +54,14 @@ func test_a_shock_wave_up_close_makes_a_hole_and_the_wall_shelters() -> void:
 		var p := _local(i)
 		if p.z < -3.1 and p.y < 3.0 and s.held[i] == 0:
 			hole += 1
-			var now := main.house_at.affine_inverse() * s.pieces.transform_of(s.piece_of[i]).origin
+			var now := main.house_at.affine_inverse() * s.place_of(i)
 			if now.z > -3.0:
 				thrown_in += 1
 		if absf(p.x + 2.5) < 0.3 and absf(p.z) < 0.3 and p.y < 3.0:
 			pillar += Vector2i(1, s.held[i])
 	check(hole >= 6 and hole < 60, "a hole, not the whole wall (%d shards)" % hole)
+	check(s.crumbled_count >= 2, "the shards hit hardest left in crumbs (%d)" % s.crumbled_count)
+	check(s.pieces.live > hole, "so there are more pieces than shards torn (%d)" % s.pieces.live)
 	check(thrown_in >= hole / 2, "what it tore out was thrown inside (%d of %d)" % [thrown_in, hole])
 	check_eq(pillar.y, pillar.x, "the pillar behind the wall was sheltered")
 	check(s.held_count > s.count * 0.9, "the house stands (%d of %d)" % [s.held_count, s.count])

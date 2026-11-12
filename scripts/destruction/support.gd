@@ -20,7 +20,7 @@ extends RefCounted
 const GRAVITY := 9.8
 ## Stress (Pa) a whole bond takes before it breaks. Tuned on the house: as
 ## built, its most loaded bond is at about half of this (--mode=check).
-const STRENGTH := 1.2e6
+const STRENGTH := 9.0e5
 ## Share of a load pressing straight down through a bond that strains it.
 const SQUEEZE := 0.08
 ## How much a load out to the side levers a bond.
@@ -30,8 +30,8 @@ const LEVER := 2.0
 const BREAKS := 40
 const SNAP := 2.0
 ## Shards dealt with per physics step, in each half of a look.
-const REACH_PER_STEP := 400
-const WEIGH_PER_STEP := 600
+const REACH_PER_STEP := 300
+const WEIGH_PER_STEP := 400
 ## What advance() returns.
 const WORKING := 0
 const REACHED := 1  ## `unheld` is ready

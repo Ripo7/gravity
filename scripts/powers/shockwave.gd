@@ -102,7 +102,7 @@ func _hit_standing(far: float) -> void:
 			continue
 		var off := s.centroid[i] - origin
 		var away := off / maxf(d, 0.01)
-		var window := _window(off, s.radius[i] * 0.7)
+		var window := _window(off, s.radius[i] * 0.6)
 		var force := FORCE * strength(d) * _side(away) * _let_through(window)
 		var speed := THROW * sqrt(strength(d)) * randf_range(0.6, 1.1)
 		s.strike(i, force, away * speed + Vector3.UP * 1.5)
@@ -115,7 +115,7 @@ func _hit_standing(far: float) -> void:
 ## ones less.
 func _hit_pieces(near: float, far: float) -> void:
 	var p := structure.pieces
-	for i in p.alive.size():
+	for i in p.top:
 		if p.alive[i] == 0:
 			continue
 		var off := p.transform_of(i).origin - origin

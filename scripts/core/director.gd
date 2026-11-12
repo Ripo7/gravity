@@ -184,7 +184,7 @@ func _end(tag: String) -> void:
 	var s := world.structure
 	print(
 		(
-			"%s standing=%d/%d pieces=%d most_awake=%d volume=%.2f/%.2f"
+			"%s standing=%d/%d pieces=%d most_awake=%d volume=%.2f/%.2f crumbs=%d"
 			% [
 				tag,
 				s.held_count,
@@ -193,6 +193,7 @@ func _end(tag: String) -> void:
 				_most_awake,
 				s.standing_volume() + s.pieces.volume(),
 				s.total_volume,
+				s.total - s.count,
 			]
 		)
 	)
