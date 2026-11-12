@@ -122,7 +122,8 @@ godot --path . -- --mode=play --from=0,0.05,8.5 --steps="o@-1.5,1.4,2.7;w2;g;w4;
 godot --headless --path . -- --mode=check
 ```
 
-Add `--write-movie out.avi --fixed-fps 30` before `--path` to record a run.
+Add `--write-movie out.avi --fixed-fps 30` before `--path` to record a run,
+and `--touch` after `--` to see the thumb controls on a desktop.
 
 ## Checks
 

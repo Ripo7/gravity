@@ -44,7 +44,7 @@ static func make_inflow(amount: int, reach: float) -> CPUParticles3D:
 	m.vertex_color_use_as_albedo = true
 	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	var line := BoxMesh.new()
-	line.size = Vector3(0.035, 0.9, 0.035)
+	line.size = Vector3(0.02, 0.7, 0.02)
 	line.material = m
 	var p := CPUParticles3D.new()
 	p.mesh = line
@@ -61,7 +61,7 @@ static func make_inflow(amount: int, reach: float) -> CPUParticles3D:
 	p.particle_flag_align_y = true
 	p.scale_amount_min = 0.5
 	p.scale_amount_max = 1.2
-	p.color = Color(0.8, 0.9, 1.0, 0.55)
+	p.color = Color(0.8, 0.9, 1.0, 0.45)
 	var ramp := Gradient.new()
 	ramp.set_color(0, Color(1, 1, 1, 0))
 	ramp.set_color(1, Color(1, 1, 1, 0))

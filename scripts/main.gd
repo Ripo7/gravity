@@ -54,7 +54,9 @@ func _ready() -> void:
 	hud.world = self
 	ui.add_child(hud)
 	hud.rebuild_pressed.connect(rebuild)
-	if TouchControls.should_show():
+	var options: Dictionary = get_node("/root/Launch").options
+	# (--touch: the thumb controls on a desktop, to look at them.)
+	if TouchControls.should_show() or options.has("touch"):
 		var touch := TouchControls.new()
 		touch.player = player
 		ui.add_child(touch)
@@ -70,7 +72,6 @@ func _ready() -> void:
 			]
 		)
 	)
-	var options: Dictionary = get_node("/root/Launch").options
 	if options.has("mode"):
 		var director := Director.new()
 		director.options = options
