@@ -25,14 +25,15 @@ const SHRINK := 0.96
 const TOUCH := 0.02
 ## A bond smaller than this (m2) is not worth keeping.
 const MIN_BOND := 0.004
-## Physics steps between two looks at what still holds: a collapse spreads
-## over a few frames instead of happening all at once.
-const LOOK_EVERY := 2
 ## What comes off in one go is cut in pieces of at most this many shards.
 const MAX_CHUNK := 45
 ## A blast below this does nothing to a shard; at 1 it tears it out.
 const CRACK := 0.3
 const CELL := 1.0  ## m, the grid used to find shards near a point
+const WARM_PER_STEP := 6
+## While whole, a box collides as a few plain blocks of at most this size
+## (m); the first shard to leave a block turns it into its shards.
+const BLOCK := 2.5
 
 var count := 0
 ## Per shard: where it stands (its centre of mass), size, and its state.
@@ -60,7 +61,7 @@ var total_volume := 0.0
 var mesh: ShardMesh
 var pieces: Pieces
 var support := Support.new()
-var solve_usec := 0  ## time the last look at what holds took (the longer half)
+var solve_usec := 0  ## the longest step of the last look at what holds
 var cut_seed := 1
 
 var _lo := PackedVector3Array()
@@ -68,20 +69,23 @@ var _hi := PackedVector3Array()
 var _shape: Array[RID] = []
 var _own: Array[RID] = []  # a standing shard's own static body, once its box is broken
 var _kick := PackedVector3Array()  # push received while standing, used if it comes off
-var _solid: Array[RID] = []  # per box: one body while it is whole
-var _box_shape: Array[RID] = []
 var _box_shards: Array[PackedInt32Array] = []
 var _box_lo := PackedVector3Array()
 var _box_hi := PackedVector3Array()
+var _box_blocks: Array[PackedInt32Array] = []
+# Per block of a box: its body while it is whole, its shape, shards, bounds.
+var _solid: Array[RID] = []
+var _block_shape: Array[RID] = []
+var _block_shards: Array[PackedInt32Array] = []
+var _block_lo := PackedVector3Array()
+var _block_hi := PackedVector3Array()
 var _rid_shard := {}
-var _rid_box := {}
+var _rid_block := {}
 var _cells := {}  # Vector3i -> PackedInt32Array of shards standing there when built
 var _mark := PackedInt32Array()
 var _stamp := 0
 var _dirty := false
-var _weigh := false
-var _tick := 0
-var _next_look := 0
+var _warm := 0
 var _kicked := PackedInt32Array()
 var _built := false
 # Only while building: every shard's corners and faces in the world.
@@ -108,7 +112,7 @@ func _exit_tree() -> void:
 	for rid in _shape:
 		if rid.is_valid():
 			PhysicsServer3D.free_rid(rid)
-	for rid in _box_shape:
+	for rid in _block_shape:
 		PhysicsServer3D.free_rid(rid)
 
 
@@ -166,16 +170,11 @@ func add_box(xf: Transform3D, size: Vector3, tint := Color.WHITE, grain := GRAIN
 		box_lo = box_lo.min(lo)
 		box_hi = box_hi.max(hi)
 		total_volume += sh.volume
-		mesh.add_shard(i, world, sh, xf.basis, tint)
+		mesh.add_shard(i, base, world, sh, xf.basis, tint)
 	_box_shards.append(mine)
 	_box_lo.append(box_lo)
 	_box_hi.append(box_hi)
-	var shape := PhysicsServer3D.box_shape_create()
-	PhysicsServer3D.shape_set_data(shape, size * 0.5)
-	_box_shape.append(shape)
-	var body := _static_body(shape, xf)
-	_solid.append(body)
-	_rid_box[body] = box
+	_add_blocks(xf, size, cut, base)
 	return box
 
 
@@ -202,28 +201,31 @@ func build(ground := 0.0) -> void:
 
 
 func _physics_process(_delta: float) -> void:
-	_tick += 1
-	if _tick < _next_look:
-		return
-	# Two halves on two different steps, so neither is long: first what is
-	# still reached from the ground, then what is overloaded.
-	var t := Time.get_ticks_usec()
-	if _weigh:
-		_weigh = false
-		_next_look = _tick + LOOK_EVERY
-		for b in support.overloaded(self):
-			break_bond(b)
-		solve_usec = maxi(solve_usec, Time.get_ticks_usec() - t)
-	elif _dirty:
+	# Collision shapes are made a few per step from the start, so that the
+	# first blast does not have to make a whole wall's worth at once.
+	for n in WARM_PER_STEP:
+		if _warm >= count:
+			break
+		shape_of(_warm)
+		_warm += 1
+	if not support.busy:
+		if not _dirty:
+			return
 		_dirty = false
-		_weigh = true
-		_next_look = _tick + LOOK_EVERY
-		for group in support.unheld(self):
-			_let_go(group)
-		for i in _kicked:
-			_kick[i] = Vector3.ZERO
-		_kicked.clear()
-		solve_usec = Time.get_ticks_usec() - t
+		support.begin(self)
+		solve_usec = 0
+	var t := Time.get_ticks_usec()
+	match support.advance(self):
+		Support.REACHED:
+			for group in support.unheld:
+				_let_go(group)
+			for i in _kicked:
+				_kick[i] = Vector3.ZERO
+			_kicked.clear()
+		Support.WEIGHED:
+			for b in support.overloaded:
+				break_bond(b)
+	solve_usec = maxi(solve_usec, Time.get_ticks_usec() - t)
 
 
 ## The shards that stood within `reach` of `at` when the building was whole
@@ -304,13 +306,13 @@ func break_bond(b: int) -> void:
 		_dirty = true
 
 
-## What a physics body is: a standing shard (its index), a whole box
-## (-1 - box), or nothing of this structure (-1000000).
+## What a physics body is: a standing shard (its index), a whole block of
+## a box (-1 - block), or nothing of this structure (-1000000).
 func owner_of(rid: RID) -> int:
 	if _rid_shard.has(rid):
 		return _rid_shard[rid]
-	if _rid_box.has(rid):
-		return -1 - int(_rid_box[rid])
+	if _rid_block.has(rid):
+		return -1 - int(_rid_block[rid])
 	return -1000000
 
 
@@ -476,8 +478,18 @@ func _release(group: PackedInt32Array, velocity: Vector3, spin := Vector3.ZERO) 
 	held_count -= group.size()
 	var reuse := RID()
 	for i in group:
-		if _solid[element[i]].is_valid():
-			_open(element[i])
+		# The whole blocks it was part of (or reached into) become shards.
+		for block in _box_blocks[element[i]]:
+			if (
+				_solid[block].is_valid()
+				and _lo[i].x < _block_hi[block].x
+				and _hi[i].x > _block_lo[block].x
+				and _lo[i].y < _block_hi[block].y
+				and _hi[i].y > _block_lo[block].y
+				and _lo[i].z < _block_hi[block].z
+				and _hi[i].z > _block_lo[block].z
+			):
+				_open(block)
 		# Its bonds to what it leaves behind are gone.
 		for k in range(adj_first[i], adj_first[i + 1]):
 			if _mark[adj_other[k]] != _stamp:
@@ -495,17 +507,46 @@ func _release(group: PackedInt32Array, velocity: Vector3, spin := Vector3.ZERO) 
 	released.emit(at / size, size, velocity)
 
 
-## A whole box takes its first damage: from now on each of its standing
+## A whole block takes its first damage: from now on each of its standing
 ## shards has its own body, so holes are real.
-func _open(box: int) -> void:
-	_rid_box.erase(_solid[box])
-	PhysicsServer3D.free_rid(_solid[box])
-	_solid[box] = RID()
-	for i in _box_shards[box]:
+func _open(block: int) -> void:
+	_rid_block.erase(_solid[block])
+	PhysicsServer3D.free_rid(_solid[block])
+	_solid[block] = RID()
+	for i in _block_shards[block]:
 		if held[i] == 1:
 			var body := _static_body(shape_of(i), Transform3D(Basis(), centroid[i]))
 			_own[i] = body
 			_rid_shard[body] = i
+
+
+## The plain blocks a whole box collides as, and which shards are in each.
+func _add_blocks(xf: Transform3D, size: Vector3, cut: Array[Fracture.Shard], base: int) -> void:
+	var n := Vector3i((size / BLOCK).ceil()).maxi(1)
+	var each := size / Vector3(n)
+	var first := _solid.size()
+	var blocks := PackedInt32Array()
+	for z in n.z:
+		for y in n.y:
+			for x in n.x:
+				var shape := PhysicsServer3D.box_shape_create()
+				PhysicsServer3D.shape_set_data(shape, each * 0.5)
+				var middle := (Vector3(x, y, z) + Vector3.ONE * 0.5) * each - size * 0.5
+				var body := _static_body(shape, xf * Transform3D(Basis(), middle))
+				var bounds := xf * AABB(middle - each * 0.5, each)
+				_rid_block[body] = _solid.size()
+				blocks.append(_solid.size())
+				_solid.append(body)
+				_block_shape.append(shape)
+				_block_shards.append(PackedInt32Array())
+				_block_lo.append(bounds.position)
+				_block_hi.append(bounds.end)
+	for k in cut.size():
+		var at := Vector3i(((cut[k].centroid + size * 0.5) / each).floor()).clamp(
+			Vector3i.ZERO, n - Vector3i.ONE
+		)
+		_block_shards[first + (at.z * n.y + at.y) * n.x + at.x].append(base + k)
+	_box_blocks.append(blocks)
 
 
 func _static_body(shape: RID, xf: Transform3D) -> RID:

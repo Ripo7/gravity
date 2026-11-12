@@ -3,16 +3,19 @@ extends RefCounted
 ## Decides what still stands in a Structure.
 ## 1. Reach: starting from the shards on the ground and going from bond to
 ##    bond, every shard reached is held; the others have nothing under them
-##    any more and come off (unheld()).
+##    any more and come off (unheld).
 ## 2. Load: each shard hangs its weight on the neighbours one step nearer
 ##    the ground, and so on down. A bond that carries too much for its size
-##    breaks (overloaded()). Pressed straight down a bond is strong; pulled
+##    breaks (overloaded). Pressed straight down a bond is strong; pulled
 ##    or sheared sideways it is weak; and what sticks out sideways levers
 ##    the bonds at its root, the more the farther it sticks out (a slab
 ##    that lost its pillars, a wall over a wide gap).
 ## It is a rough model, far from real engineering, but it gives what the eye
 ## expects: a hole in a wall holds, a wide gap brings down what is above it,
 ## a slab that lost its pillars snaps off.
+## A look at the whole building is spread over several physics steps
+## (advance()), a few hundred shards at a time, so no step is long. Bonds
+## that break meanwhile are simply seen by the next look.
 
 const GRAVITY := 9.8
 ## Stress (Pa) a whole bond takes before it breaks. Tuned on the house: as
@@ -24,8 +27,15 @@ const SQUEEZE := 0.08
 const LEVER := 2.0
 ## Bonds over their limit broken in one look, worst first. Those far over
 ## it (a ratio above SNAP) all go at once.
-const BREAKS := 24
+const BREAKS := 40
 const SNAP := 2.0
+## Shards dealt with per physics step, in each half of a look.
+const REACH_PER_STEP := 400
+const WEIGH_PER_STEP := 600
+## What advance() returns.
+const WORKING := 0
+const REACHED := 1  ## `unheld` is ready
+const WEIGHED := 2  ## `overloaded` is ready, the look is over
 
 ## A bond much smaller than the biggest one its shard has is a sliver: the
 ## shard is not counted as hanging on it while it has better.
@@ -37,7 +47,19 @@ const WEDGE := 0.35
 var level := PackedInt32Array()
 ## The worst load / strength seen in the last look (1 = at the limit).
 var worst := 0.0
+## After REACHED: the standing shards that nothing holds any more, grouped
+## by what is still bonded together.
+var unheld: Array[PackedInt32Array] = []
+## After WEIGHED: the bonds that carry more than they can, worst first.
+var overloaded := PackedInt32Array()
+## True while a look is under way.
+var busy := false
 
+var _stage := 0  # 0 reach through good bonds, 1 through any, 2 weigh
+var _head := 0
+var _worst := 0.0
+var _over: Array[Vector2] = []  # (-ratio, bond)
+var _skipped := PackedInt32Array()  # entries of adj_bond not followed: slivers
 var _order := PackedInt32Array()
 var _hold := PackedFloat32Array()  # area of the bonds each shard hangs on
 var _wedge := PackedFloat32Array()  # the area it is judged on (see WEDGE)
@@ -80,22 +102,76 @@ func setup(s: Structure) -> void:
 			_lean[k] = Vector2(to.x, to.z).length() * (1.0 - down) * (1.0 - down) if to.y <= 0.0 else length
 
 
-## The standing shards that nothing holds any more, grouped by what is
-## still bonded together.
-func unheld(s: Structure) -> Array[PackedInt32Array]:
+## Starts a look at what holds.
+func begin(s: Structure) -> void:
+	busy = true
+	_stage = 0
+	_head = 0
 	level.fill(-1)
 	_order.clear()
+	_skipped.clear()
 	for i in s.count:
 		if s.held[i] == 1 and s.anchored[i] == 1:
 			level[i] = 0
 			_order.append(i)
-	_spread(s, true)
-	if _order.size() < s.held_count:
-		# What only slivers hold is reached last, from everything else.
-		_spread(s, false)
-	var out: Array[PackedInt32Array] = []
-	if _order.size() == s.held_count:
-		return out
+
+
+## Goes on with the look for one physics step. Returns REACHED when
+## `unheld` is ready, WEIGHED when `overloaded` is (and the look is over),
+## WORKING otherwise.
+func advance(s: Structure) -> int:
+	if _stage < 2:
+		_head = _spread(s, _head, _head + REACH_PER_STEP, _stage == 0)
+		if _head < _order.size():
+			return WORKING
+		if _stage == 0:
+			# What only slivers hold is reached last, from everything else.
+			_stage = 1
+			for k in _skipped:
+				var j := s.adj_other[k]
+				if level[j] < 0 and s.held[j] == 1 and s.bond_health[s.adj_bond[k]] > 0.0:
+					level[j] = level[_owner_of(s, k)] + 1
+					_order.append(j)
+			if _head < _order.size():
+				return WORKING
+		_group_unheld(s)
+		_stage = 2
+		_head = _order.size() - 1
+		_worst = 0.0
+		_over.clear()
+		for i in _order:
+			_carry[i] = s.mass[i]
+			_lever[i] = 0.0
+		return REACHED
+	_head = _weigh(s, _head, _head - WEIGH_PER_STEP)
+	if _head >= 0:
+		return WORKING
+	worst = _worst
+	_over.sort()
+	overloaded.clear()
+	for o in _over:
+		if overloaded.size() >= BREAKS and -o.x < SNAP:
+			break
+		overloaded.append(int(o.y))
+	busy = false
+	return WEIGHED
+
+
+## The whole look at once (for tools and tests): returns what advance()
+## last returned, WEIGHED.
+func look(s: Structure) -> void:
+	begin(s)
+	while advance(s) != WEIGHED:
+		pass
+
+
+## The shard whose list of bonds holds entry `k`.
+func _owner_of(s: Structure, k: int) -> int:
+	return s.bond_a[s.adj_bond[k]] if s.bond_b[s.adj_bond[k]] == s.adj_other[k] else s.bond_b[s.adj_bond[k]]
+
+
+func _group_unheld(s: Structure) -> void:
+	unheld.clear()
 	_seen.fill(0)
 	for start in s.count:
 		if s.held[start] == 0 or level[start] >= 0 or _seen[start] == 1:
@@ -108,24 +184,58 @@ func unheld(s: Structure) -> Array[PackedInt32Array]:
 			head += 1
 			for k in range(s.adj_first[i], s.adj_first[i + 1]):
 				var j := s.adj_other[k]
-				if _seen[j] == 0 and s.held[j] == 1 and s.bond_health[s.adj_bond[k]] > 0.0:
+				if _seen[j] == 0 and level[j] < 0 and s.held[j] == 1 and s.bond_health[s.adj_bond[k]] > 0.0:
 					_seen[j] = 1
 					group.append(j)
-		out.append(group)
-	return out
+		unheld.append(group)
 
 
-## The bonds that carry more than they can, worst first (uses who hangs on
-## whom as unheld() last worked it out).
-func overloaded(s: Structure) -> PackedInt32Array:
-	for i in _order:
-		_carry[i] = s.mass[i]
-		_lever[i] = 0.0
-	var over: Array[Vector2] = []  # (-ratio, bond)
-	worst = 0.0
-	# From the farthest shards down to the ground.
-	for n in range(_order.size() - 1, -1, -1):
-		var i := _order[n]
+## Goes from the shards reached so far (from `head` in the order, up to
+## `stop`) to the standing shards bonded to them, and notes for each what it
+## hangs on. `good_only`: not through slivers. Returns where it stopped.
+func _spread(s: Structure, head: int, stop: int, good_only: bool) -> int:
+	while head < _order.size() and head < stop:
+		var i := _order[head]
+		head += 1
+		var here := level[i]
+		var hold := 0.0
+		var all := 0.0
+		var out := INF
+		for k in range(s.adj_first[i], s.adj_first[i + 1]):
+			var b := s.adj_bond[k]
+			if s.bond_health[b] <= 0.0:
+				continue
+			var j := s.adj_other[k]
+			var theirs := level[j]
+			if theirs < 0:
+				if s.held[j] == 0:
+					continue
+				all += s.bond_area[b]
+				if good_only and _good[k] == 0:
+					_skipped.append(k)
+					continue
+				level[j] = here + 1
+				_order.append(j)
+			else:
+				all += s.bond_area[b]
+				if theirs == here - 1:
+					hold += s.bond_area[b]
+					out = minf(out, _out[j] + _lean[k])
+		_hold[i] = hold
+		# A shard wedged between its neighbours leans on them too: it is
+		# never judged on a sliver alone while it has other bonds.
+		_wedge[i] = maxf(hold, all * WEDGE)
+		_out[i] = 0.0 if here == 0 else out
+	return head
+
+
+## Hangs each shard's load on what holds it, from the farthest shards down
+## to the ground (from `head` in the order, down to `stop`), and notes the
+## bonds that carry too much. Returns where it stopped.
+func _weigh(s: Structure, head: int, stop: int) -> int:
+	while head >= 0 and head > stop:
+		var i := _order[head]
+		head -= 1
 		var hold := _hold[i]
 		if hold <= 0.0 or s.held[i] == 0:
 			continue
@@ -151,52 +261,8 @@ func overloaded(s: Structure) -> PackedInt32Array:
 			_carry[j] += load * share
 			_lever[j] += moment * share
 			var ratio := push * (1.0 - down * (1.0 - SQUEEZE) + LEVER * moment / load / depth) / health
-			if ratio > worst:
-				worst = ratio
+			if ratio > _worst:
+				_worst = ratio
 			if ratio > 1.0:
-				over.append(Vector2(-ratio, b))
-	over.sort()
-	var broken := PackedInt32Array()
-	for o in over:
-		if broken.size() >= BREAKS and -o.x < SNAP:
-			break
-		broken.append(int(o.y))
-	return broken
-
-
-## Goes from the shards reached so far to the standing shards bonded to
-## them, step by step, and notes for each what it hangs on. `good_only`: not
-## through slivers.
-func _spread(s: Structure, good_only: bool) -> void:
-	var head := 0
-	while head < _order.size():
-		var i := _order[head]
-		head += 1
-		var here := level[i]
-		var hold := 0.0
-		var all := 0.0
-		var out := INF
-		for k in range(s.adj_first[i], s.adj_first[i + 1]):
-			var b := s.adj_bond[k]
-			if s.bond_health[b] <= 0.0:
-				continue
-			var j := s.adj_other[k]
-			var theirs := level[j]
-			if theirs < 0:
-				if s.held[j] == 0:
-					continue
-				all += s.bond_area[b]
-				if good_only and _good[k] == 0:
-					continue
-				level[j] = here + 1
-				_order.append(j)
-			else:
-				all += s.bond_area[b]
-				if theirs == here - 1:
-					hold += s.bond_area[b]
-					out = minf(out, _out[j] + _lean[k])
-		_hold[i] = hold
-		# A shard wedged between its neighbours leans on them too: it is
-		# never judged on a sliver alone while it has other bonds.
-		_wedge[i] = maxf(hold, all * WEDGE)
-		_out[i] = 0.0 if here == 0 else out
+				_over.append(Vector2(-ratio, b))
+	return head

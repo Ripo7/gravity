@@ -4,6 +4,7 @@ extends Node
 ##   --mode=play --steps="a@x,y,z;o;w1.5" [--from=x,y,z]
 ##        steps separated by ";": "o" a shock wave ("o@x,y,z" aims first),
 ##        "a@x,y,z" look there, "m<x,y,z>" go there, "w<seconds>" wait,
+##        "f<seconds>" walk forward,
 ##        "c@x0,y0,z0,x1,y1,z1" knock out what stands in that box.
 ##   --mode=showcase   a fixed tour that takes the house apart
 ##   --mode=still [--pos=x,y,z --at=x,y,z --wait=S]   just look
@@ -20,7 +21,6 @@ var _most_awake := 0
 func _ready() -> void:
 	world = get_parent() as Main
 	player = world.player
-	player.input_enabled = false
 	if options.has("seed"):
 		seed(int(options["seed"]))
 	if options.has("prof"):
@@ -91,6 +91,11 @@ func _play() -> void:
 			player.global_position = _vec(spec.substr(1))
 		elif kind == "a":
 			_aim(_vec(spec.substr(2)))
+		elif kind == "f":
+			player.touch_move = Vector2(0, -1)
+			await _wait(float(spec.substr(1)))
+			player.touch_move = Vector2.ZERO
+			print("WALKED to %s (on floor: %s)" % [player.global_position, player.is_on_floor()])
 		elif kind == "c":
 			var box := spec.substr(2).split_floats(",")
 			_cut(

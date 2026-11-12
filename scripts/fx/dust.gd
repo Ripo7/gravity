@@ -20,7 +20,7 @@ func _ready() -> void:
 	soft.width = 64
 	soft.height = 64
 	var g := Gradient.new()
-	g.set_color(0, Color(1, 1, 1, 0.55))
+	g.set_color(0, Color(1, 1, 1, 0.4))
 	g.set_color(1, Color(1, 1, 1, 0))
 	soft.gradient = g
 	var mat := StandardMaterial3D.new()
@@ -56,7 +56,7 @@ func _ready() -> void:
 		p.scale_amount_min = 0.7
 		p.scale_amount_max = 1.3
 		p.scale_amount_curve = swell
-		p.color = Color(0.78, 0.77, 0.75, 0.8)
+		p.color = Color(0.66, 0.65, 0.63, 0.7)
 		p.color_ramp = Fx.fade_ramp()
 		p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(p)

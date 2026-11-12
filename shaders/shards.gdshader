@@ -6,6 +6,8 @@ shader_type spatial;
 // and a thousand loose shards are all moved here, on the graphics card.
 // The grid is laid on the shards where they stood, so it is whole across a
 // standing wall and stays glued to each piece as it tumbles.
+// A face made by the cut is only drawn once the shard on its other side has
+// gone its own way: while the two are still together it is inside the wall.
 
 uniform sampler2D slot_of : filter_nearest, repeat_disable;  // per shard: its body (-1 hidden)
 uniform sampler2D bodies : filter_nearest, repeat_disable;   // per body: where it is (2 texels)
@@ -28,11 +30,16 @@ float hash(vec3 p) {
 void vertex() {
 	stood = VERTEX;
 	facing = NORMAL;
-	inside = UV.y;
+	inside = UV.y > 0.5 ? 1.0 : 0.0;
 	int id = int(UV.x + 0.5);
 	int w = textureSize(slot_of, 0).x;
 	float slot = texelFetch(slot_of, ivec2(id % w, id / w), 0).r;
-	if (slot < -0.5) {
+	bool hidden = slot < -0.5;
+	if (!hidden && UV.y > 0.5) {
+		int other = int(UV.y - 0.5);
+		hidden = abs(texelFetch(slot_of, ivec2(other % w, other / w), 0).r - slot) < 0.5;
+	}
+	if (hidden) {
 		VERTEX = vec3(0.0);
 	} else {
 		int t = int(slot + 0.5) * 2;

@@ -28,12 +28,18 @@ var _bodies_changed := false
 
 ## Adds shard `id`: its corners where it stands (`points`), its faces as
 ## cut by Fracture, and the box's rotation to turn the face normals with.
-func add_shard(id: int, points: PackedVector3Array, cut: Fracture.Shard, turn: Basis, tint: Color) -> void:
+## `base` is the id of the first shard of its box (Fracture numbers the
+## shards of a box from 0).
+func add_shard(
+	id: int, base: int, points: PackedVector3Array, cut: Fracture.Shard, turn: Basis, tint: Color
+) -> void:
 	for f in cut.faces.size():
 		var ring := cut.faces[f]
 		var normal := turn * cut.normals[f]
 		var from := _verts.size()
-		var uv := Vector2(id, 1.0 if cut.others[f] >= 0 else 0.0)
+		# Which shard, and for a face made by the cut, 1 + the shard on its
+		# other side (0 for a face of the box).
+		var uv := Vector2(id, base + cut.others[f] + 1 if cut.others[f] >= 0 else 0)
 		for c in ring:
 			_verts.append(points[c])
 			_normals.append(normal)

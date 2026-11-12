@@ -12,6 +12,9 @@ const KILL_Y := -25.0
 ## them; heavier ones are obstacles.
 const SHOVE_MASS := 500.0
 const SHOVE_SPEED := 1.6  ## m/s
+## Rubble up to this high (m) is stepped onto instead of stopping you.
+const STEP := 0.6
+const EYES := 1.6  ## m above your feet
 
 @export var walk_speed := 6.5
 @export var sprint_speed := 10.0
@@ -34,6 +37,7 @@ var pieces: Pieces
 
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var _spawn: Transform3D
+var _lift := 0.0  # the eyes lag behind a step up, so the view does not jump
 
 
 func _init() -> void:
@@ -48,7 +52,7 @@ func _init() -> void:
 	shape.position.y = 0.9
 	add_child(shape)
 	head = Node3D.new()
-	head.position.y = 1.6
+	head.position.y = EYES
 	add_child(head)
 	camera = CameraShake.new()
 	camera.near = 0.05
@@ -127,10 +131,43 @@ func _physics_process(delta: float) -> void:
 		velocity.y -= _gravity * delta
 	touch_jump = false
 	move_and_slide()
+	_climb(wish, delta)
+	_lift = move_toward(_lift, 0.0, delta * 3.0)
+	head.position.y = EYES - _lift
 	_shove()
 	if global_position.y < KILL_Y:
 		global_transform = _spawn
 		velocity = Vector3.ZERO
+
+
+## Stopped by something low while walking: step up onto it.
+func _climb(wish: Vector3, delta: float) -> void:
+	if not is_on_floor() or wish.length() < 0.2:
+		return
+	var blocked := false
+	for k in get_slide_collision_count():
+		var n := get_slide_collision(k).get_normal()
+		if absf(n.y) < 0.5 and n.dot(wish) < -0.3:
+			blocked = true
+	if not blocked:
+		return
+	var ahead := wish.normalized() * maxf(walk_speed * delta, 0.15)
+	var xf := global_transform
+	if test_move(xf, Vector3.UP * STEP):
+		return  # no headroom
+	xf.origin.y += STEP
+	if test_move(xf, ahead):
+		return  # too high to step onto
+	xf.origin += ahead
+	var landing := KinematicCollision3D.new()
+	if not test_move(xf, Vector3.DOWN * STEP, landing) or landing.get_normal().y < 0.6:
+		return  # nothing flat enough up there
+	var to := xf.origin + landing.get_travel()
+	var rise := to.y - global_position.y
+	if rise < 0.03:
+		return
+	global_position = to
+	_lift = minf(_lift + rise, STEP)
 
 
 ## Light pieces you walk into are nudged aside (never launched).

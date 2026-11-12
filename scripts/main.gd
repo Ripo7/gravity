@@ -9,6 +9,7 @@ const TEXTURES := "res://addons/kenney_prototype_textures/"
 var structure: Structure
 var player: Player
 var dust: Dust
+var chips: Chips
 var clock: PhysicsClock
 var hud: Hud
 ## Where the house stands.
@@ -29,6 +30,8 @@ func _ready() -> void:
 	build_ms = (Time.get_ticks_usec() - t) / 1000.0
 	dust = Dust.new()
 	add_child(dust)
+	chips = Chips.new()
+	add_child(chips)
 	structure.released.connect(_on_released)
 	player = Player.new()
 	player.pieces = structure.pieces
@@ -77,9 +80,13 @@ func rebuild() -> void:
 		get_tree().reload_current_scene()
 
 
+## Something came off or broke up: dust, and bits thrown out.
 func _on_released(at: Vector3, volume: float, velocity: Vector3) -> void:
+	var size := pow(volume, 0.33)
+	chips.disturb(at, 1.0 + size * 1.5)
+	chips.burst(at, clampi(int(volume * 30.0), 2, 10), velocity * 0.6, 1.0 + size)
 	if volume > 0.03:
-		dust.puff(at, clampf(pow(volume, 0.33) * 2.2, 0.8, 3.5), velocity * 0.15)
+		dust.puff(at, clampf(size * 2.2, 0.8, 3.5), velocity * 0.15)
 
 
 func _build_world() -> void:
