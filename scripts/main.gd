@@ -23,6 +23,7 @@ func _ready() -> void:
 	add_child(clock)
 	_build_world()
 	structure = Structure.new()
+	structure.most_crumbs = int(Quality.pick(250, 450, 800))
 	add_child(structure)
 	var t := Time.get_ticks_usec()
 	House.build(structure, house_at)
@@ -50,8 +51,14 @@ func _ready() -> void:
 		ui.add_child(touch)
 	print(
 		(
-			"BUILD shards=%d bonds=%d in %.0f ms (tier %d)"
-			% [structure.count, structure.bond_a.size(), build_ms, Quality.tier()]
+			"BUILD shards=%d bonds=%d vertices=%d in %.0f ms (tier %d)"
+			% [
+				structure.count,
+				structure.bond_a.size(),
+				structure.mesh.vertex_count,
+				build_ms,
+				Quality.tier()
+			]
 		)
 	)
 	var options: Dictionary = get_node("/root/Launch").options

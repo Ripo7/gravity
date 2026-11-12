@@ -58,3 +58,39 @@ func test_the_same_seed_gives_the_same_cut() -> void:
 		same = same and a[i].points == b[i].points
 	check(same, "same corners")
 	check(c.size() != a.size() or c[0].points != a[0].points, "another seed, another cut")
+
+
+func test_cuts_lean_across_a_thin_wall() -> void:
+	var shards := Fracture.cut(Vector3(6, 3, 0.35), 0.6, 7)
+	var lean := 0.0
+	var cuts := 0
+	for sh in shards:
+		for f in sh.faces.size():
+			if sh.others[f] >= 0:
+				lean += absf(sh.normals[f].z)
+				cuts += 1
+	lean /= cuts
+	check(lean > 0.2, "the cuts are not square to the wall (mean lean %.2f)" % lean)
+
+
+func test_crumbs_fill_their_shard_exactly() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5
+	var shards := Fracture.cut(Vector3(4, 3, 0.35), 0.6, 9)
+	var cut := 0
+	for sh in shards:
+		var bits := Fracture.crumble(sh, 4, rng)
+		if bits.is_empty():
+			continue
+		cut += 1
+		check(bits.size() >= 2, "several crumbs")
+		var volume := 0.0
+		for bit in bits:
+			volume += bit.volume
+			check(bit.points.size() >= 4 and bit.faces.size() >= 4, "a crumb is a solid")
+			for p in bit.points:
+				for f in sh.faces.size():
+					var depth := sh.normals[f].dot(p - sh.points[sh.faces[f][0]])
+					check(depth < 1e-3, "inside its shard")
+		check_near(volume, sh.volume, sh.volume * 1e-3, "crumbs add up to their shard")
+	check(cut > shards.size() * 0.9, "nearly every shard can crumble (%d of %d)" % [cut, shards.size()])

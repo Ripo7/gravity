@@ -5,8 +5,9 @@ extends Node3D
 ## shard is bonded to the shards it touches. Shards that keep a chain of
 ## bonds down to the ground stand; Support works that out, and breaks the
 ## bonds that carry too much. What no longer holds comes off as rigid pieces
-## (Pieces), which break again where they land. Nothing is ever deleted: a
-## shard either stands or is part of a piece.
+## (Pieces), which break again where they land. A shard that is hit hard
+## is cut once more, there and then, and leaves in crumbs. Nothing is ever
+## deleted: a shard stands, is part of a piece, or is in crumbs.
 
 ## Something came off: where, how much (m3) and how fast.
 signal released(at: Vector3, volume: float, velocity: Vector3)
@@ -25,10 +26,21 @@ const SHRINK := 0.96
 const TOUCH := 0.02
 ## A bond smaller than this (m2) is not worth keeping.
 const MIN_BOND := 0.004
-## What comes off in one go is cut in pieces of at most this many shards.
-const MAX_CHUNK := 45
-## A blast below this does nothing to a shard; at 1 it tears it out.
+## What comes off in one go is cut in pieces of at most this many shards
+## (or MAX_CHUNK_BUSY while a lot is already moving, see Pieces.BUSY).
+const MAX_CHUNK := 32
+const MAX_CHUNK_BUSY := 45
+## A blast below this does nothing to a shard; at 1 it tears it out, and
+## from about SHATTER on the shard leaves in crumbs.
 const CRACK := 0.3
+const SHATTER := 2.0
+## A shard thrown out faster than this (m/s) clears what stands around it
+## (Pieces.CLEAR_STEPS).
+const TORN_SPEED := 5.0
+## A shard that crumbles is cut into crumbs of about this volume (m3); a
+## shard too small for two stays whole.
+const CRUMB := 0.02
+const MAX_CRUMBS := 6
 const CELL := 1.0  ## m, the grid used to find shards near a point
 const WARM_PER_STEP := 6
 ## While whole, a box collides as a few plain blocks of at most this size
@@ -36,19 +48,32 @@ const WARM_PER_STEP := 6
 const BLOCK := 2.5
 ## When a lot lets go at once it comes off over a few steps, about this many
 ## shards per step: making all the bodies in one step is a visible hitch.
-const FALL_PER_STEP := 40
+const FALL_PER_STEP := 28
 
+# The cuts already made, by size and seed: rebuilding does not cut again.
+static var _cuts := {}
+
+## Shards are numbered 0 .. count - 1. Crumbs get the numbers after them,
+## up to total - 1, as they are made: no bonds, never standing. The first
+## six arrays below cover both.
 var count := 0
+var total := 0
+## No more crumbs than this are ever made (set it before build()): each is
+## one more body to move.
+var most_crumbs := 400
+var crumb_first := PackedInt32Array()  ## per shard: its first crumb, or -1 while it is whole
+var crumb_count := PackedByteArray()  ## and how many it broke into
+var crumbled_count := 0  ## how many shards are in crumbs
 ## Per shard: where it stands (its centre of mass), size, and its state.
 var centroid := PackedVector3Array()
 var volume := PackedFloat32Array()
 var mass := PackedFloat32Array()
 var radius := PackedFloat32Array()
+var piece_of := PackedInt32Array()  ## its piece once it has come off, else -1
+var corners: Array[PackedVector3Array] = []  ## its collision corners, around its centre
 var element := PackedInt32Array()  ## the box it was cut from
 var held := PackedByteArray()  ## 1 while it stands
 var anchored := PackedByteArray()  ## 1 if it rests on the ground
-var piece_of := PackedInt32Array()  ## its piece once it has come off, else -1
-var corners: Array[PackedVector3Array] = []  ## its collision corners, around its centre
 ## Bonds between two shards: 1 whole .. 0 broken.
 var bond_a := PackedInt32Array()
 var bond_b := PackedInt32Array()
@@ -98,6 +123,10 @@ var _built := false
 # Only while building: every shard's corners and faces in the world.
 var _points: Array[PackedVector3Array] = []
 var _planes: Array = []
+# To cut a shard into crumbs later: how Fracture made it, and its box.
+var _cut_of: Array[Fracture.Shard] = []
+var _box_xf: Array[Transform3D] = []
+var _box_tint := PackedColorArray()
 
 
 func _init() -> void:
@@ -127,7 +156,12 @@ func _exit_tree() -> void:
 ## every box is in.
 func add_box(xf: Transform3D, size: Vector3, tint := Color.WHITE, grain := GRAIN) -> int:
 	var box := _box_shards.size()
-	var cut := Fracture.cut(size, grain, cut_seed * 7919 + box * 104729)
+	var cut_key := [size, grain, cut_seed * 7919 + box * 104729]
+	if not _cuts.has(cut_key):
+		_cuts[cut_key] = Fracture.cut(size, grain, cut_key[2])
+	var cut: Array[Fracture.Shard] = _cuts[cut_key]
+	_box_xf.append(xf)
+	_box_tint.append(tint)
 	var base := count
 	var mine := PackedInt32Array()
 	var box_lo := Vector3.INF
@@ -136,6 +170,7 @@ func add_box(xf: Transform3D, size: Vector3, tint := Color.WHITE, grain := GRAIN
 		var i := count
 		count += 1
 		mine.append(i)
+		_cut_of.append(sh)
 		var c := xf * sh.centroid
 		var world := PackedVector3Array()
 		var around := PackedVector3Array()
@@ -196,12 +231,19 @@ func build(ground := 0.0) -> void:
 		if not _cells.has(cell):
 			_cells[cell] = PackedInt32Array()
 		(_cells[cell] as PackedInt32Array).append(i)
+	total = count
+	crumb_first.resize(count)
+	crumb_first.fill(-1)
+	crumb_count.resize(count)
 	_index_bonds()
 	held_count = count
 	_mark.resize(count)
 	_leaving.resize(count)
-	mesh.build(count, count + 1)
-	pieces.setup(count)
+	# Room for the crumbs to come, and one more id, never drawn: what a
+	# crumb's cut faces look at.
+	var room := count + most_crumbs
+	mesh.build(room + 1, room + 1, count)
+	pieces.setup(room)
 	support.setup(self)
 	_points.clear()
 	_planes.clear()
@@ -264,6 +306,9 @@ func shards_near(at: Vector3, reach: float) -> PackedInt32Array:
 func strike(i: int, force: float, velocity: Vector3) -> void:
 	if held[i] == 0 or force < CRACK:
 		return
+	if force >= SHATTER * randf_range(0.85, 1.35) and randf() < pieces.crumble_chance():
+		shatter(i, velocity)
+		return
 	if force >= 1.0:
 		blow(i, velocity)
 		return
@@ -281,12 +326,26 @@ func blow(i: int, velocity: Vector3) -> void:
 	if held[i] == 0:
 		return
 	var spin := Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * minf(velocity.length(), 12.0)
-	_release(PackedInt32Array([i]), velocity, spin)
+	_release(PackedInt32Array([i]), velocity, spin, false, velocity.length() > TORN_SPEED)
+	_dirty = true
+
+
+## Standing shard `i` is hit hard enough to break up: it leaves in crumbs,
+## thrown at about `velocity`. (Whole, if it cannot crumble or too much is
+## going on, see Pieces.can_crumble.)
+func shatter(i: int, velocity: Vector3) -> void:
+	if held[i] == 0:
+		return
+	if not pieces.can_crumble(i):
+		blow(i, velocity)
+		return
+	_release(PackedInt32Array([i]), velocity, Vector3.ZERO, true, velocity.length() > TORN_SPEED)
 	_dirty = true
 
 
 ## Something heavy hit the standing building at `at`: about `amount` m3 of
-## it is knocked out there, nearest first, and leaves at `velocity`.
+## it is knocked out there, nearest first, and leaves at `velocity`. The
+## nearest half of it leaves in crumbs.
 func crush(at: Vector3, amount: float, velocity: Vector3) -> void:
 	var near: Array[Vector2] = []  # (distance to its surface, shard)
 	for i in shards_near(at, 1.6):
@@ -300,7 +359,10 @@ func crush(at: Vector3, amount: float, velocity: Vector3) -> void:
 			strike(i, clampf(CRACK + left / volume[i], 0.0, 0.95), velocity)
 			break
 		left -= volume[i]
-		blow(i, velocity * randf_range(0.3, 0.7))
+		if left > amount * 0.5:
+			shatter(i, velocity * randf_range(0.3, 0.7))
+		else:
+			blow(i, velocity * randf_range(0.3, 0.7))
 
 
 func damage_bond(b: int, amount: float) -> void:
@@ -336,6 +398,64 @@ func shape_of(i: int) -> RID:
 		PhysicsServer3D.shape_set_data(shape, corners[i])
 		_shape[i] = shape
 	return _shape[i]
+
+
+## Where shard or crumb `i` is now (its centre of mass); for a shard that
+## broke into crumbs, the middle of them.
+func place_of(i: int) -> Vector3:
+	if i < count and crumb_first[i] >= 0:
+		var sum := Vector3.ZERO
+		for c in range(crumb_first[i], crumb_first[i] + crumb_count[i]):
+			sum += place_of(c)
+		return sum / crumb_count[i]
+	var piece := piece_of[i]
+	if piece < 0:
+		return centroid[i]
+	return pieces.transform_of(piece) * (centroid[i] - pieces.origin[piece])
+
+
+## True if shard `i` is big enough to be cut into crumbs and there is room
+## left for them.
+func can_crumble(i: int) -> bool:
+	return i < count and volume[i] >= CRUMB * 1.5 and total + MAX_CRUMBS <= count + most_crumbs
+
+
+## Cuts shard `i` into crumbs and gives them their numbers (what becomes of
+## the shard and of them is the caller's business). Empty if it cannot be.
+func make_crumbs(i: int) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	if not can_crumble(i):
+		return out
+	var rng := RandomNumberGenerator.new()
+	rng.seed = cut_seed * 31 + i * 7919
+	var bits := Fracture.crumble(_cut_of[i], mini(roundi(volume[i] / CRUMB), MAX_CRUMBS), rng)
+	if bits.is_empty():
+		return out
+	var xf := _box_xf[element[i]]
+	crumb_first[i] = total
+	crumb_count[i] = bits.size()
+	crumbled_count += 1
+	for bit in bits:
+		var c := xf * bit.centroid
+		var world := PackedVector3Array()
+		var around := PackedVector3Array()
+		var reach := 0.0
+		for p in bit.points:
+			var w := xf * p
+			world.append(w)
+			around.append((w - c) * SHRINK)
+			reach = maxf(reach, w.distance_to(c))
+		centroid.append(c)
+		volume.append(bit.volume)
+		mass.append(bit.volume * DENSITY)
+		radius.append(reach)
+		piece_of.append(-1)
+		corners.append(around)
+		_shape.append(RID())
+		mesh.add_shard(total, 0, world, bit, xf.basis, _box_tint[element[i]], count + most_crumbs)
+		out.append(total)
+		total += 1
+	return out
 
 
 ## Volume (m3) still standing.
@@ -421,9 +541,12 @@ func _index_bonds() -> void:
 	for b in bond_a.size():
 		degree[bond_a[b] + 1] += 1
 		degree[bond_b[b] + 1] += 1
-	adj_first.resize(count + 1)
+	# (Crumbs to come have no bonds: their ranges are empty.)
+	adj_first.resize(count + most_crumbs + 1)
 	for i in count:
 		adj_first[i + 1] = adj_first[i] + degree[i + 1]
+	for i in range(count, count + most_crumbs):
+		adj_first[i + 1] = adj_first[count]
 	adj_bond.resize(bond_a.size() * 2)
 	adj_other.resize(bond_a.size() * 2)
 	var next := adj_first.duplicate()
@@ -481,10 +604,11 @@ func _drop_some() -> void:
 				_release(part, push)
 
 
-## `group` cut in connected chunks of MAX_CHUNK shards at most. A small
+## `group` cut in connected chunks of MAX_CHUNK shards at most (see there). A small
 ## group is taken to be in one part unless `check`.
 func _chunks(group: PackedInt32Array, check := false) -> Array[PackedInt32Array]:
-	if group.size() <= MAX_CHUNK and not check:
+	var most := MAX_CHUNK if pieces.awake <= Pieces.BUSY else MAX_CHUNK_BUSY
+	if group.size() <= most and not check:
 		return [group]
 	_stamp += 2
 	var todo := _stamp - 1
@@ -497,20 +621,24 @@ func _chunks(group: PackedInt32Array, check := false) -> Array[PackedInt32Array]
 		var chunk := PackedInt32Array([start])
 		_mark[start] = _stamp
 		var head := 0
-		while head < chunk.size() and chunk.size() < MAX_CHUNK:
+		while head < chunk.size() and chunk.size() < most:
 			var i := chunk[head]
 			head += 1
 			for k in range(adj_first[i], adj_first[i + 1]):
 				var j := adj_other[k]
-				if _mark[j] == todo and bond_health[adj_bond[k]] > 0.0 and chunk.size() < MAX_CHUNK:
+				if _mark[j] == todo and bond_health[adj_bond[k]] > 0.0 and chunk.size() < most:
 					_mark[j] = _stamp
 					chunk.append(j)
 		out.append(chunk)
 	return out
 
 
-## Shards `group` stop standing and become one rigid piece.
-func _release(group: PackedInt32Array, velocity: Vector3, spin := Vector3.ZERO) -> void:
+## Shards `group` stop standing and become one rigid piece; or, `in_crumbs`,
+## the one shard of the group breaks into its crumbs. `torn`: thrown out by
+## a blast.
+func _release(
+	group: PackedInt32Array, velocity: Vector3, spin := Vector3.ZERO, in_crumbs := false, torn := false
+) -> void:
 	_stamp += 1
 	var lo := Vector3.INF
 	var hi := -Vector3.INF
@@ -544,14 +672,17 @@ func _release(group: PackedInt32Array, velocity: Vector3, spin := Vector3.ZERO) 
 				bond_health[adj_bond[k]] = 0.0
 		if _own[i].is_valid():
 			_rid_shard.erase(_own[i])
-			if group.size() == 1:
+			if group.size() == 1 and not in_crumbs:
 				reuse = _own[i]
 			else:
 				PhysicsServer3D.free_rid(_own[i])
 			_own[i] = RID()
 	# What was resting on it has to move again.
 	pieces.thaw_box(lo - Vector3.ONE * 0.3, hi + Vector3(0.3, 0.6, 0.3))
-	pieces.spawn(group, Transform3D.IDENTITY, velocity, spin, reuse)
+	if in_crumbs:
+		pieces.crumble(group[0], Transform3D.IDENTITY, velocity, spin, torn)
+	else:
+		pieces.spawn(group, Transform3D.IDENTITY, velocity, spin, reuse, torn)
 	released.emit(at / size, size, velocity)
 
 
