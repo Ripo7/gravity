@@ -52,8 +52,8 @@ const GRID := 2.0  ## m, the grid frozen pieces are found by
 const NOT_OURS := -1000000
 const MASK_CLEARING := Structure.LAYER_WORLD | Structure.LAYER_DEBRIS
 const MASK := MASK_CLEARING | Structure.LAYER_STRUCTURE
-## A piece an orb is drawing in goes through other loose pieces: it would
-## jam in a heap.
+## A piece an orb is drawing in goes through other loose pieces (it would
+## jam in a heap) and through you: see Structure.LAYER_GRIPPED.
 const MASK_GRIPPED := Structure.LAYER_WORLD | Structure.LAYER_STRUCTURE
 
 var structure: Structure
@@ -240,7 +240,7 @@ func _physics_process(_delta: float) -> void:
 		if c.z > 1:
 			_clearing[k] = Vector3i(c.x, c.y, c.z - 1)
 			continue
-		if alive[c.x] == 1 and _serial[c.x] == c.y:
+		if alive[c.x] == 1 and _serial[c.x] == c.y and gripped[c.x] == 0:
 			PhysicsServer3D.body_set_collision_mask(body[c.x], MASK)
 		_clearing.remove_at(k)
 	for i in _freeze:
@@ -309,6 +309,7 @@ func grip(i: int) -> void:
 	if frozen[i] == 1:
 		thaw(i)
 	gripped[i] = 1
+	PhysicsServer3D.body_set_collision_layer(body[i], Structure.LAYER_GRIPPED)
 	PhysicsServer3D.body_set_collision_mask(body[i], MASK_GRIPPED)
 
 
@@ -323,6 +324,7 @@ func drag(i: int, velocity: Vector3, size: float) -> void:
 func let_go(i: int) -> void:
 	gripped[i] = 0
 	_size[i] = 1.0
+	PhysicsServer3D.body_set_collision_layer(body[i], Structure.LAYER_DEBRIS)
 	PhysicsServer3D.body_set_collision_mask(body[i], MASK)
 	structure.mesh.set_body(i + 1, _xf[i], origin[i])
 

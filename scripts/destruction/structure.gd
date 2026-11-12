@@ -16,6 +16,10 @@ const LAYER_WORLD := 1
 const LAYER_STRUCTURE := 2
 const LAYER_DEBRIS := 4
 const LAYER_PLAYER := 8
+## Loose pieces an orb is drawing in: nothing sees them (you would be
+## carried off standing on one), they only stop at the ground and at what
+## still stands.
+const LAYER_GRIPPED := 16
 ## Shards are about this big (m).
 const GRAIN := 0.6
 const DENSITY := 2400.0  ## kg/m3

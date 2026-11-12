@@ -71,6 +71,65 @@ func test_thrown_it_breaks_what_it_hits_and_gives_everything_back() -> void:
 	await _unload()
 
 
+func test_standing_on_a_piece_you_are_not_carried_off_with_it() -> void:
+	await _load()
+	await _bring_the_balcony_down()
+	# A loose piece lying on the ground, away from the heap, to stand on.
+	var p := s.pieces
+	var under := -1
+	for i in p.top:
+		if p.alive[i] == 0 or p.frozen[i] == 0:
+			continue
+		var at := main.house_at.affine_inverse() * p.transform_of(i).origin
+		if at.z > 9.0 and at.y < 0.4 and p.mass[i] > 60.0 and (under < 0 or p.mass[i] > p.mass[under]):
+			under = i
+	check(under >= 0, "there is a piece to stand on")
+	if under >= 0:
+		var top := main.house_at.affine_inverse() * p.transform_of(under).origin
+		_stand(Vector3(top.x, top.y + 0.35, top.z), Vector3(0, 1.2, 3.4))
+		await frames(20)
+		var here := main.player.global_position
+		var orb := main.start_orb()
+		var moved := 0.0
+		for k in 30:
+			await frames(10)
+			var off := main.player.global_position - here
+			moved = maxf(moved, Vector2(off.x, off.z).length())
+		check(orb.volume > 0.3, "the orb drew pieces in (%.2f m3)" % orb.volume)
+		check(moved < 0.4, "you stayed where you were (moved %.2f m)" % moved)
+		main.throw_orb()
+	await _unload()
+
+
+func test_what_comes_in_from_behind_does_not_push_you() -> void:
+	await _load()
+	# Loose shards on the ground behind where you stand, the orb in front.
+	var behind := 0
+	for i in s.count:
+		var p := _local(i)
+		if p.z > 6.3 and p.y < 3.0 and absf(p.x) < 2.0:
+			s.blow(i, Vector3(0, 2, 12))
+			behind += 1
+	await frames(240)
+	_stand(Vector3(0, 0.05, 11), Vector3(0, 1.2, 3.4))
+	await frames(10)
+	var here := main.player.global_position
+	var back := 0
+	for i in s.pieces.top:
+		if s.pieces.alive[i] == 1 and s.pieces.transform_of(i).origin.z > here.z + 0.5:
+			back += 1
+	check(back >= 5, "there are loose pieces behind you (%d)" % back)
+	var orb := main.start_orb()
+	var moved := 0.0
+	for k in 30:
+		await frames(10)
+		moved = maxf(moved, main.player.global_position.distance_to(here))
+	check(orb.volume > 0.3, "it drew them in (%.2f m3)" % orb.volume)
+	check(moved < 0.25, "and you stayed where you were (moved %.2f m)" % moved)
+	main.throw_orb()
+	await _unload()
+
+
 func test_with_nothing_to_gather_nothing_happens() -> void:
 	await _load()
 	_stand(Vector3(0, 0.05, 13), Vector3(0, 1.4, 3.4))
