@@ -70,6 +70,8 @@ jobs:
           $GODOT --headless --fixed-fps 60 --path . -- --mode=showcase --seed=1 --prof --quality=low 2>&1 \
             | python3 tools/perf_gate.py --max-busy-ms 8
 
+  export:
+    name: Web export
     needs: [test]
     runs-on: ubuntu-latest
     timeout-minutes: 15
