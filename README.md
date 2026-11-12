@@ -115,8 +115,9 @@ Headless on a 2-core cloud machine, phone settings, the showcase tour
 
 - a physics step costs 0.9 to 1.3 ms at the median, 2.0 to 2.5 ms on
   average while things move;
-- 99% of the steps are under 5 to 7 ms, the slowest takes 7 to 12 ms: that
-  is the physics engine with 300 to 400 pieces moving at once;
+- 99% of the steps are under 5 to 7 ms, the slowest takes 7 to 12 ms: mostly
+  the physics engine with 300 to 400 pieces moving at once (the scripts
+  are 1 to 3 ms of such a step);
 - the same tour of the archived Gravity (another scene, so only an order of
   magnitude) averaged 5 ms per step while things moved.
 
