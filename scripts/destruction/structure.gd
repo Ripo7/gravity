@@ -16,6 +16,10 @@ const LAYER_WORLD := 1
 const LAYER_STRUCTURE := 2
 const LAYER_DEBRIS := 4
 const LAYER_PLAYER := 8
+## Loose pieces being drawn into an orb: nothing sees them (you would be
+## carried off standing on one), they only stop at the ground and at what
+## still stands.
+const LAYER_GRIPPED := 16
 ## Shards are about this big (m).
 const GRAIN := 0.6
 const DENSITY := 2400.0  ## kg/m3
@@ -227,10 +231,12 @@ func build(ground := 0.0) -> void:
 	for i in count:
 		if _lo[i].y < ground + TOUCH:
 			anchored[i] = 1
+		# (Put back after adding: a packed array taken out of a dictionary
+		# is a copy.)
 		var cell := Vector3i((centroid[i] / CELL).floor())
-		if not _cells.has(cell):
-			_cells[cell] = PackedInt32Array()
-		(_cells[cell] as PackedInt32Array).append(i)
+		var there: PackedInt32Array = _cells.get(cell, PackedInt32Array())
+		there.append(i)
+		_cells[cell] = there
 	total = count
 	crumb_first.resize(count)
 	crumb_first.fill(-1)

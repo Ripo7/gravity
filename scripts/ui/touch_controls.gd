@@ -3,7 +3,9 @@ extends Control
 ## On-screen controls for phones and tablets.
 ##   Left half: a floating stick (appears where the thumb lands) to move.
 ##   Right half: drag to look.
-##   Bottom-right: the shock wave button. Above it: jump.
+##   Bottom-right: the shock wave button. Above it: jump. Beside it: the
+##   tidy button, to hold (debris gathers into a ball) and let go (the ball
+##   is put down).
 ## Multi-touch is tracked per finger so you can move, look and fire at once.
 
 @export var player: Player
@@ -20,6 +22,7 @@ var _stick_pos := Vector2.ZERO
 var _look_finger := -1
 var _fire_finger := -1
 var _jump_finger := -1
+var _gather_finger := -1
 ## Last position per finger. Deltas are computed from these instead of the
 ## event's `relative`: on the web, Godot pairs multi-touch moves with the
 ## wrong previous finger, which made the camera jump and spin on iOS.
@@ -47,6 +50,14 @@ func fire_radius() -> float:
 	return size.y * 0.11
 
 
+func gather_center() -> Vector2:
+	return Vector2(size.x - size.y * 0.47, size.y * 0.84)
+
+
+func gather_radius() -> float:
+	return size.y * 0.095
+
+
 func jump_center() -> Vector2:
 	return Vector2(size.x - size.y * 0.2, size.y * 0.5)
 
@@ -68,15 +79,18 @@ func _input(event: InputEvent) -> void:
 
 
 func _release_all() -> void:
-	if _stick_finger < 0 and _look_finger < 0 and _fire_finger < 0 and _jump_finger < 0:
+	var none := _stick_finger < 0 and _look_finger < 0 and _fire_finger < 0 and _jump_finger < 0
+	if none and _gather_finger < 0:
 		return
 	_stick_finger = -1
 	_look_finger = -1
 	_fire_finger = -1
 	_jump_finger = -1
+	_gather_finger = -1
 	_last.clear()
 	if player:
 		player.touch_move = Vector2.ZERO
+		player.touch_gather = false
 	queue_redraw()
 
 
@@ -86,6 +100,9 @@ func _on_touch(e: InputEventScreenTouch) -> void:
 		if e.position.distance_to(fire_center()) < fire_radius() * 1.3 and _fire_finger < 0:
 			_fire_finger = e.index
 			player.touch_fire = true
+		elif e.position.distance_to(gather_center()) < gather_radius() * 1.3 and _gather_finger < 0:
+			_gather_finger = e.index
+			player.touch_gather = true
 		elif e.position.distance_to(jump_center()) < jump_radius() * 1.4 and _jump_finger < 0:
 			_jump_finger = e.index
 			player.touch_jump = true
@@ -99,6 +116,9 @@ func _on_touch(e: InputEventScreenTouch) -> void:
 		_last.erase(e.index)
 		if e.index == _fire_finger:
 			_fire_finger = -1
+		elif e.index == _gather_finger:
+			_gather_finger = -1
+			player.touch_gather = false
 		elif e.index == _jump_finger:
 			_jump_finger = -1
 		elif e.index == _stick_finger:
@@ -124,8 +144,9 @@ func _on_drag(e: InputEventScreenDrag) -> void:
 		if _stick_pos.distance_to(_stick_origin) > r:
 			_stick_origin = _stick_pos - (_stick_pos - _stick_origin).normalized() * r
 		queue_redraw()
-	elif e.index == _look_finger or e.index == _fire_finger:
-		# Dragging from the fire button also aims, like a real thumb would.
+	elif e.index == _look_finger or e.index == _fire_finger or e.index == _gather_finger:
+		# Dragging from the fire or the tidy button also turns you, like a
+		# real thumb would: the ball is carried, then put down.
 		var k := look_sensitivity / maxf(size.y, 1.0)
 		player.look(Vector2(-step.x, -step.y) * k)
 
@@ -150,6 +171,18 @@ func _draw() -> void:
 	draw_circle(c - Vector2(r * 0.45, 0), r * 0.1, mark)
 	for j in 3:
 		draw_arc(c - Vector2(r * 0.45, 0), r * (0.32 + 0.26 * j), -0.75, 0.75, 12, mark, 3.0, true)
+	# The tidy button: a ball, with a ring that fills as the ball grows.
+	var held := _gather_finger >= 0
+	var g := gather_center()
+	var gr := gather_radius()
+	draw_circle(g, gr * (1.08 if held else 1.0), Color(1.0, 0.62, 0.25, 0.75 if held else 0.55))
+	draw_arc(g, gr * 1.12, 0, TAU, 48, Color(1, 1, 1, 0.6), 3.0, true)
+	draw_circle(g, gr * 0.36, Color(1, 1, 1, 0.9))
+	for j in 6:
+		var way := Vector2.from_angle(TAU * j / 6.0 + 0.3)
+		draw_circle(g + way * gr * 0.68, gr * 0.07, Color(1, 1, 1, 0.8))
+	if player != null and player.orb_fill > 0.0:
+		draw_arc(g, gr * 1.28, -PI / 2, -PI / 2 + TAU * player.orb_fill, 48, Color(1, 1, 1, 0.95), 5.0, true)
 	draw_circle(jump_center(), jump_radius(), ink_strong if _jump_finger >= 0 else ink)
 	var a := jump_center() + Vector2(0, -jump_radius() * 0.35)
 	var w := jump_radius() * 0.4

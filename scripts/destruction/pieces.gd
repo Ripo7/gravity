@@ -7,7 +7,8 @@ extends Node
 ## and knocks out what it hits if that is still standing. A lone shard that
 ## hits hard enough breaks into crumbs. Pieces that have come to rest are
 ## frozen: they cost nothing and a pile stays put, until something disturbs
-## them. Nothing is removed.
+## them. Nothing is removed: what a ball of tidied debris swallows (take)
+## is still counted.
 
 ## A piece slower than this (m/s, rad/s) for QUIET_TIME seconds is frozen.
 const QUIET_SPEED := 0.25
@@ -51,6 +52,9 @@ const GRID := 2.0  ## m, the grid frozen pieces are found by
 const NOT_OURS := -1000000
 const MASK_CLEARING := Structure.LAYER_WORLD | Structure.LAYER_DEBRIS
 const MASK := MASK_CLEARING | Structure.LAYER_STRUCTURE
+## A piece an orb is drawing in goes through other loose pieces (it would
+## jam in a heap) and through you: see Structure.LAYER_GRIPPED.
+const MASK_GRIPPED := Structure.LAYER_WORLD | Structure.LAYER_STRUCTURE
 
 var structure: Structure
 ## Per piece (a piece keeps its number until it breaks up).
@@ -68,11 +72,14 @@ var asleep := 0
 ## No piece has a number of `top` or more yet (numbers are given lowest
 ## first): loops over the pieces stop there.
 var top := 0
+var gripped := PackedByteArray()  ## 1 while an orb is drawing the piece in
+var taken_volume := 0.0  ## m3 swallowed by orbs
 
 var _xf: Array[Transform3D] = []
 var _lin := PackedVector3Array()
 var _ang := PackedVector3Array()
 var _quiet := PackedFloat32Array()
+var _size := PackedFloat32Array()  # 1, or less while it dwindles into an orb
 var _bruise := PackedFloat32Array()  # energy lost in hits since it last broke (J/kg)
 var _serial := PackedInt32Array()
 var _free := PackedInt32Array()
@@ -102,6 +109,8 @@ func setup(count: int) -> void:
 	_lin.resize(count)
 	_ang.resize(count)
 	_quiet.resize(count)
+	_size.resize(count)
+	gripped.resize(count)
 	_bruise.resize(count)
 	_serial.resize(count)
 	_cell.resize(count)
@@ -184,6 +193,8 @@ func spawn(
 	_ang[i] = spin
 	_quiet[i] = 0.0
 	_bruise[i] = 0.0
+	_size[i] = 1.0
+	gripped[i] = 0
 	live += 1
 	awake += 1
 	s.mesh.set_body(i + 1, xf, centre)
@@ -229,7 +240,7 @@ func _physics_process(_delta: float) -> void:
 		if c.z > 1:
 			_clearing[k] = Vector3i(c.x, c.y, c.z - 1)
 			continue
-		if alive[c.x] == 1 and _serial[c.x] == c.y:
+		if alive[c.x] == 1 and _serial[c.x] == c.y and gripped[c.x] == 0:
 			PhysicsServer3D.body_set_collision_mask(body[c.x], MASK)
 		_clearing.remove_at(k)
 	for i in _freeze:
@@ -293,9 +304,51 @@ func thaw(i: int) -> void:
 	_wake.append(AABB(at - Vector3(r, 0.0, r), Vector3(r, r + 0.3, r) * 2.0))
 
 
-## Volume (m3) of everything that has come off.
+## An orb takes hold of piece `i` (see MASK_GRIPPED); drag() then moves it.
+func grip(i: int) -> void:
+	if frozen[i] == 1:
+		thaw(i)
+	gripped[i] = 1
+	PhysicsServer3D.body_set_collision_layer(body[i], Structure.LAYER_GRIPPED)
+	PhysicsServer3D.body_set_collision_mask(body[i], MASK_GRIPPED)
+
+
+## Gripped piece `i` moves at `velocity`, drawn at `size` (1: full size).
+func drag(i: int, velocity: Vector3, size: float) -> void:
+	_size[i] = size
+	_quiet[i] = 0.0
+	PhysicsServer3D.body_set_state(body[i], PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY, velocity)
+
+
+## The orb lets piece `i` go: it is a loose piece like any other again.
+func let_go(i: int) -> void:
+	gripped[i] = 0
+	_size[i] = 1.0
+	PhysicsServer3D.body_set_collision_layer(body[i], Structure.LAYER_DEBRIS)
+	PhysicsServer3D.body_set_collision_mask(body[i], MASK)
+	structure.mesh.set_body(i + 1, _xf[i], origin[i])
+
+
+## Piece `i` leaves the world for good (an orb swallows it): no body, not
+## drawn, its volume counted in taken_volume.
+func take(i: int) -> void:
+	var s := structure
+	for m in members[i]:
+		s.piece_of[m] = -1
+		s.mesh.set_slot(m, -1)
+		taken_volume += s.volume[m]
+		for e in range(s.adj_first[m], s.adj_first[m + 1]):
+			s.bond_health[s.adj_bond[e]] = 0.0
+	_remove(i)
+
+
+func serial_of(i: int) -> int:
+	return _serial[i]
+
+
+## Volume (m3) of everything that has come off, in pieces or in orbs.
 func volume() -> float:
-	var v := 0.0
+	var v := taken_volume
 	for i in top:
 		if alive[i] == 1:
 			for k in members[i]:
@@ -363,7 +416,7 @@ func _moved(state: PhysicsDirectBodyState3D, i: int, serial: int) -> void:
 	_xf[i] = xf
 	_lin[i] = lin
 	_ang[i] = ang
-	structure.mesh.set_body(i + 1, xf, origin[i])
+	structure.mesh.set_body(i + 1, xf, origin[i], _size[i])
 	var slack := HURRY if awake > BUSY else 1.0
 	if (
 		lin.length_squared() < QUIET_SPEED * QUIET_SPEED * slack * slack

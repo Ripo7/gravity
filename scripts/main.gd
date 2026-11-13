@@ -1,7 +1,8 @@
 class_name Main
 extends Node3D
 ## The test ground, in greybox: a house you can take apart with a shock
-## wave (see Structure for how it breaks), walked around in first person.
+## wave (see Structure for how it breaks) and whose debris you can tidy
+## into balls (see Orb), walked around in first person.
 ## Textures: Kenney's prototype textures (CC0).
 
 const TEXTURES := "res://addons/kenney_prototype_textures/"
@@ -12,6 +13,7 @@ var dust: Dust
 var chips: Chips
 var clock: PhysicsClock
 var hud: Hud
+var orb: Orb  ## the ball in hand, if any
 ## Where the house stands.
 var house_at := Transform3D(Basis(), Vector3(0, 0, -4))
 ## Milliseconds it took to cut and bond the house.
@@ -39,13 +41,22 @@ func _ready() -> void:
 	add_child(player)
 	player.global_position = house_at * Vector3(0, 0.05, 15)
 	player.fired.connect(cast_shockwave)
+	player.gathering_changed.connect(
+		func(on: bool) -> void:
+			if on:
+				start_orb()
+			else:
+				drop_orb()
+	)
 	var ui := CanvasLayer.new()
 	add_child(ui)
 	hud = Hud.new()
 	hud.world = self
 	ui.add_child(hud)
 	hud.rebuild_pressed.connect(rebuild)
-	if TouchControls.should_show():
+	var options: Dictionary = get_node("/root/Launch").options
+	# (--touch: the thumb controls on a desktop, to look at them.)
+	if TouchControls.should_show() or options.has("touch"):
 		var touch := TouchControls.new()
 		touch.player = player
 		ui.add_child(touch)
@@ -61,7 +72,6 @@ func _ready() -> void:
 			]
 		)
 	)
-	var options: Dictionary = get_node("/root/Launch").options
 	if options.has("mode"):
 		var director := Director.new()
 		director.options = options
@@ -79,6 +89,43 @@ func cast_shockwave(from: Vector3, direction: Vector3) -> Shockwave:
 	wave.setup(structure, from, direction)
 	add_child(wave)
 	return wave
+
+
+## Starts tidying loose debris into a ball held in front of the player:
+## the ball they are looking at if there is one lying near, else a new one.
+func start_orb() -> Orb:
+	if orb != null and is_instance_valid(orb) and orb.state == Orb.State.HELD:
+		return orb
+	var from := player.camera.global_position
+	var dir := -player.camera.global_basis.z
+	orb = null
+	var nearest := Orb.TAKE_BACK
+	for node in get_tree().get_nodes_in_group("orb"):
+		var ball := node as Orb
+		var to := ball.centre - from
+		var along := to.dot(dir)
+		if ball.state == Orb.State.DOWN and along > 0.0 and along < nearest:
+			if (to - dir * along).length() < ball.radius() + 0.3:
+				orb = ball
+				nearest = along
+	if orb != null:
+		orb.take_back()
+	else:
+		orb = Orb.new()
+		orb.setup(structure, player.camera)
+		add_child(orb)
+	return orb
+
+
+## Puts the ball in hand down.
+func drop_orb() -> void:
+	if orb != null and is_instance_valid(orb):
+		orb.put_down()
+	orb = null
+
+
+func _process(_delta: float) -> void:
+	player.orb_fill = orb.fill() if orb != null and is_instance_valid(orb) else 0.0
 
 
 ## Puts the house back up (starts the scene again).

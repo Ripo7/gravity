@@ -1,7 +1,7 @@
 # Concept: breaking a house
 
-A first-person destruction test: a small greybox house and one power, a
-shock wave. Walls break into irregular shards where they are hit, and into
+A first-person destruction test: a small greybox house, one power (a shock
+wave) and a way to tidy up after it (the debris gathered into balls). Walls break into irregular shards where they are hit, and into
 smaller crumbs where they are hit hardest; what is no longer held up falls,
 and breaks again when it lands. Nothing disappears: the rubble stays and you
 can climb on it.
@@ -19,6 +19,7 @@ The previous project, Gravity, is kept as it was on the branch
 | Move | WASD (by position, so ZQSD on AZERTY) / arrows | left stick |
 | Look | mouse | drag on the right half |
 | Shock wave | left click or F | blue button |
+| Tidy up | hold right click or E, let go to put the ball down | hold the orange button, let go |
 | Jump | space | small button |
 | Rebuild the house | R | "Reconstruire" |
 
@@ -81,6 +82,17 @@ whose front moves at 45 m/s. It tears out the shards it hits hard enough,
 cracks the bonds of the others, and is mostly stopped by what holds: a wall
 shelters what is behind it, a hole lets it through.
 
+Tidying up (`scripts/game/orb.gd`) is not a power: it breaks nothing. While
+you hold the button, loose pieces within 11 m that the ball can see (not
+what is behind a wall) rise, wind in and dwindle into a ball in front of
+you, 14 at a time; each one that arrives is taken out of the world and the
+ball grows by exactly its volume, up to 8 m3 (about 2.5 m across). Let go
+and the ball is put down: one heavy, solid thing instead of hundreds of
+pieces. Hold again while looking at a ball and you take it back, to carry
+it elsewhere or to fill it further. Nothing is lost: the volume in the balls
+is counted with the rest. Pieces on their way in are on a collision layer of
+their own, so that you are not carried off standing on one.
+
 Quality tiers (`scripts/core/quality.gd`: phone, browser, desktop) change
 the dust, the decorative bits and how many crumbs there can be. The house,
 its shards and what holds are the same everywhere.
@@ -104,23 +116,26 @@ browser as `index.html?mode=...`:
 # A fixed tour that takes the house apart, with the cost of the physics.
 godot --headless --fixed-fps 60 --path . -- --mode=showcase --seed=1 --prof --quality=low \
   | python3 tools/perf_gate.py
-# Your own steps: aim, shock wave, wait, walk forward...
+# Your own steps: aim, shock wave, wait, walk forward, tidy (g) and let go (t)...
 godot --path . -- --mode=play --from=-2.5,0.05,4.2 --steps="a@-2.5,1.4,-0.6;o;w2;f0.8;o;w3"
+godot --path . -- --mode=play --from=0,0.05,8.5 --steps="o@-1.5,1.4,2.7;w2;g;w4;t;w2"
 # How loaded the house is as built (1 = a bond breaks).
 godot --headless --path . -- --mode=check
 ```
 
-Add `--write-movie out.avi --fixed-fps 30` before `--path` to record a run.
+Add `--write-movie out.avi --fixed-fps 30` before `--path` to record a run,
+and `--touch` after `--` to see the thumb controls on a desktop.
 
 ## Checks
 
 - `tests/`: a small headless runner; files `tests/test_*.gd`, methods
   `test_*` (they may `await`). They cover the cut (volumes, shared faces),
-  what holds and what falls, the shock wave on the house, and the controls.
+  what holds and what falls, the shock wave on the house, tidying up, and
+  the controls.
 - `tools/perf_gate.py`: reads a profiled showcase and fails when the
   physics gets too slow.
 - `tools/web_probe.mjs`: loads the web export in headless Chromium, breaks
-  the house and fails on any error (`npm install playwright`, then
+  the house, tidies the debris into a ball, and fails on any error (`npm install playwright`, then
   `node tools/web_probe.mjs build/web shot.png`). WebGL2 is stricter than
   desktop OpenGL: two bugs only showed there.
 - `.github/workflows/ci.yml` runs lint, tests, the perf gate, the web
@@ -147,6 +162,10 @@ once), 8 seeds, twice:
 - the same kind of tour of the archived Gravity (another scene, measured in
   real time, so only an order of magnitude) averaged 5 ms per step while
   things moved.
+
+Tidying up, same machine and settings (the balcony brought down, then 8 m3
+gathered into one ball): 0.2 to 0.3 ms per step while the ball draws debris
+in, and 300 loose pieces become 115 and a ball.
 
 Not measured: a real phone. The line at the top left is there for that.
 
