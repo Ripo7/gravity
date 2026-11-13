@@ -1,16 +1,14 @@
 shader_type spatial;
-// The orb: loose debris tidied into one lumpy ball. It is lit facet by
-// facet like the broken faces of the shards it is made of, in their
-// colours. While it is held it glows along its seams and its rim, in the
-// blue of the shock wave; put down, it is only a ball of rubble.
+render_mode unshaded, shadows_disabled;
+// The orb: a ball of magic that swallows debris. A dark heart, streams of
+// light winding round it towards the poles it drains into, and a bright
+// rim. It lights itself: nothing here depends on the sun.
 
-uniform vec3 wall : source_color = vec3(0.62, 0.62, 0.65);
-uniform vec3 wood : source_color = vec3(0.72, 0.58, 0.42);
-uniform vec3 glow : source_color = vec3(0.45, 0.72, 1.0);
-uniform float power = 1.0;  // how strongly it glows (0: put down)
-uniform float lumps = 0.16;  // how far from round, as a share of its size
+uniform vec3 deep : source_color = vec3(0.07, 0.03, 0.2);
+uniform vec3 bright : source_color = vec3(0.66, 0.5, 1.0);
+uniform float power = 1.0;  // more when it has just swallowed something
 
-varying vec3 at;      // where on the ball (it is 1 across the radius)
+varying vec3 at;      // where on the ball (1 across the radius)
 varying vec3 round;   // the way the ball faces there, seen from the eye
 
 float hash(vec3 p) {
@@ -31,21 +29,16 @@ float noise(vec3 p) {
 void vertex() {
 	at = VERTEX;
 	round = normalize((MODELVIEW_MATRIX * vec4(NORMAL, 0.0)).xyz);
-	VERTEX += NORMAL * (noise(VERTEX * 2.1 + vec3(3.7)) - 0.5) * 2.0 * lumps;
 }
 
 void fragment() {
-	vec3 facet = normalize(cross(dFdx(VERTEX), dFdy(VERTEX)));
-	facet = dot(facet, VERTEX) > 0.0 ? -facet : facet;
-	NORMAL = facet;
-	// Patches of the two colours of the house, with the grain of a break.
-	float patch = smoothstep(0.58, 0.64, noise(at * 1.9 + vec3(11.0)));
-	float grain = hash(floor(at * 7.0)) * 0.6 + hash(floor(at * 19.0)) * 0.4;
-	ALBEDO = mix(wall, wood, patch) * (0.55 + 0.4 * grain);
-	ROUGHNESS = 0.9;
-	SPECULAR = 0.2;
-	// Seams between what was fused, and the rim.
-	float seam = 1.0 - smoothstep(0.0, 0.045, abs(noise(at * 3.3 + vec3(5.0)) - 0.5));
-	float rim = pow(1.0 - clamp(dot(normalize(-VERTEX), round), 0.0, 1.0), 2.5);
-	EMISSION = glow * (seam * 1.0 + rim * 0.55) * power;
+	// The streams turn round the ball, faster towards its poles.
+	float turn = TIME * 2.2 + at.y * 3.0;
+	vec3 p = vec3(at.x * cos(turn) - at.z * sin(turn), at.y * 1.6, at.x * sin(turn) + at.z * cos(turn));
+	float streams = noise(p * 2.6 + vec3(0.0, -TIME * 0.9, 0.0)) * 0.65 + noise(p * 6.5 + vec3(TIME * 0.6)) * 0.35;
+	streams = smoothstep(0.48, 0.74, streams);
+	float rim = pow(1.0 - clamp(dot(normalize(-VERTEX), round), 0.0, 1.0), 2.2);
+	vec3 colour = mix(deep, bright, streams * 0.85);
+	colour += bright * rim * 1.3 + vec3(1.0) * pow(rim, 5.0) * 0.6;
+	ALBEDO = colour * power;
 }

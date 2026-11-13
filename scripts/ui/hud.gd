@@ -25,9 +25,9 @@ func _ready() -> void:
 	_stats.position = Vector2(20, 14)
 	_hint = _label(22)
 	_hint.position = Vector2(20, 44)
-	_hint.text = "Clic ou F : onde de choc  ·  Clic droit ou E, maintenu : ranger  ·  R : reconstruire"
+	_hint.text = "Clic ou F : onde de choc  ·  Clic droit ou E, maintenu : aspirer  ·  R : reconstruire"
 	if TouchControls.should_show():
-		_hint.text = "Bleu : onde de choc  ·  Orange, maintenu : ranger les débris"
+		_hint.text = "Bleu : onde de choc  ·  Violet, maintenu : aspirer les débris"
 	var button := Button.new()
 	button.text = "Reconstruire"
 	button.focus_mode = Control.FOCUS_NONE

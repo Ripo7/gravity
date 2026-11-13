@@ -1,7 +1,7 @@
 # Concept: breaking a house
 
 A first-person destruction test: a small greybox house, one power (a shock
-wave) and a way to tidy up after it (the debris gathered into balls). Walls break into irregular shards where they are hit, and into
+wave) and an orb that swallows the debris when you want it gone. Walls break into irregular shards where they are hit, and into
 smaller crumbs where they are hit hardest; what is no longer held up falls,
 and breaks again when it lands. Nothing disappears: the rubble stays and you
 can climb on it.
@@ -19,7 +19,7 @@ The previous project, Gravity, is kept as it was on the branch
 | Move | WASD (by position, so ZQSD on AZERTY) / arrows | left stick |
 | Look | mouse | drag on the right half |
 | Shock wave | left click or F | blue button |
-| Tidy up | hold right click or E, let go to put the ball down | hold the orange button, let go |
+| Orb | hold right click or E | hold the violet button |
 | Jump | space | small button |
 | Rebuild the house | R | "Reconstruire" |
 
@@ -60,9 +60,9 @@ step and how many pieces there are (and how many are moving).
    the point where a falling piece strikes) is cut once more, there and
    then, into 2 to 6 crumbs that fill it exactly. Each crumb is one more
    body, so they are rationed: 3 shards per step, none while more than 260
-   pieces are moving, and no more than a fixed number in all (250 on a
+   pieces are moving, and no more than a fixed number at a time (250 on a
    phone, 450 in a browser, 800 on a desktop), with fewer and fewer made as
-   that fills up.
+   that fills up. Crumbs the orb swallows leave their room to new ones.
 6. **Two draw calls** (`shard_mesh.gd`, `shaders/shards.gdshader`). All the
    shards are one mesh; a small texture tells the vertex shader which body
    each shard follows and where that body is. The checker is laid from the
@@ -70,7 +70,7 @@ step and how many pieces there are (and how many are moving).
    a cut are only drawn once the two shards are apart; their middle is
    pushed in or out and each facet is lit on its own, like broken stone.
    The crumbs are a second, small mesh drawn the same way, made again when
-   some are added.
+   some are added, without those that are gone.
 7. **Collisions of what stands.** A whole box collides as a few plain
    blocks; the first shard to leave a block turns it into one static shape
    per shard, so the holes are real. A shard torn out by a blast goes
@@ -82,16 +82,15 @@ whose front moves at 45 m/s. It tears out the shards it hits hard enough,
 cracks the bonds of the others, and is mostly stopped by what holds: a wall
 shelters what is behind it, a hole lets it through.
 
-Tidying up (`scripts/game/orb.gd`) is not a power: it breaks nothing. While
-you hold the button, loose pieces within 11 m that the ball can see (not
-what is behind a wall) rise, wind in and dwindle into a ball in front of
-you, 14 at a time; each one that arrives is taken out of the world and the
-ball grows by exactly its volume, up to 8 m3 (about 2.5 m across). Let go
-and the ball is put down: one heavy, solid thing instead of hundreds of
-pieces. Hold again while looking at a ball and you take it back, to carry
-it elsewhere or to fill it further. Nothing is lost: the volume in the balls
-is counted with the rest. Pieces on their way in are on a collision layer of
-their own, so that you are not carried off standing on one.
+The orb (`scripts/game/orb.gd`) is not a power: it breaks nothing. While
+you hold the button, a ball of magic stays open in front of you, a little
+below where you look. Loose pieces within 11 m that it can see (not what is
+behind a wall) rise, wind in and dwindle into it, 16 at a time, and are gone
+for good: no body, not drawn. Let go and it closes; what was on its way in
+falls back. This is the one place where debris disappears, and only because
+you ask: the volume swallowed is still counted, and the crumbs swallowed
+leave their room to new ones. Pieces on their way in are on a collision
+layer of their own, so that you are not carried off standing on one.
 
 Quality tiers (`scripts/core/quality.gd`: phone, browser, desktop) change
 the dust, the decorative bits and how many crumbs there can be. The house,
@@ -116,7 +115,7 @@ browser as `index.html?mode=...`:
 # A fixed tour that takes the house apart, with the cost of the physics.
 godot --headless --fixed-fps 60 --path . -- --mode=showcase --seed=1 --prof --quality=low \
   | python3 tools/perf_gate.py
-# Your own steps: aim, shock wave, wait, walk forward, tidy (g) and let go (t)...
+# Your own steps: aim, shock wave, wait, walk forward, orb open (g) and let go (t)...
 godot --path . -- --mode=play --from=-2.5,0.05,4.2 --steps="a@-2.5,1.4,-0.6;o;w2;f0.8;o;w3"
 godot --path . -- --mode=play --from=0,0.05,8.5 --steps="o@-1.5,1.4,2.7;w2;g;w4;t;w2"
 # How loaded the house is as built (1 = a bond breaks).
@@ -130,12 +129,12 @@ and `--touch` after `--` to see the thumb controls on a desktop.
 
 - `tests/`: a small headless runner; files `tests/test_*.gd`, methods
   `test_*` (they may `await`). They cover the cut (volumes, shared faces),
-  what holds and what falls, the shock wave on the house, tidying up, and
-  the controls.
+  what holds and what falls, the shock wave on the house, the orb, and the
+  controls.
 - `tools/perf_gate.py`: reads a profiled showcase and fails when the
   physics gets too slow.
 - `tools/web_probe.mjs`: loads the web export in headless Chromium, breaks
-  the house, tidies the debris into a ball, and fails on any error (`npm install playwright`, then
+  the house, opens the orb on the debris, and fails on any error (`npm install playwright`, then
   `node tools/web_probe.mjs build/web shot.png`). WebGL2 is stricter than
   desktop OpenGL: two bugs only showed there.
 - `.github/workflows/ci.yml` runs lint, tests, the perf gate, the web
@@ -163,9 +162,9 @@ once), 8 seeds, twice:
   real time, so only an order of magnitude) averaged 5 ms per step while
   things moved.
 
-Tidying up, same machine and settings (the balcony brought down, then 8 m3
-gathered into one ball): 0.2 to 0.3 ms per step while the ball draws debris
-in, and 300 loose pieces become 115 and a ball.
+The orb, same machine and settings (the balcony brought down, then the orb
+held open for 7 s): 0.2 to 0.4 ms per step while it draws debris in, and
+the 300 loose pieces become about 115.
 
 Not measured: a real phone. The line at the top left is there for that.
 

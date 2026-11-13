@@ -1,104 +1,63 @@
 extends TestCase
-## Tidying up: held, the orb gathers loose debris into one ball; let go, the
-## ball is put down and stays; looked at and held again, it is taken back.
+## The orb: held open, it draws in loose debris, which is gone for good; let
+## go, it closes. It breaks nothing.
 
 var main: Main
 var s: Structure
 
 
-func test_held_it_swallows_loose_debris_and_grows() -> void:
+func test_held_open_it_swallows_loose_debris_for_good() -> void:
 	await _load()
 	await _bring_the_balcony_down()
 	var before := s.pieces.live
-	_stand(Vector3(0, 0.05, 13), Vector3(0, 1.0, 8))
-	var orb := main.start_orb()
-	await frames(2)
-	var small := orb.radius()
-	await frames(300)
-	check(orb.volume > 1.0, "it swallowed debris (%.2f m3)" % orb.volume)
-	check(orb.volume <= Orb.MOST + 1e-3, "no more than it can hold")
-	check(orb.radius() > small * 1.5, "and grew (%.2f m to %.2f m)" % [small, orb.radius()])
-	var ball := 4.0 / 3.0 * PI * pow(orb.radius(), 3.0)
-	check_near(ball, orb.volume, orb.volume * 0.01, "a ball of the volume it swallowed")
-	check(s.pieces.live < before - 10, "what it swallowed is off the ground (%d pieces)" % s.pieces.live)
-	check_near(s.pieces.taken_volume, orb.volume, 1e-3, "and counted")
-	check_near(s.standing_volume() + s.pieces.volume(), s.total_volume, 1e-2, "nothing vanished")
-	var eye := main.player.camera
-	var ahead := (orb.centre - eye.global_position).dot(-eye.global_basis.z)
-	check(ahead > 1.5 and ahead < Orb.HOLD + orb.radius() * 3.0, "held in front of you (%.1f m)" % ahead)
-	check(orb.centre.y > orb.radius(), "above the ground")
-	await _unload()
-
-
-func test_let_go_the_ball_is_put_down_and_stays() -> void:
-	await _load()
-	await _bring_the_balcony_down()
-	_stand(Vector3(0, 0.05, 13), Vector3(0, 1.0, 8))
-	var orb := main.start_orb()
-	await frames(300)
-	var held := orb.volume
+	var loose := s.pieces.volume()
 	var standing := s.held_count
-	var was := orb.centre
-	check(held > 1.0, "it holds something (%.2f m3)" % held)
-	main.drop_orb()
-	check_eq(orb.state, Orb.State.DOWN, "let go, it is put down")
-	check(main.orb == null, "and no longer in hand")
+	_stand(Vector3(0, 0.05, 13), Vector3(0, 1.0, 8))
+	var orb := main.start_orb()
 	await frames(300)
-	check(is_instance_valid(orb), "the ball is still there")
-	check_near(orb.volume, held, 1e-4, "with all it swallowed")
-	var up := orb.centre.y - orb.radius()
-	check(up > -0.05 and up < 0.8, "resting on the ground or the rubble (%.2f m above it)" % up)
-	var rolled := Vector2(orb.centre.x - was.x, orb.centre.z - was.z).length()
-	check(rolled < 2.5, "near where you put it (%.1f m away)" % rolled)
+	check(orb.swallowed > 1.0, "it swallowed debris (%.2f m3)" % orb.swallowed)
+	check(
+		s.pieces.live < before - 10,
+		"which is gone from the ground (%d pieces of %d)" % [s.pieces.live, before]
+	)
+	check_near(s.pieces.taken_volume, orb.swallowed, 1e-3, "and counted as taken")
+	check_near(s.pieces.volume(), loose, 1e-2, "so nothing is unaccounted for")
+	check_near(s.standing_volume() + s.pieces.volume(), s.total_volume, 1e-2, "in the whole house either")
 	check_eq(s.held_count, standing, "it broke nothing")
-	check_near(s.pieces.taken_volume, held, 1e-3, "and gave nothing back: what it holds is still counted")
-	_check_nothing_vanished()
-	# You cannot walk through it.
-	var p := main.player
-	p.global_position = orb.centre + Vector3(0, 0, orb.radius() + 1.2)
-	p.global_position.y = 0.05
-	p.input_enabled = true
-	p.touch_move = Vector2(0, -1)
-	p.rotation.y = 0.0
-	await frames(120)
-	p.touch_move = Vector2.ZERO
-	var gap := Vector2(p.global_position.x - orb.centre.x, p.global_position.z - orb.centre.z).length()
-	check(gap > orb.radius() * 0.8, "it is solid: you stop against it (%.2f m from its middle)" % gap)
+	var eye := main.player.camera
+	var ahead := (orb.centre - eye.global_position).dot(-eye.global_basis.z)
+	check(ahead > 1.5 and ahead < Orb.HOLD + 0.5, "held in front of you (%.1f m)" % ahead)
+	check(orb.centre.y > Orb.SIZE, "above the ground")
 	await _unload()
 
 
-func test_looked_at_and_held_again_the_ball_is_taken_back() -> void:
+func test_let_go_it_closes_and_gives_nothing_back() -> void:
 	await _load()
 	await _bring_the_balcony_down()
 	_stand(Vector3(0, 0.05, 13), Vector3(0, 1.0, 8))
 	var orb := main.start_orb()
-	await frames(90)
+	await frames(120)
+	var gone := orb.swallowed
+	check(gone > 0.3, "it swallowed something (%.2f m3)" % gone)
 	main.drop_orb()
-	await frames(180)
-	var held := orb.volume
-	check(held > 0.2 and held < Orb.MOST, "a ball lies there, not full (%.2f m3)" % held)
-	# Looking elsewhere: a new one.
-	_stand(Vector3(0, 0.05, 13), Vector3(6, 3.0, 20))
-	await frames(5)
-	var other := main.start_orb()
-	check(other != orb, "looking away, you start a new ball")
-	main.drop_orb()
-	await frames(5)
-	check(not is_instance_valid(other), "which goes out, having swallowed nothing")
-	# Looking at it: the same one, in hand again, and it goes on growing.
-	_look_at_point(orb.centre)
-	await frames(5)
-	var again := main.start_orb()
-	check(again == orb, "looking at it, you take the same ball back")
-	check_eq(orb.state, Orb.State.HELD, "in hand")
-	_stand(Vector3(0, 0.05, 13), Vector3(0, 1.0, 8))
+	check(not orb.open, "let go, it closes")
+	check(main.orb == null, "and is no longer held")
+	await frames(60)
+	check(not is_instance_valid(orb), "then it is gone")
+	var left := s.pieces.live
 	await frames(240)
-	check(orb.volume > held + 0.3, "it goes on growing (%.2f to %.2f m3)" % [held, orb.volume])
-	var eye := main.player.camera
-	var ahead := (orb.centre - eye.global_position).dot(-eye.global_basis.z)
-	check(ahead > 1.5, "held in front of you again (%.1f m)" % ahead)
+	check_near(s.pieces.taken_volume, gone, 1e-3, "what it swallowed stays gone")
+	check(s.pieces.live <= left + 5, "nothing comes back (%d pieces)" % s.pieces.live)
+	var held := 0
+	for i in s.pieces.top:
+		held += int(s.pieces.alive[i] == 1 and s.pieces.gripped[i] == 1)
+	check_eq(held, 0, "what was on its way in is loose again")
 	_check_nothing_vanished()
-	main.drop_orb()
+	# Held again, a new one opens and goes on.
+	var again := main.start_orb()
+	check(again != orb and again.open, "held again, another opens")
+	await frames(120)
+	check(again.swallowed > 0.2, "and goes on swallowing (%.2f m3)" % again.swallowed)
 	await _unload()
 
 
@@ -126,7 +85,7 @@ func test_standing_on_a_piece_you_are_not_carried_off_with_it() -> void:
 			await frames(10)
 			var off := main.player.global_position - here
 			moved = maxf(moved, Vector2(off.x, off.z).length())
-		check(orb.volume > 0.3, "the orb drew pieces in (%.2f m3)" % orb.volume)
+		check(orb.swallowed > 0.3, "the orb drew pieces in (%.2f m3)" % orb.swallowed)
 		check(moved < 0.4, "you stayed where you were (moved %.2f m)" % moved)
 		main.drop_orb()
 	await _unload()
@@ -155,7 +114,7 @@ func test_what_comes_in_from_behind_does_not_push_you() -> void:
 	for k in 30:
 		await frames(10)
 		moved = maxf(moved, main.player.global_position.distance_to(here))
-	check(orb.volume > 0.3, "it drew them in (%.2f m3)" % orb.volume)
+	check(orb.swallowed > 0.3, "it drew them in (%.2f m3)" % orb.swallowed)
 	check(moved < 0.25, "and you stayed where you were (moved %.2f m)" % moved)
 	main.drop_orb()
 	await _unload()
@@ -166,10 +125,10 @@ func test_with_nothing_to_gather_nothing_happens() -> void:
 	_stand(Vector3(0, 0.05, 13), Vector3(0, 1.4, 3.4))
 	var orb := main.start_orb()
 	await frames(60)
-	check_eq(orb.volume, 0.0, "nothing to swallow")
+	check_eq(orb.swallowed, 0.0, "nothing to swallow")
 	main.drop_orb()
 	await frames(30)
-	check(not is_instance_valid(orb), "it goes out")
+	check(not is_instance_valid(orb), "it closes")
 	check_eq(s.held_count, s.count, "nothing broke")
 	check_eq(s.pieces.live, 0, "nothing came off")
 	await _unload()
@@ -190,7 +149,7 @@ func test_what_is_behind_a_wall_stays_there() -> void:
 	_stand(Vector3(0, 0.05, -9), Vector3(0, 1.0, -3.5))
 	var orb := main.start_orb()
 	await frames(180)
-	check_eq(orb.volume, 0.0, "it cannot draw them through the wall")
+	check_eq(orb.swallowed, 0.0, "it cannot draw them through the wall")
 	main.drop_orb()
 	await _unload()
 
