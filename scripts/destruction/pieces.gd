@@ -7,8 +7,8 @@ extends Node
 ## and knocks out what it hits if that is still standing. A lone shard that
 ## hits hard enough breaks into crumbs. Pieces that have come to rest are
 ## frozen: they cost nothing and a pile stays put, until something disturbs
-## them. Nothing is removed: what a ball of tidied debris swallows (take)
-## is still counted.
+## them. Nothing is removed, except what an orb swallows (take), which is
+## still counted.
 
 ## A piece slower than this (m/s, rad/s) for QUIET_TIME seconds is frozen.
 const QUIET_SPEED := 0.25
@@ -73,7 +73,7 @@ var asleep := 0
 ## first): loops over the pieces stop there.
 var top := 0
 var gripped := PackedByteArray()  ## 1 while an orb is drawing the piece in
-var taken_volume := 0.0  ## m3 swallowed by orbs
+var taken_volume := 0.0  ## m3 that orbs made disappear
 
 var _xf: Array[Transform3D] = []
 var _lin := PackedVector3Array()
@@ -210,7 +210,7 @@ func can_crumble(m: int) -> bool:
 ## crumbs yet, less and less as the room for them fills up.
 func crumble_chance() -> float:
 	var s := structure
-	return 1.0 - float(s.total - s.count) / maxf(s.most_crumbs, 1.0)
+	return 1.0 - float(s.crumbs_out) / maxf(s.most_crumbs, 1.0)
 
 
 ## Shard `m` breaks into crumbs, each a piece of its own, flung apart (or
@@ -330,16 +330,20 @@ func let_go(i: int) -> void:
 
 
 ## Piece `i` leaves the world for good (an orb swallows it): no body, not
-## drawn, its volume counted in taken_volume.
+## drawn, its volume counted in taken_volume, its crumbs' room given back.
 func take(i: int) -> void:
 	var s := structure
-	for m in members[i]:
+	var group := members[i]
+	for m in group:
 		s.piece_of[m] = -1
 		s.mesh.set_slot(m, -1)
 		taken_volume += s.volume[m]
 		for e in range(s.adj_first[m], s.adj_first[m + 1]):
 			s.bond_health[s.adj_bond[e]] = 0.0
 	_remove(i)
+	for m in group:
+		if m >= s.count:
+			s.crumb_gone(m)
 
 
 func serial_of(i: int) -> int:

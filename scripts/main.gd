@@ -1,8 +1,8 @@
 class_name Main
 extends Node3D
 ## The test ground, in greybox: a house you can take apart with a shock
-## wave (see Structure for how it breaks) and whose debris you can tidy
-## into balls (see Orb), walked around in first person.
+## wave (see Structure for how it breaks) and whose debris an orb swallows
+## when you want it gone (see Orb), walked around in first person.
 ## Textures: Kenney's prototype textures (CC0).
 
 const TEXTURES := "res://addons/kenney_prototype_textures/"
@@ -13,7 +13,7 @@ var dust: Dust
 var chips: Chips
 var clock: PhysicsClock
 var hud: Hud
-var orb: Orb  ## the ball in hand, if any
+var orb: Orb  ## the one held open, if any
 ## Where the house stands.
 var house_at := Transform3D(Basis(), Vector3(0, 0, -4))
 ## Milliseconds it took to cut and bond the house.
@@ -91,41 +91,21 @@ func cast_shockwave(from: Vector3, direction: Vector3) -> Shockwave:
 	return wave
 
 
-## Starts tidying loose debris into a ball held in front of the player:
-## the ball they are looking at if there is one lying near, else a new one.
+## Opens the orb in front of the player: it swallows the loose debris
+## around for as long as it is held.
 func start_orb() -> Orb:
-	if orb != null and is_instance_valid(orb) and orb.state == Orb.State.HELD:
-		return orb
-	var from := player.camera.global_position
-	var dir := -player.camera.global_basis.z
-	orb = null
-	var nearest := Orb.TAKE_BACK
-	for node in get_tree().get_nodes_in_group("orb"):
-		var ball := node as Orb
-		var to := ball.centre - from
-		var along := to.dot(dir)
-		if ball.state == Orb.State.DOWN and along > 0.0 and along < nearest:
-			if (to - dir * along).length() < ball.radius() + 0.3:
-				orb = ball
-				nearest = along
-	if orb != null:
-		orb.take_back()
-	else:
+	if orb == null or not is_instance_valid(orb) or not orb.open:
 		orb = Orb.new()
 		orb.setup(structure, player.camera)
 		add_child(orb)
 	return orb
 
 
-## Puts the ball in hand down.
+## Lets go of the orb: it closes.
 func drop_orb() -> void:
 	if orb != null and is_instance_valid(orb):
-		orb.put_down()
+		orb.close()
 	orb = null
-
-
-func _process(_delta: float) -> void:
-	player.orb_fill = orb.fill() if orb != null and is_instance_valid(orb) else 0.0
 
 
 ## Puts the house back up (starts the scene again).

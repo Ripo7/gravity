@@ -4,7 +4,7 @@ extends MeshInstance3D
 ## The mesh never changes: breaking only changes two small textures, which
 ## shard belongs to which rigid body, and where each body is. Crumbs, cut
 ## while the game runs, are a second, small mesh drawn the same way; it is
-## made again whenever some are added.
+## made again whenever some are added, without those that are gone.
 
 const SHADER := preload("res://shaders/shards.gdshader")
 const TEXTURES := "res://addons/kenney_prototype_textures/"
@@ -35,6 +35,7 @@ var _bodies_changed := false
 var _rng := RandomNumberGenerator.new()
 var _crumbs: MeshInstance3D
 var _crumbs_changed := false
+var _bits := {}  # crumb id: its [corners, normals, colours, uvs, triangles]
 
 
 ## Adds shard `id`: its corners where it stands (`points`), its faces as
@@ -42,7 +43,7 @@ var _crumbs_changed := false
 ## `base` is the id of the first shard of its box (Fracture numbers the
 ## shards of a box from 0). For a crumb, `alone` is an id that is never
 ## drawn: its cut faces always show once it is out. After build(), what is
-## added goes to the crumbs' mesh.
+## added is a crumb: it goes to the crumbs' mesh, until forget().
 func _init() -> void:
 	_rng.seed = 20261112
 
@@ -50,7 +51,6 @@ func _init() -> void:
 func add_shard(
 	id: int, base: int, points: PackedVector3Array, cut: Fracture.Shard, turn: Basis, tint: Color, alone := -1
 ) -> void:
-	_crumbs_changed = _crumbs != null
 	for f in cut.faces.size():
 		var ring := cut.faces[f]
 		var normal := turn * cut.normals[f]
@@ -86,6 +86,16 @@ func add_shard(
 			_indices.append(from + n)
 			_indices.append(from + (t + 1) % n)
 			_indices.append(from + t)
+	if _crumbs != null:
+		_bits[id] = [_verts, _normals, _colors, _uvs, _indices]
+		_clear()
+		_crumbs_changed = true
+
+
+## Crumb `id` is gone for good: it is left out the next time the crumbs'
+## mesh is made (until then it is only not drawn, like any hidden shard).
+func forget(id: int) -> void:
+	_bits.erase(id)
 
 
 ## Builds the mesh once every shard is added. Body 0 is the world: shards
@@ -116,11 +126,7 @@ func build(shards: int, bodies: int, hidden_from: int) -> void:
 	mat.set_shader_parameter("bodies", _body_texture)
 	mat.set_shader_parameter("grid", load(TEXTURES + "light/texture_07.png"))
 	material_override = mat
-	_verts = PackedVector3Array()
-	_normals = PackedVector3Array()
-	_colors = PackedColorArray()
-	_uvs = PackedVector2Array()
-	_indices = PackedInt32Array()
+	_clear()
 	_crumbs = MeshInstance3D.new()
 	_crumbs.material_override = mat
 	_crumbs.custom_aabb = custom_aabb
@@ -154,7 +160,16 @@ func set_body(slot: int, xf: Transform3D, origin: Vector3, size := 1.0) -> void:
 func _process(_delta: float) -> void:
 	if _crumbs_changed:
 		_crumbs_changed = false
-		_crumbs.mesh = _surface()
+		for bit: Array in _bits.values():
+			var from := _verts.size()
+			_verts.append_array(bit[0])
+			_normals.append_array(bit[1])
+			_colors.append_array(bit[2])
+			_uvs.append_array(bit[3])
+			for index: int in bit[4]:
+				_indices.append(from + index)
+		_crumbs.mesh = _surface() if not _verts.is_empty() else null
+		_clear()
 	if _slots_changed:
 		_slots_changed = false
 		_slot_image.set_data(WIDTH, _slot_image.get_height(), false, Image.FORMAT_RF, _slots.to_byte_array())
@@ -165,6 +180,14 @@ func _process(_delta: float) -> void:
 			WIDTH, _body_image.get_height(), false, Image.FORMAT_RGBAF, _bodies.to_byte_array()
 		)
 		_body_texture.update(_body_image)
+
+
+func _clear() -> void:
+	_verts = PackedVector3Array()
+	_normals = PackedVector3Array()
+	_colors = PackedColorArray()
+	_uvs = PackedVector2Array()
+	_indices = PackedInt32Array()
 
 
 ## A mesh of what has been added so far.

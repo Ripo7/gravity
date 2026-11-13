@@ -85,7 +85,7 @@ func test_a_shard_hit_hard_breaks_into_crumbs() -> void:
 	await _begin()
 	s.add_box(Transform3D(Basis(), Vector3(0, 1.5, 0)), Vector3(4, 3, 0.35))
 	s.build()
-	check_eq(s.total, s.count, "no crumbs to begin with")
+	check_eq(s.crumbs_out, 0, "no crumbs to begin with")
 	var big := 0
 	for i in s.count:
 		big += int(s.can_crumble(i))
@@ -99,13 +99,15 @@ func test_a_shard_hit_hard_breaks_into_crumbs() -> void:
 	check(hit >= 0, "there is a shard in the middle")
 	s.shatter(hit, Vector3(0, 0, -6))
 	await frames(3)
-	var bits := s.crumb_count[hit]
+	var crumbs: PackedInt32Array = s.crumbs_of.get(hit, PackedInt32Array())
+	var bits := crumbs.size()
 	check_eq(s.held[hit], 0, "it no longer stands")
 	check(bits >= 2, "it is in several crumbs (%d)" % bits)
 	check_eq(s.pieces.live, bits, "each of them a piece")
-	check_eq(s.total, s.count + bits, "numbered after the shards")
+	check_eq(s.crumbs_out, bits, "and counted")
 	var volume := 0.0
-	for c in range(s.crumb_first[hit], s.crumb_first[hit] + bits):
+	for c in crumbs:
+		check(c >= s.count, "numbered after the shards")
 		volume += s.volume[c]
 	check_near(volume, s.volume[hit], s.volume[hit] * 1e-3, "that add up to the shard")
 	check_near(s.standing_volume() + s.pieces.volume(), s.total_volume, 1e-3, "nothing vanished")
@@ -123,10 +125,51 @@ func test_crumbs_stop_when_there_is_no_room_left() -> void:
 	for i in s.count:
 		s.shatter(i, Vector3(0, 0, -6))
 		await frames(1)
-	check(s.total > s.count, "some crumbs were made (%d)" % (s.total - s.count))
-	check(s.total - s.count <= 14, "never more than there is room for")
+	check(s.crumbs_out > 0, "some crumbs were made (%d)" % s.crumbs_out)
+	check(s.crumbs_out <= 14, "never more than there is room for")
 	check_eq(s.held_count, 0, "every shard left all the same")
 	check_near(s.pieces.volume(), s.total_volume, 1e-3, "nothing vanished")
+	await _end()
+
+
+func test_crumbs_that_are_gone_leave_their_room_to_others() -> void:
+	await _begin()
+	s.most_crumbs = 14
+	s.add_box(Transform3D(Basis(), Vector3(0, 1.5, 0)), Vector3(4, 3, 0.35))
+	s.build()
+	# Shards crumble until there is no room left.
+	var next := 0
+	while next < s.count and s.crumbs_out + Structure.MAX_CRUMBS <= 14:
+		s.shatter(next, Vector3(0, 0, -6))
+		next += 1
+		await frames(1)
+	var full := s.crumbs_out
+	var numbers := s.total
+	check(full > 0 and not s.pieces.can_crumble(next), "the room for crumbs is full (%d)" % full)
+	# Every crumb is taken away, as an orb does.
+	var p := s.pieces
+	var gone := 0.0
+	for i in p.top:
+		if p.alive[i] == 1 and p.members[i][0] >= s.count:
+			gone += s.volume[p.members[i][0]]
+			p.take(i)
+	check_eq(s.crumbs_out, 0, "no crumb is left")
+	check_near(p.taken_volume, gone, 1e-4, "what was taken is counted")
+	check_near(s.standing_volume() + p.volume(), s.total_volume, 1e-3, "so nothing is unaccounted for")
+	await frames(2)
+	# And shards can crumble again, into the numbers that came free.
+	var before := p.live
+	while next < s.count and not s.can_crumble(next):
+		next += 1
+	s.shatter(next, Vector3(0, 0, -6))
+	await frames(3)
+	check(s.crumbs_out >= 2, "another shard broke into crumbs (%d)" % s.crumbs_out)
+	check_eq(p.live, before + s.crumbs_out, "each of them a piece")
+	check_eq(s.total, numbers, "with the numbers of those that were gone")
+	var volume := 0.0
+	for c: int in s.crumbs_of[next]:
+		volume += s.volume[c]
+	check_near(volume, s.volume[next], s.volume[next] * 1e-3, "that add up to their shard")
 	await _end()
 
 

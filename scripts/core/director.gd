@@ -109,13 +109,13 @@ func _play() -> void:
 				)
 			)
 		elif kind == "g":
-			# The tidy button goes down; "t" lets it go.
+			# The orb button goes down; "t" lets it go.
 			player.touch_gather = true
 			print("GATHER pieces=%d" % world.structure.pieces.live)
 		elif kind == "t":
 			var held: Orb = world.orb
-			var inside := held.volume if held != null and is_instance_valid(held) else 0.0
-			print("ORB %.2f m3 pieces=%d" % [inside, world.structure.pieces.live])
+			var gone := held.swallowed if held != null and is_instance_valid(held) else 0.0
+			print("ORB %.2f m3 pieces=%d" % [gone, world.structure.pieces.live])
 			player.touch_gather = false
 		elif kind == "o":
 			if spec.contains("@"):
@@ -202,7 +202,7 @@ func _end(tag: String) -> void:
 				_most_awake,
 				s.standing_volume() + s.pieces.volume(),
 				s.total_volume,
-				s.total - s.count,
+				s.crumbs_out,
 			]
 		)
 	)

@@ -58,16 +58,17 @@ const FALL_PER_STEP := 28
 static var _cuts := {}
 
 ## Shards are numbered 0 .. count - 1. Crumbs get the numbers after them,
-## up to total - 1, as they are made: no bonds, never standing. The first
-## six arrays below cover both.
+## up to total - 1, as they are made (a crumb that is gone leaves its number
+## to the next one): no bonds, never standing. The first six arrays below
+## cover both.
 var count := 0
 var total := 0
-## No more crumbs than this are ever made (set it before build()): each is
-## one more body to move.
+## No more crumbs than this at a time (set it before build()): each is one
+## more body to move.
 var most_crumbs := 400
-var crumb_first := PackedInt32Array()  ## per shard: its first crumb, or -1 while it is whole
-var crumb_count := PackedByteArray()  ## and how many it broke into
-var crumbled_count := 0  ## how many shards are in crumbs
+var crumbs_out := 0  ## how many crumbs there are now
+var crumbs_of := {}  ## shard: the crumbs it broke into that are still there
+var crumbled_count := 0  ## how many shards have broken into crumbs
 ## Per shard: where it stands (its centre of mass), size, and its state.
 var centroid := PackedVector3Array()
 var volume := PackedFloat32Array()
@@ -127,6 +128,8 @@ var _built := false
 # Only while building: every shard's corners and faces in the world.
 var _points: Array[PackedVector3Array] = []
 var _planes: Array = []
+var _spare := PackedInt32Array()  # the numbers of crumbs that are gone
+var _crumb_shard := PackedInt32Array()  # per crumb (from `count` on): the shard it was cut from
 # To cut a shard into crumbs later: how Fracture made it, and its box.
 var _cut_of: Array[Fracture.Shard] = []
 var _box_xf: Array[Transform3D] = []
@@ -238,9 +241,6 @@ func build(ground := 0.0) -> void:
 		there.append(i)
 		_cells[cell] = there
 	total = count
-	crumb_first.resize(count)
-	crumb_first.fill(-1)
-	crumb_count.resize(count)
 	_index_bonds()
 	held_count = count
 	_mark.resize(count)
@@ -409,11 +409,11 @@ func shape_of(i: int) -> RID:
 ## Where shard or crumb `i` is now (its centre of mass); for a shard that
 ## broke into crumbs, the middle of them.
 func place_of(i: int) -> Vector3:
-	if i < count and crumb_first[i] >= 0:
+	if i < count and crumbs_of.has(i) and not (crumbs_of[i] as PackedInt32Array).is_empty():
 		var sum := Vector3.ZERO
-		for c in range(crumb_first[i], crumb_first[i] + crumb_count[i]):
+		for c: int in crumbs_of[i]:
 			sum += place_of(c)
-		return sum / crumb_count[i]
+		return sum / (crumbs_of[i] as PackedInt32Array).size()
 	var piece := piece_of[i]
 	if piece < 0:
 		return centroid[i]
@@ -423,7 +423,7 @@ func place_of(i: int) -> Vector3:
 ## True if shard `i` is big enough to be cut into crumbs and there is room
 ## left for them.
 func can_crumble(i: int) -> bool:
-	return i < count and volume[i] >= CRUMB * 1.5 and total + MAX_CRUMBS <= count + most_crumbs
+	return i < count and volume[i] >= CRUMB * 1.5 and crumbs_out + MAX_CRUMBS <= most_crumbs
 
 
 ## Cuts shard `i` into crumbs and gives them their numbers (what becomes of
@@ -438,8 +438,6 @@ func make_crumbs(i: int) -> PackedInt32Array:
 	if bits.is_empty():
 		return out
 	var xf := _box_xf[element[i]]
-	crumb_first[i] = total
-	crumb_count[i] = bits.size()
 	crumbled_count += 1
 	for bit in bits:
 		var c := xf * bit.centroid
@@ -451,17 +449,47 @@ func make_crumbs(i: int) -> PackedInt32Array:
 			world.append(w)
 			around.append((w - c) * SHRINK)
 			reach = maxf(reach, w.distance_to(c))
-		centroid.append(c)
-		volume.append(bit.volume)
-		mass.append(bit.volume * DENSITY)
-		radius.append(reach)
-		piece_of.append(-1)
-		corners.append(around)
-		_shape.append(RID())
-		mesh.add_shard(total, 0, world, bit, xf.basis, _box_tint[element[i]], count + most_crumbs)
-		out.append(total)
-		total += 1
+		# The number of a crumb that is gone, or a new one.
+		var id := total
+		if _spare.is_empty():
+			total += 1
+			centroid.append(c)
+			volume.append(0.0)
+			mass.append(0.0)
+			radius.append(0.0)
+			piece_of.append(-1)
+			corners.append(around)
+			_shape.append(RID())
+			_crumb_shard.append(i)
+		else:
+			id = _spare[_spare.size() - 1]
+			_spare.remove_at(_spare.size() - 1)
+		centroid[id] = c
+		volume[id] = bit.volume
+		mass[id] = bit.volume * DENSITY
+		radius[id] = reach
+		piece_of[id] = -1
+		corners[id] = around
+		_crumb_shard[id - count] = i
+		mesh.add_shard(id, 0, world, bit, xf.basis, _box_tint[element[i]], count + most_crumbs)
+		out.append(id)
+	crumbs_out += out.size()
+	crumbs_of[i] = out.duplicate()
 	return out
+
+
+## Crumb `id` is gone for good (an orb swallowed it): its number and its
+## room are free for another.
+func crumb_gone(id: int) -> void:
+	crumbs_out -= 1
+	_spare.append(id)
+	mesh.forget(id)
+	if _shape[id].is_valid():
+		PhysicsServer3D.free_rid(_shape[id])
+		_shape[id] = RID()
+	var of: PackedInt32Array = crumbs_of[_crumb_shard[id - count]]
+	of.remove_at(of.find(id))
+	crumbs_of[_crumb_shard[id - count]] = of
 
 
 ## Volume (m3) still standing.

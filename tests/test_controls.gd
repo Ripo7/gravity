@@ -74,7 +74,7 @@ func test_touch_controls_move_look_and_fire() -> void:
 	await _unload()
 
 
-func test_the_tidy_button_is_held_then_let_go() -> void:
+func test_the_orb_button_is_held_then_let_go() -> void:
 	await _load()
 	var p := main.player
 	var tc := TouchControls.new()
@@ -84,12 +84,12 @@ func test_the_tidy_button_is_held_then_let_go() -> void:
 	var gap := (
 		tc.gather_center().distance_to(tc.fire_center()) - tc.gather_radius() * 1.3 - tc.fire_radius() * 1.3
 	)
-	check(gap > 0.0, "the tidy button is apart from the shock wave's")
+	check(gap > 0.0, "the orb button is apart from the shock wave's")
 	check(tc.gather_center().x > tc.size.x * 0.5, "under the right thumb")
 	tc._on_touch(_touch(1, tc.gather_center(), true))
 	await frames(3)
 	check(p.gathering, "holding it gathers")
-	check(main.orb != null and main.orb.state == Orb.State.HELD, "a ball is held in front of you")
+	check(main.orb != null and main.orb.open, "the orb is open in front of you")
 	var orb := main.orb
 	var yaw := p.rotation.y
 	tc._on_drag(_drag(1, tc.gather_center() - Vector2(40, 0)))
@@ -97,8 +97,8 @@ func test_the_tidy_button_is_held_then_let_go() -> void:
 	tc._on_touch(_touch(1, tc.gather_center() - Vector2(40, 0), false))
 	await frames(3)
 	check(not p.gathering, "letting go stops")
-	check(main.orb == null, "and the ball leaves your hand")
-	check(not is_instance_valid(orb) or orb.state != Orb.State.HELD, "it is no longer held")
+	check(main.orb == null, "and the orb is let go")
+	check(not is_instance_valid(orb) or not orb.open, "it closes")
 	await _unload()
 
 

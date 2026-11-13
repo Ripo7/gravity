@@ -1,9 +1,9 @@
 // Loads the web export in headless Chromium (software WebGL2), plays a short
-// scripted run (two shock waves at the house, then the debris tidied into a
-// ball that is put down) and checks that the house was built, that it
-// broke, that the ball swallowed something, and that nothing failed on the
-// way (a shader that does not compile in WebGL shows up here, not on
-// desktop). The screenshot is taken while the ball is held.
+// scripted run (two shock waves at the house, then the orb held open on the
+// debris) and checks that the house was built, that it broke, that the orb
+// swallowed something, and that nothing failed on the way (a shader that
+// does not compile in WebGL shows up here, not on desktop). The screenshot
+// is taken while the orb is open.
 // Usage: node tools/web_probe.mjs build/web [screenshot.png]
 //        CHROME=/usr/bin/google-chrome to use an installed browser.
 import { createServer } from "node:http";
@@ -60,7 +60,7 @@ const m = done && done.match(/standing=(\d+)\/(\d+) pieces=(\d+)/);
 if (!m) failures.push("the run did not finish");
 else if (Number(m[1]) >= Number(m[2]) || Number(m[3]) < 5) failures.push("nothing broke");
 const orb = lines.find((t) => t.startsWith("ORB"));
-if (!orb || !(parseFloat(orb.split(" ")[1]) > 0)) failures.push("the ball swallowed nothing");
+if (!orb || !(parseFloat(orb.split(" ")[1]) > 0)) failures.push("the orb swallowed nothing");
 const errors = lines.filter((t) => /SCRIPT ERROR|shader.*(error|fail)|ERROR:/i.test(t));
 if (errors.length) failures.push(`${errors.length} errors, first: ${errors[0]}`);
 console.log(failures.length ? "WEB_FAIL " + failures.join("; ") : "WEB_OK");
