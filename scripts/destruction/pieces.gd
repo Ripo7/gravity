@@ -8,7 +8,7 @@ extends Node
 ## hits hard enough breaks into crumbs. Pieces that have come to rest are
 ## frozen: they cost nothing and a pile stays put, until something disturbs
 ## them. Nothing is removed, except what an orb swallows (take), which is
-## still counted.
+## still counted; a piece an orb cannot get to itself comes apart (break_up).
 
 ## A piece slower than this (m/s, rad/s) for QUIET_TIME seconds is frozen.
 const QUIET_SPEED := 0.25
@@ -73,6 +73,9 @@ var asleep := 0
 ## first): loops over the pieces stop there.
 var top := 0
 var gripped := PackedByteArray()  ## 1 while an orb is drawing the piece in
+## Pieces born in an orb's grip (parts of one that broke on its way in) and
+## that it has not taken charge of yet: it empties this list.
+var adrift := PackedInt32Array()
 var taken_volume := 0.0  ## m3 that orbs made disappear
 
 var _xf: Array[Transform3D] = []
@@ -94,6 +97,7 @@ var _mark := PackedInt32Array()
 var _stamp := 0
 var _crumbles_left := CRUMBLES_PER_STEP
 var _clearing: Array[Vector3i] = []  # (piece, serial, steps left) going through what stands
+var _born_gripped := false  # while the parts of a gripped piece are being spawned
 
 
 ## Room for `count` pieces (as many as there are shards and crumbs).
@@ -198,6 +202,9 @@ func spawn(
 	live += 1
 	awake += 1
 	s.mesh.set_body(i + 1, xf, centre)
+	if _born_gripped:
+		grip(i)
+		adrift.append(i)
 	return i
 
 
@@ -344,6 +351,28 @@ func take(i: int) -> void:
 	for m in group:
 		if m >= s.count:
 			s.crumb_gone(m)
+
+
+## Piece `i` of several shards comes apart (an orb pulls on it and it is
+## stuck): each of its shards is a piece of its own, where it is (and in the
+## orb's grip if the whole was: see adrift).
+func break_up(i: int) -> void:
+	var group := members[i]
+	if group.size() < 2:
+		return
+	var s := structure
+	var xf := _xf[i]
+	var from_rest := xf * Transform3D(Basis(), -origin[i])
+	var amount := mass[i] / Structure.DENSITY
+	for m in group:
+		for e in range(s.adj_first[m], s.adj_first[m + 1]):
+			s.bond_health[s.adj_bond[e]] = 0.0
+	_born_gripped = gripped[i] == 1
+	_remove(i)
+	for m in group:
+		spawn(PackedInt32Array([m]), from_rest, Vector3.ZERO, Vector3.ZERO)
+	_born_gripped = false
+	s.released.emit(xf.origin, amount, Vector3.ZERO)
 
 
 func serial_of(i: int) -> int:
@@ -539,6 +568,8 @@ func _shatter(hit: Array) -> void:
 		return
 	var lin := _lin[i]
 	var ang := _ang[i]
+	# What an orb was drawing in stays in its grip, in parts.
+	_born_gripped = gripped[i] == 1
 	for m in crushed + powder:
 		for e in range(s.adj_first[m], s.adj_first[m + 1]):
 			s.bond_health[s.adj_bond[e]] = 0.0
@@ -566,6 +597,7 @@ func _shatter(hit: Array) -> void:
 				if _mark[s.adj_other[e]] != _stamp:
 					s.bond_health[s.adj_bond[e]] = 0.0
 		spawn(part, from_rest, lin + ang.cross(arm), ang)
+	_born_gripped = false
 	s.released.emit(xf.origin, amount, lin)
 
 
