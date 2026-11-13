@@ -16,7 +16,7 @@ const LAYER_WORLD := 1
 const LAYER_STRUCTURE := 2
 const LAYER_DEBRIS := 4
 const LAYER_PLAYER := 8
-## Loose pieces an orb is drawing in: nothing sees them (you would be
+## Loose pieces being drawn into an orb: nothing sees them (you would be
 ## carried off standing on one), they only stop at the ground and at what
 ## still stands.
 const LAYER_GRIPPED := 16
@@ -350,11 +350,11 @@ func shatter(i: int, velocity: Vector3) -> void:
 
 
 ## Something heavy hit the standing building at `at`: about `amount` m3 of
-## it is knocked out there, nearest first and no farther than `reach`, and
-## leaves at `velocity`. The nearest half of it leaves in crumbs.
-func crush(at: Vector3, amount: float, velocity: Vector3, reach := 1.6) -> void:
+## it is knocked out there, nearest first, and leaves at `velocity`. The
+## nearest half of it leaves in crumbs.
+func crush(at: Vector3, amount: float, velocity: Vector3) -> void:
 	var near: Array[Vector2] = []  # (distance to its surface, shard)
-	for i in shards_near(at, reach):
+	for i in shards_near(at, 1.6):
 		if held[i] == 1:
 			near.append(Vector2(maxf(centroid[i].distance_to(at) - radius[i], 0.0), i))
 	near.sort()

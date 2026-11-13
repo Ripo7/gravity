@@ -4,7 +4,8 @@ extends Control
 ##   Left half: a floating stick (appears where the thumb lands) to move.
 ##   Right half: drag to look.
 ##   Bottom-right: the shock wave button. Above it: jump. Beside it: the
-##   orb button, to hold (debris gathers) and let go (the orb is thrown).
+##   tidy button, to hold (debris gathers into a ball) and let go (the ball
+##   is put down).
 ## Multi-touch is tracked per finger so you can move, look and fire at once.
 
 @export var player: Player
@@ -144,8 +145,8 @@ func _on_drag(e: InputEventScreenDrag) -> void:
 			_stick_origin = _stick_pos - (_stick_pos - _stick_origin).normalized() * r
 		queue_redraw()
 	elif e.index == _look_finger or e.index == _fire_finger or e.index == _gather_finger:
-		# Dragging from the fire or the orb button also aims, like a real
-		# thumb would: the orb is held, aimed, then let go.
+		# Dragging from the fire or the tidy button also turns you, like a
+		# real thumb would: the ball is carried, then put down.
 		var k := look_sensitivity / maxf(size.y, 1.0)
 		player.look(Vector2(-step.x, -step.y) * k)
 
@@ -170,7 +171,7 @@ func _draw() -> void:
 	draw_circle(c - Vector2(r * 0.45, 0), r * 0.1, mark)
 	for j in 3:
 		draw_arc(c - Vector2(r * 0.45, 0), r * (0.32 + 0.26 * j), -0.75, 0.75, 12, mark, 3.0, true)
-	# The orb button: a ball, with a ring that fills as the orb grows.
+	# The tidy button: a ball, with a ring that fills as the ball grows.
 	var held := _gather_finger >= 0
 	var g := gather_center()
 	var gr := gather_radius()

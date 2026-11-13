@@ -1,9 +1,9 @@
 // Loads the web export in headless Chromium (software WebGL2), plays a short
-// scripted run (two shock waves at the house, then the debris gathered into
-// an orb and thrown back) and checks that the house was built, that it
-// broke, that the orb swallowed something and burst, and that nothing failed
-// on the way (a shader that does not compile in WebGL shows up here, not on
-// desktop). The screenshot is taken while the orb is held.
+// scripted run (two shock waves at the house, then the debris tidied into a
+// ball that is put down) and checks that the house was built, that it
+// broke, that the ball swallowed something, and that nothing failed on the
+// way (a shader that does not compile in WebGL shows up here, not on
+// desktop). The screenshot is taken while the ball is held.
 // Usage: node tools/web_probe.mjs build/web [screenshot.png]
 //        CHROME=/usr/bin/google-chrome to use an installed browser.
 import { createServer } from "node:http";
@@ -34,10 +34,10 @@ const lines = [];
 page.on("console", (m) => {
   const t = m.text();
   lines.push(t);
-  if (/BUILD|CAST|GATHER|ORB|BURST|PLAY_DONE|ERROR|error|shader/i.test(t)) console.log(t);
+  if (/BUILD|CAST|GATHER|ORB|PLAY_DONE|ERROR|error|shader/i.test(t)) console.log(t);
 });
 page.on("pageerror", (e) => console.log("PAGE ERROR " + e.message));
-const steps = "a@-2.5,1.4,-0.6;w0.3;o;w1.5;o@-1.5,1.4,2.7;w2.5;g;w2.5;a@1.5,1.2,-0.6;w0.3;t;w2.5";
+const steps = "a@-2.5,1.4,-0.6;w0.3;o;w1.5;o@-1.5,1.4,2.7;w2.5;g;w2.5;t;w1.5";
 await page.goto(`http://localhost:8061/index.html?mode=play&from=-2.5,0.05,4.5&steps=${encodeURIComponent(steps)}`);
 // Software WebGL is slow: a few seconds of game time can take a minute.
 let done;
@@ -60,8 +60,7 @@ const m = done && done.match(/standing=(\d+)\/(\d+) pieces=(\d+)/);
 if (!m) failures.push("the run did not finish");
 else if (Number(m[1]) >= Number(m[2]) || Number(m[3]) < 5) failures.push("nothing broke");
 const orb = lines.find((t) => t.startsWith("ORB"));
-if (!orb || !(parseFloat(orb.split(" ")[1]) > 0)) failures.push("the orb swallowed nothing");
-else if (!lines.some((t) => t.startsWith("BURST"))) failures.push("the orb did not burst");
+if (!orb || !(parseFloat(orb.split(" ")[1]) > 0)) failures.push("the ball swallowed nothing");
 const errors = lines.filter((t) => /SCRIPT ERROR|shader.*(error|fail)|ERROR:/i.test(t));
 if (errors.length) failures.push(`${errors.length} errors, first: ${errors[0]}`);
 console.log(failures.length ? "WEB_FAIL " + failures.join("; ") : "WEB_OK");

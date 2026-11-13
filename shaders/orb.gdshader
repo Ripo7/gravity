@@ -1,13 +1,13 @@
 shader_type spatial;
-// The orb: loose debris fused into one lumpy ball, held together by the
-// same blue air as the shock wave. It is lit facet by facet like the broken
-// faces of the shards it is made of, in their colours, and glows along its
-// seams and its rim; more while it is still drawing debris in.
+// The orb: loose debris tidied into one lumpy ball. It is lit facet by
+// facet like the broken faces of the shards it is made of, in their
+// colours. While it is held it glows along its seams and its rim, in the
+// blue of the shock wave; put down, it is only a ball of rubble.
 
 uniform vec3 wall : source_color = vec3(0.62, 0.62, 0.65);
 uniform vec3 wood : source_color = vec3(0.72, 0.58, 0.42);
 uniform vec3 glow : source_color = vec3(0.45, 0.72, 1.0);
-uniform float power = 1.0;  // how strongly it glows
+uniform float power = 1.0;  // how strongly it glows (0: put down)
 uniform float lumps = 0.16;  // how far from round, as a share of its size
 
 varying vec3 at;      // where on the ball (it is 1 across the radius)

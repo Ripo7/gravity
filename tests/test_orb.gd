@@ -1,6 +1,6 @@
 extends TestCase
-## The orb: held, it gathers loose debris into one ball; thrown, it breaks
-## what it hits and gives everything back.
+## Tidying up: held, the orb gathers loose debris into one ball; let go, the
+## ball is put down and stays; looked at and held again, it is taken back.
 
 var main: Main
 var s: Structure
@@ -30,44 +30,75 @@ func test_held_it_swallows_loose_debris_and_grows() -> void:
 	await _unload()
 
 
-func test_thrown_it_breaks_what_it_hits_and_gives_everything_back() -> void:
+func test_let_go_the_ball_is_put_down_and_stays() -> void:
 	await _load()
 	await _bring_the_balcony_down()
 	_stand(Vector3(0, 0.05, 13), Vector3(0, 1.0, 8))
 	var orb := main.start_orb()
 	await frames(300)
-	check(orb.volume > 1.0, "it holds something (%.2f m3)" % orb.volume)
-	# The upper floor's front wall, near its left corner.
-	var target := Vector3(-3.6, 4.2, 3.4)
-	_stand(Vector3(0, 0.05, 13), target)
-	await frames(20)
+	var held := orb.volume
 	var standing := s.held_count
-	# What is in the middle of the view.
-	var eye := main.player.camera
-	var ray := PhysicsRayQueryParameters3D.create(
-		eye.global_position,
-		eye.global_position - eye.global_basis.z * 40.0,
-		Structure.LAYER_WORLD | Structure.LAYER_STRUCTURE
-	)
-	var seen := main.get_world_3d().direct_space_state.intersect_ray(ray)
-	check(not seen.is_empty(), "you are looking at the house")
-	var size := orb.radius()
-	var hits: Array[Vector3] = []
-	orb.burst.connect(func(at: Vector3, _volume: float) -> void: hits.append(at))
-	main.throw_orb()
-	check_eq(orb.state, Orb.State.FLY, "let go, it flies")
+	var was := orb.centre
+	check(held > 1.0, "it holds something (%.2f m3)" % held)
+	main.drop_orb()
+	check_eq(orb.state, Orb.State.DOWN, "let go, it is put down")
+	check(main.orb == null, "and no longer in hand")
+	await frames(300)
+	check(is_instance_valid(orb), "the ball is still there")
+	check_near(orb.volume, held, 1e-4, "with all it swallowed")
+	var up := orb.centre.y - orb.radius()
+	check(up > -0.05 and up < 0.8, "resting on the ground or the rubble (%.2f m above it)" % up)
+	var rolled := Vector2(orb.centre.x - was.x, orb.centre.z - was.z).length()
+	check(rolled < 2.5, "near where you put it (%.1f m away)" % rolled)
+	check_eq(s.held_count, standing, "it broke nothing")
+	check_near(s.pieces.taken_volume, held, 1e-3, "and gave nothing back: what it holds is still counted")
+	_check_nothing_vanished()
+	# You cannot walk through it.
+	var p := main.player
+	p.global_position = orb.centre + Vector3(0, 0, orb.radius() + 1.2)
+	p.global_position.y = 0.05
+	p.input_enabled = true
+	p.touch_move = Vector2(0, -1)
+	p.rotation.y = 0.0
+	await frames(120)
+	p.touch_move = Vector2.ZERO
+	var gap := Vector2(p.global_position.x - orb.centre.x, p.global_position.z - orb.centre.z).length()
+	check(gap > orb.radius() * 0.8, "it is solid: you stop against it (%.2f m from its middle)" % gap)
+	await _unload()
+
+
+func test_looked_at_and_held_again_the_ball_is_taken_back() -> void:
+	await _load()
+	await _bring_the_balcony_down()
+	_stand(Vector3(0, 0.05, 13), Vector3(0, 1.0, 8))
+	var orb := main.start_orb()
 	await frames(90)
-	check_eq(hits.size(), 1, "it hit something")
-	if hits.size() == 1 and not seen.is_empty():
-		var off := hits[0].distance_to(seen["position"])
-		check(off < size + 0.6, "what you were looking at (%.1f m off, ball of %.1f m)" % [off, size])
-	check(s.held_count <= standing - 8, "it knocked a hole (%d shards)" % (standing - s.held_count))
-	check(not is_instance_valid(orb), "the ball is gone")
-	check_near(s.pieces.taken_volume, 0.0, 1e-3, "all it held is back")
+	main.drop_orb()
+	await frames(180)
+	var held := orb.volume
+	check(held > 0.2 and held < Orb.MOST, "a ball lies there, not full (%.2f m3)" % held)
+	# Looking elsewhere: a new one.
+	_stand(Vector3(0, 0.05, 13), Vector3(6, 3.0, 20))
+	await frames(5)
+	var other := main.start_orb()
+	check(other != orb, "looking away, you start a new ball")
+	main.drop_orb()
+	await frames(5)
+	check(not is_instance_valid(other), "which goes out, having swallowed nothing")
+	# Looking at it: the same one, in hand again, and it goes on growing.
+	_look_at_point(orb.centre)
+	await frames(5)
+	var again := main.start_orb()
+	check(again == orb, "looking at it, you take the same ball back")
+	check_eq(orb.state, Orb.State.HELD, "in hand")
+	_stand(Vector3(0, 0.05, 13), Vector3(0, 1.0, 8))
+	await frames(240)
+	check(orb.volume > held + 0.3, "it goes on growing (%.2f to %.2f m3)" % [held, orb.volume])
+	var eye := main.player.camera
+	var ahead := (orb.centre - eye.global_position).dot(-eye.global_basis.z)
+	check(ahead > 1.5, "held in front of you again (%.1f m)" % ahead)
 	_check_nothing_vanished()
-	await frames(600)
-	_check_nothing_vanished()
-	check(s.pieces.awake <= s.pieces.live / 20, "it all came to rest (%d still moving)" % s.pieces.awake)
+	main.drop_orb()
 	await _unload()
 
 
@@ -97,7 +128,7 @@ func test_standing_on_a_piece_you_are_not_carried_off_with_it() -> void:
 			moved = maxf(moved, Vector2(off.x, off.z).length())
 		check(orb.volume > 0.3, "the orb drew pieces in (%.2f m3)" % orb.volume)
 		check(moved < 0.4, "you stayed where you were (moved %.2f m)" % moved)
-		main.throw_orb()
+		main.drop_orb()
 	await _unload()
 
 
@@ -126,7 +157,7 @@ func test_what_comes_in_from_behind_does_not_push_you() -> void:
 		moved = maxf(moved, main.player.global_position.distance_to(here))
 	check(orb.volume > 0.3, "it drew them in (%.2f m3)" % orb.volume)
 	check(moved < 0.25, "and you stayed where you were (moved %.2f m)" % moved)
-	main.throw_orb()
+	main.drop_orb()
 	await _unload()
 
 
@@ -136,7 +167,7 @@ func test_with_nothing_to_gather_nothing_happens() -> void:
 	var orb := main.start_orb()
 	await frames(60)
 	check_eq(orb.volume, 0.0, "nothing to swallow")
-	main.throw_orb()
+	main.drop_orb()
 	await frames(30)
 	check(not is_instance_valid(orb), "it goes out")
 	check_eq(s.held_count, s.count, "nothing broke")
@@ -160,7 +191,7 @@ func test_what_is_behind_a_wall_stays_there() -> void:
 	var orb := main.start_orb()
 	await frames(180)
 	check_eq(orb.volume, 0.0, "it cannot draw them through the wall")
-	main.throw_orb()
+	main.drop_orb()
 	await _unload()
 
 
@@ -178,7 +209,13 @@ func _stand(at: Vector3, target: Vector3) -> void:
 	var p := main.player
 	p.global_position = main.house_at * at
 	p.velocity = Vector3.ZERO
-	var d := main.house_at * target - (p.global_position + Vector3(0, Player.EYES, 0))
+	_look_at_point(main.house_at * target)
+
+
+## Turns the player to look at `point` (in the world).
+func _look_at_point(point: Vector3) -> void:
+	var p := main.player
+	var d := point - (p.global_position + Vector3(0, Player.EYES, 0))
 	p.rotation.y = atan2(-d.x, -d.z)
 	p.head.rotation.x = atan2(d.y, Vector2(d.x, d.z).length())
 

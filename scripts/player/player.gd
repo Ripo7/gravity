@@ -2,8 +2,8 @@ class_name Player
 extends CharacterBody3D
 ## First-person controller (mouse + keyboard, gamepad, touch). The fire
 ## button sends a shock wave out of your hands, along where you look. The
-## gather button, held, draws loose debris into an orb in front of you; let
-## go and the orb is thrown.
+## gather button, held, tidies loose debris into a ball in front of you; let
+## go and the ball is put down.
 
 ## The shock wave leaves from `from` along `direction`.
 signal fired(from: Vector3, direction: Vector3)
@@ -36,7 +36,7 @@ var touch_fire := false
 var touch_gather := false  ## held down
 var cooldown_left := 0.0
 var gathering := false
-## How full the orb being gathered is (0 to 1), for the button's ring.
+## How full the ball in hand is (0 to 1), for the button's ring.
 var orb_fill := 0.0
 var head: Node3D
 var camera: CameraShake

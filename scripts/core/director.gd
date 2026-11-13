@@ -109,23 +109,13 @@ func _play() -> void:
 				)
 			)
 		elif kind == "g":
-			# The orb button goes down; "t" lets it go.
+			# The tidy button goes down; "t" lets it go.
 			player.touch_gather = true
 			print("GATHER pieces=%d" % world.structure.pieces.live)
 		elif kind == "t":
 			var held: Orb = world.orb
 			var inside := held.volume if held != null and is_instance_valid(held) else 0.0
 			print("ORB %.2f m3 pieces=%d" % [inside, world.structure.pieces.live])
-			if inside > 0.0:
-				held.burst.connect(
-					func(at: Vector3, volume: float) -> void:
-						print(
-							(
-								"BURST %.2f m3 at %s standing=%d"
-								% [volume, at.snappedf(0.01), world.structure.held_count]
-							)
-						)
-				)
 			player.touch_gather = false
 		elif kind == "o":
 			if spec.contains("@"):

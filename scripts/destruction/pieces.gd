@@ -7,8 +7,8 @@ extends Node
 ## and knocks out what it hits if that is still standing. A lone shard that
 ## hits hard enough breaks into crumbs. Pieces that have come to rest are
 ## frozen: they cost nothing and a pile stays put, until something disturbs
-## them. Nothing is removed: what an orb swallows (take) is counted until it
-## is given back (give).
+## them. Nothing is removed: what a ball of tidied debris swallows (take)
+## is still counted.
 
 ## A piece slower than this (m/s, rad/s) for QUIET_TIME seconds is frozen.
 const QUIET_SPEED := 0.25
@@ -73,7 +73,7 @@ var asleep := 0
 ## first): loops over the pieces stop there.
 var top := 0
 var gripped := PackedByteArray()  ## 1 while an orb is drawing the piece in
-var taken_volume := 0.0  ## m3 swallowed by orbs and not given back yet
+var taken_volume := 0.0  ## m3 swallowed by orbs
 
 var _xf: Array[Transform3D] = []
 var _lin := PackedVector3Array()
@@ -329,37 +329,24 @@ func let_go(i: int) -> void:
 	structure.mesh.set_body(i + 1, _xf[i], origin[i])
 
 
-## Piece `i` leaves the world (an orb swallows it): no body, not drawn, and
-## its shards no longer bonded to each other. Returns its shards; give()
-## brings them back one by one.
-func take(i: int) -> PackedInt32Array:
+## Piece `i` leaves the world for good (an orb swallows it): no body, not
+## drawn, its volume counted in taken_volume.
+func take(i: int) -> void:
 	var s := structure
-	var group := members[i]
-	for m in group:
+	for m in members[i]:
 		s.piece_of[m] = -1
 		s.mesh.set_slot(m, -1)
 		taken_volume += s.volume[m]
 		for e in range(s.adj_first[m], s.adj_first[m + 1]):
 			s.bond_health[s.adj_bond[e]] = 0.0
 	_remove(i)
-	return group
-
-
-## Shard `m`, taken earlier, comes back as a piece of its own: its centre
-## of mass at `xf`, turned as `xf` says. `velocity`, `spin`, `torn` as in
-## spawn().
-func give(m: int, xf: Transform3D, velocity: Vector3, spin: Vector3, torn := false) -> int:
-	var s := structure
-	taken_volume -= s.volume[m]
-	var from_rest := Transform3D(xf.basis, xf.origin - xf.basis * s.centroid[m])
-	return spawn(PackedInt32Array([m]), from_rest, velocity, spin, RID(), torn)
 
 
 func serial_of(i: int) -> int:
 	return _serial[i]
 
 
-## Volume (m3) of everything that has come off, in pieces or in an orb.
+## Volume (m3) of everything that has come off, in pieces or in orbs.
 func volume() -> float:
 	var v := taken_volume
 	for i in top:
