@@ -57,6 +57,11 @@ func gather_radius() -> float:
 	return size.y * 0.095
 
 
+## True over the HUD's own buttons: a touch there is theirs.
+func _on_a_button(at: Vector2) -> bool:
+	return Hud.rebuild_rect(size).merge(Hud.switch_rect(size)).grow(10).has_point(at)
+
+
 func jump_center() -> Vector2:
 	return Vector2(size.x - size.y * 0.2, size.y * 0.5)
 
@@ -109,7 +114,7 @@ func _on_touch(e: InputEventScreenTouch) -> void:
 			_stick_finger = e.index
 			_stick_origin = e.position
 			_stick_pos = e.position
-		elif _look_finger < 0 and not Hud.rebuild_rect(size).grow(10).has_point(e.position):
+		elif _look_finger < 0 and not _on_a_button(e.position):
 			_look_finger = e.index
 	else:
 		_last.erase(e.index)

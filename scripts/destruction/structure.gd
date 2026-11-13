@@ -69,6 +69,10 @@ var most_crumbs := 400
 var crumbs_out := 0  ## how many crumbs there are now
 var crumbs_of := {}  ## shard: the crumbs it broke into that are still there
 var crumbled_count := 0  ## how many shards have broken into crumbs
+## Blocks of ground that does not break, other than the ground itself (a
+## ledge, a platform): shards that touch one are held by it. Add them before
+## build().
+var footings: Array[AABB] = []
 ## Per shard: where it stands (its centre of mass), size, and its state.
 var centroid := PackedVector3Array()
 var volume := PackedFloat32Array()
@@ -234,6 +238,12 @@ func build(ground := 0.0) -> void:
 	for i in count:
 		if _lo[i].y < ground + TOUCH:
 			anchored[i] = 1
+		else:
+			var box := AABB(_lo[i], _hi[i] - _lo[i]).grow(TOUCH)
+			for footing in footings:
+				if footing.intersects(box):
+					anchored[i] = 1
+					break
 		# (Put back after adding: a packed array taken out of a dictionary
 		# is a copy.)
 		var cell := Vector3i((centroid[i] / CELL).floor())

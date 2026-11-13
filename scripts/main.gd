@@ -1,11 +1,17 @@
 class_name Main
 extends Node3D
-## The test ground, in greybox: a house you can take apart with a shock
-## wave (see Structure for how it breaks) and whose debris an orb swallows
-## when you want it gone (see Orb), walked around in first person.
+## The game, in greybox, walked in first person with a shock wave that
+## breaks things (see Structure) and an orb that swallows the debris (see
+## Orb). Two levels: the course, where the point is to get to the far end
+## (see Course), and the house, a sandbox to take apart.
 ## Textures: Kenney's prototype textures (CC0).
 
 const TEXTURES := "res://addons/kenney_prototype_textures/"
+
+## The level every scene started from now on builds: "course" or "house".
+## Empty: as asked on the command line (--level=), else the course, or the
+## house for scripted runs (--mode=).
+static var next_level := ""
 
 var structure: Structure
 var player: Player
@@ -14,6 +20,10 @@ var chips: Chips
 var clock: PhysicsClock
 var hud: Hud
 var orb: Orb  ## the one held open, if any
+var level := ""
+var course: Course  ## the course, when that is the level
+var sun: DirectionalLight3D
+var air: Environment
 ## Where the house stands.
 var house_at := Transform3D(Basis(), Vector3(0, 0, -4))
 ## Milliseconds it took to cut and bond the house.
@@ -27,9 +37,25 @@ func _ready() -> void:
 	structure = Structure.new()
 	structure.most_crumbs = int(Quality.pick(250, 450, 800))
 	add_child(structure)
+	var options: Dictionary = get_node("/root/Launch").options
+	level = next_level
+	if level == "":
+		level = options.get("level", "house" if options.has("mode") else "course")
 	var t := Time.get_ticks_usec()
-	House.build(structure, house_at)
+	if level == "course":
+		course = Course.new()
+		add_child(course)
+		course.build(structure)
+		# The sun down the corridor, from behind you: its floor and what
+		# faces you are lit, not in the shadow of its sides.
+		sun.rotation_degrees = Vector3(-58, 10, 0)
+		air.ambient_light_energy = 0.65
+	else:
+		House.build(structure, house_at)
 	structure.build()
+	# (In the course a plug is held by nothing: it has to come loose now,
+	# not at the first shock wave.)
+	structure.recheck()
 	build_ms = (Time.get_ticks_usec() - t) / 1000.0
 	dust = Dust.new()
 	add_child(dust)
@@ -39,7 +65,11 @@ func _ready() -> void:
 	player = Player.new()
 	player.pieces = structure.pieces
 	add_child(player)
-	player.global_position = house_at * Vector3(0, 0.05, 15)
+	if course != null:
+		player.global_transform = course.start
+		course.watch(player)
+	else:
+		player.global_position = house_at * Vector3(0, 0.05, 15)
 	player.fired.connect(cast_shockwave)
 	player.gathering_changed.connect(
 		func(on: bool) -> void:
@@ -54,7 +84,7 @@ func _ready() -> void:
 	hud.world = self
 	ui.add_child(hud)
 	hud.rebuild_pressed.connect(rebuild)
-	var options: Dictionary = get_node("/root/Launch").options
+	hud.switch_pressed.connect(switch_level)
 	# (--touch: the thumb controls on a desktop, to look at them.)
 	if TouchControls.should_show() or options.has("touch"):
 		var touch := TouchControls.new()
@@ -62,8 +92,9 @@ func _ready() -> void:
 		ui.add_child(touch)
 	print(
 		(
-			"BUILD shards=%d bonds=%d vertices=%d in %.0f ms (tier %d)"
+			"BUILD %s shards=%d bonds=%d vertices=%d in %.0f ms (tier %d)"
 			% [
+				level,
 				structure.count,
 				structure.bond_a.size(),
 				structure.mesh.vertex_count,
@@ -108,10 +139,17 @@ func drop_orb() -> void:
 	orb = null
 
 
-## Puts the house back up (starts the scene again).
+## Starts the level again, everything back up.
 func rebuild() -> void:
+	next_level = level
 	if get_tree().current_scene == self:
 		get_tree().reload_current_scene()
+
+
+## Goes to the other level.
+func switch_level() -> void:
+	level = "house" if level == "course" else "course"
+	rebuild()
 
 
 ## Something came off or broke up: dust, and bits thrown out.
@@ -138,8 +176,9 @@ func _build_world() -> void:
 	var world := WorldEnvironment.new()
 	world.environment = env
 	add_child(world)
+	air = env
 
-	var sun := DirectionalLight3D.new()
+	sun = DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-50, -30, 0)
 	sun.light_energy = 0.75
 	sun.shadow_enabled = true

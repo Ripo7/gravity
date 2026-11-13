@@ -44,7 +44,8 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          $GODOT --headless --path . res://tests/test_runner.tscn 2>&1 | tee tests.log
+          # --fixed-fps: one physics step per frame, as fast as the machine goes.
+          $GODOT --headless --fixed-fps 60 --path . res://tests/test_runner.tscn 2>&1 | tee tests.log
           # Script errors mean something broke even if the checks passed.
           if grep -q "SCRIPT ERROR" tests.log; then echo "::error::script errors during tests"; exit 1; fi
 
@@ -112,7 +113,7 @@ jobs:
         with:
           node-version: "22"
       - run: npm install --no-save playwright@1.64.1 && npx playwright install --with-deps chromium
-      - name: Build the house and break it in WebGL2
+      - name: Build the house and the course and break them in WebGL2
         shell: bash
         run: set -o pipefail; node tools/web_probe.mjs build/web probe.png | tee probe.txt
       - uses: actions/upload-artifact@v4
@@ -121,4 +122,5 @@ jobs:
           name: web-probe
           path: |
             probe.png
+            probe-course.png
             probe.txt

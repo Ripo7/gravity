@@ -197,6 +197,7 @@ func _local(i: int) -> Vector3:
 
 func _load() -> void:
 	seed(5)
+	Main.next_level = "house"
 	main = (load("res://scenes/main.tscn") as PackedScene).instantiate() as Main
 	get_tree().root.add_child.call_deferred(main)
 	await get_tree().process_frame

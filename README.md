@@ -1,10 +1,31 @@
-# Concept: breaking a house
+# Concept: breaking your way through
 
-A first-person destruction test: a small greybox house, one power (a shock
-wave) and an orb that swallows the debris when you want it gone. Walls break into irregular shards where they are hit, and into
-smaller crumbs where they are hit hardest; what is no longer held up falls,
-and breaks again when it lands. Nothing disappears: the rubble stays and you
-can climb on it.
+A first-person greybox game where destruction is the means, not the goal:
+you have one power (a shock wave) and an orb that swallows debris, and
+somewhere to get to. Walls break into irregular shards where they are hit,
+and into smaller crumbs where they are hit hardest; what is no longer held
+up falls, and breaks again when it lands. Nothing disappears unless the orb
+takes it: the rubble stays and you can climb on it.
+
+## The course
+
+The game opens on a corridor of dark rock (it does not break) with a beam
+of light at the far end: get there. The clock starts when you first move or
+fire, and the shock waves are counted. Four things are in the way, each
+asking for something else (`scripts/game/course.gd`):
+
+1. **A wall** right across: break through it.
+2. **A gate plugged** with blocks of several tonnes, which a shock wave
+   does not shift: the orb swallows them (a block that jams comes apart
+   and goes in shard by shard).
+3. **A ledge** 3 m high, when you jump 2.5 m, with a solid tank on four
+   legs at its foot, in a bay of rock: two legs less and the tank comes
+   down; you climb its rubble. (Swallow the rubble and you are stuck:
+   "Recommencer".)
+4. **A hut** with no door, on the ledge, with the light inside.
+
+"Bac à sable" switches to the house of the earlier versions, to break at
+leisure; "Parcours" comes back.
 
 Godot 4.7, GDScript, Jolt physics, Compatibility renderer (WebGL2), so it
 can be played in Safari on an iPhone from each pull request's preview.
@@ -21,7 +42,8 @@ The previous project, Gravity, is kept as it was on the branch
 | Shock wave | left click or F | blue button |
 | Orb | hold right click or E | hold the violet button |
 | Jump | space | small button |
-| Rebuild the house | R | "Reconstruire" |
+| Start again | R | "Recommencer" ("Reconstruire" in the sandbox) |
+| Course / sandbox | | "Bac à sable" / "Parcours" |
 
 The line at the top left shows frames per second, the cost of one physics
 step and how many pieces there are (and how many are moving).
@@ -29,16 +51,17 @@ step and how many pieces there are (and how many are moving).
 ## How the destruction works
 
 1. **Cut once, at load** (`scripts/destruction/fracture.gd`). Every box of
-   the house (wall, slab, pillar) is cut into convex shards about 0.6 m
+   what is built (wall, slab, pillar) is cut into convex shards about 0.6 m
    across, of mixed sizes, by a Voronoi diagram. Across a thin box distances
    count for more, so the cuts lean instead of going square through a wall,
    and a pillar also splits along its length. Neighbours share exactly the
    same corners, so an intact wall has no gaps. The house is 1516 shards and
-   is cut in about 0.25 s (0.6 s in a browser); rebuilding it reuses the
-   cut.
+   is cut in about 0.25 s (0.6 s in a browser), the course 711; rebuilding
+   reuses the cut.
 2. **Bonds** (`structure.gd`). Shards that touch are bonded, with the area
    they share; so are the shards of two boxes that touch. Shards on the
-   ground are anchors.
+   ground are anchors, and so are those against rock a level declares
+   (`Structure.footings`: the hut stands on the ledge).
 3. **What holds** (`support.gd`). After any damage, a look at the bonds
    finds what is still tied to the ground (the rest comes off, in rigid
    chunks of 32 shards at most, 45 while a lot is already moving) and how
@@ -87,7 +110,9 @@ you hold the button, a ball of magic stays open in front of you, a little
 below where you look. Loose pieces within 11 m that it can see (not what is
 behind a wall) rise, wind in and dwindle into it, 16 at a time, and are gone
 for good: no body, not drawn. Let go and it closes; what was on its way in
-falls back. This is the one place where debris disappears, and only because
+falls back. A loose block of several shards that does not come any nearer
+(it is jammed, or under a heap) comes apart, and its shards come in one by
+one. This is the one place where debris disappears, and only because
 you ask: the volume swallowed is still counted, and the crumbs swallowed
 leave their room to new ones. Pieces on their way in are on a collision
 layer of their own, so that you are not carried off standing on one.
@@ -99,9 +124,10 @@ its shards and what holds are the same everywhere.
 ## Run
 
 ```sh
-godot --path .                                                # play
-godot --headless --path . res://tests/test_runner.tscn        # tests
-godot --headless --path . res://tests/test_runner.tscn -- --only=house
+godot --path .                                                # play (the course)
+godot --path . -- --level=house                               # the sandbox
+godot --headless --fixed-fps 60 --path . res://tests/test_runner.tscn   # tests
+godot --headless --fixed-fps 60 --path . res://tests/test_runner.tscn -- --only=course
 pip install "gdtoolkit==4.*" && gdlint scripts tests && gdformat --check scripts tests
 ```
 
@@ -109,7 +135,8 @@ pip install "gdtoolkit==4.*" && gdlint scripts tests && gdformat --check scripts
 export templates) into `~/.godot-ci`.
 
 Scripted runs (`scripts/core/director.gd`), on desktop after `--`, in a
-browser as `index.html?mode=...`:
+browser as `index.html?mode=...`. They take place in the house unless
+`--level=course` is given:
 
 ```sh
 # A fixed tour that takes the house apart, with the cost of the physics.
@@ -120,7 +147,12 @@ godot --path . -- --mode=play --from=-2.5,0.05,4.2 --steps="a@-2.5,1.4,-0.6;o;w2
 godot --path . -- --mode=play --from=0,0.05,8.5 --steps="o@-1.5,1.4,2.7;w2;g;w4;t;w2"
 # How loaded the house is as built (1 = a bond breaks).
 godot --headless --path . -- --mode=check
+# The first wall of the course: walk, two shock waves, walk through.
+godot --path . -- --level=course --mode=play --steps="f0.7;o@0,1.2,-2;w0.6;o@0,0.4,-2;w0.5;f1.5"
 ```
+
+Other steps: `j<seconds>` walks forward jumping, `u<height>` does so until
+you stand that high, `m<x,y,z>` puts you somewhere.
 
 Add `--write-movie out.avi --fixed-fps 30` before `--path` to record a run,
 and `--touch` after `--` to see the thumb controls on a desktop.
@@ -129,12 +161,14 @@ and `--touch` after `--` to see the thumb controls on a desktop.
 
 - `tests/`: a small headless runner; files `tests/test_*.gd`, methods
   `test_*` (they may `await`). They cover the cut (volumes, shared faces),
-  what holds and what falls, the shock wave on the house, the orb, and the
-  controls.
+  what holds and what falls, the shock wave on the house, the orb, the
+  controls, and the course: each obstacle is in the way, and a scripted
+  player gets to the light.
 - `tools/perf_gate.py`: reads a profiled showcase and fails when the
   physics gets too slow.
 - `tools/web_probe.mjs`: loads the web export in headless Chromium, breaks
-  the house, opens the orb on the debris, and fails on any error (`npm install playwright`, then
+  the house, opens the orb on the debris, breaks the first wall of the
+  course, and fails on any error (`npm install playwright`, then
   `node tools/web_probe.mjs build/web shot.png`). WebGL2 is stricter than
   desktop OpenGL: two bugs only showed there.
 - `.github/workflows/ci.yml` runs lint, tests, the perf gate, the web

@@ -4,11 +4,15 @@ extends Node
 ##   --mode=play --steps="a@x,y,z;o;w1.5" [--from=x,y,z]
 ##        steps separated by ";": "o" a shock wave ("o@x,y,z" aims first),
 ##        "a@x,y,z" look there, "m<x,y,z>" go there, "w<seconds>" wait,
-##        "f<seconds>" walk forward,
+##        "f<seconds>" walk forward, "j<seconds>" the same, jumping,
+##        "u<height>" the same until you stand that high (10 s at most),
+##        "z<z>" walk forward until you are that far along -Z (10 s at most),
+##        "g" the orb button goes down, "t" it is let go,
 ##        "c@x0,y0,z0,x1,y1,z1" knock out what stands in that box.
 ##   --mode=showcase   a fixed tour that takes the house apart
 ##   --mode=still [--pos=x,y,z --at=x,y,z --wait=S]   just look
 ##   --mode=check      how loaded the building is as built
+## --level=course|house picks what is built (the house unless asked).
 ## --seed=N makes a run repeatable; --prof prints the cost of the physics
 ## once a second (PROF lines, read by tools/perf_gate.py).
 
@@ -28,6 +32,10 @@ func _ready() -> void:
 		seed(int(options["seed"]))
 	if options.has("prof"):
 		_profile()
+	if world.course != null:
+		world.course.finished.connect(
+			func(seconds: float, waves: int) -> void: print("ARRIVED in %.1f s, %d waves" % [seconds, waves])
+		)
 	match options.get("mode", ""):
 		"play":
 			_play()
@@ -95,9 +103,34 @@ func _play() -> void:
 			player.global_position = _vec(spec.substr(1))
 		elif kind == "a":
 			_aim(_vec(spec.substr(2)))
-		elif kind == "f":
-			player.touch_move = Vector2(0, -1)
-			await _wait(float(spec.substr(1)))
+		elif kind == "f" or kind == "j":
+			var left := float(spec.substr(1))
+			while left > 0.0:
+				player.touch_move = Vector2(0, -1)
+				if kind == "j" and player.is_on_floor():
+					player.touch_jump = true
+				await get_tree().physics_frame
+				left -= get_physics_process_delta_time()
+			player.touch_move = Vector2.ZERO
+			print("WALKED to %s (on floor: %s)" % [player.global_position, player.is_on_floor()])
+		elif kind == "u":
+			var high := float(spec.substr(1))
+			var tries := 600
+			while tries > 0 and not (player.is_on_floor() and player.global_position.y >= high):
+				player.touch_move = Vector2(0, -1)
+				if player.is_on_floor():
+					player.touch_jump = true
+				await get_tree().physics_frame
+				tries -= 1
+			player.touch_move = Vector2.ZERO
+			print("CLIMBED to %s in %d steps" % [player.global_position, 600 - tries])
+		elif kind == "z":
+			var far := float(spec.substr(1))
+			var tries := 600
+			while tries > 0 and player.global_position.z > far:
+				player.touch_move = Vector2(0, -1)
+				await get_tree().physics_frame
+				tries -= 1
 			player.touch_move = Vector2.ZERO
 			print("WALKED to %s (on floor: %s)" % [player.global_position, player.is_on_floor()])
 		elif kind == "c":
