@@ -1,7 +1,8 @@
 # Concept: breaking a house
 
-A first-person destruction test: a small greybox house, one power (a shock
-wave) and an orb that swallows the debris when you want it gone. Walls break into irregular shards where they are hit, and into
+A first-person destruction test, and nothing else yet: a small greybox
+house and something to shoot at it with (a plain ball, a stand-in). Walls
+break into irregular shards where they are hit, and into
 smaller crumbs where they are hit hardest; what is no longer held up falls,
 and breaks again when it lands. Nothing disappears: the rubble stays and you
 can climb on it.
@@ -18,8 +19,7 @@ The previous project, Gravity, is kept as it was on the branch
 | --- | --- | --- |
 | Move | WASD (by position, so ZQSD on AZERTY) / arrows | left stick |
 | Look | mouse | drag on the right half |
-| Shock wave | left click or F | blue button |
-| Orb | hold right click or E | hold the violet button |
+| Shoot | left click or F | blue button |
 | Jump | space | small button |
 | Rebuild the house | R | "Reconstruire" |
 
@@ -55,14 +55,14 @@ step and how many pieces there are (and how many are moving).
    goes into the building if that is what it hit. So a big slab does not
    survive coming down. Pieces that lie still are frozen (static) and wake
    when something near them moves.
-5. **Crumbs.** A shard that is hit hard (the middle of a close blast, a
+5. **Crumbs.** A shard that is hit hard (where a shot lands, a
    lone shard that lands or is thrown against something at 6 m/s or more,
    the point where a falling piece strikes) is cut once more, there and
    then, into 2 to 6 crumbs that fill it exactly. Each crumb is one more
    body, so they are rationed: 3 shards per step, none while more than 260
-   pieces are moving, and no more than a fixed number at a time (250 on a
+   pieces are moving, and no more than a fixed number in all (250 on a
    phone, 450 in a browser, 800 on a desktop), with fewer and fewer made as
-   that fills up. Crumbs the orb swallows leave their room to new ones.
+   that fills up.
 6. **Two draw calls** (`shard_mesh.gd`, `shaders/shards.gdshader`). All the
    shards are one mesh; a small texture tells the vertex shader which body
    each shard follows and where that body is. The checker is laid from the
@@ -70,27 +70,19 @@ step and how many pieces there are (and how many are moving).
    a cut are only drawn once the two shards are apart; their middle is
    pushed in or out and each facet is lit on its own, like broken stone.
    The crumbs are a second, small mesh drawn the same way, made again when
-   some are added, without those that are gone.
+   some are added.
 7. **Collisions of what stands.** A whole box collides as a few plain
    blocks; the first shard to leave a block turns it into one static shape
-   per shard, so the holes are real. A shard torn out by a blast goes
+   per shard, so the holes are real. A shard knocked out fast goes
    through what still stands for 5 steps: with leaning cuts it would often
    be wedged in its own hole.
 
-The shock wave (`scripts/powers/shockwave.gd`) is a 32° cone, 16 m long,
-whose front moves at 45 m/s. It tears out the shards it hits hard enough,
-cracks the bonds of the others, and is mostly stopped by what holds: a wall
-shelters what is behind it, a hole lets it through.
-
-The orb (`scripts/game/orb.gd`) is not a power: it breaks nothing. While
-you hold the button, a ball of magic stays open in front of you, a little
-below where you look. Loose pieces within 11 m that it can see (not what is
-behind a wall) rise, wind in and dwindle into it, 16 at a time, and are gone
-for good: no body, not drawn. Let go and it closes; what was on its way in
-falls back. This is the one place where debris disappears, and only because
-you ask: the volume swallowed is still counted, and the crumbs swallowed
-leave their room to new ones. Pieces on their way in are on a collision
-layer of their own, so that you are not carried off standing on one.
+The projectile (`scripts/game/projectile.gd`) is a placeholder: a ball
+that leaves your eye at 36 m/s, flies straight and stops at the first thing
+it touches. In a standing wall, the shards centred within 0.7 m of the
+impact are knocked out (the nearest half in crumbs) and the bonds of those
+up to 1.3 m crack; a loose piece is shoved; the ground only stops it. One
+shot every 0.3 s.
 
 Quality tiers (`scripts/core/quality.gd`: phone, browser, desktop) change
 the dust, the decorative bits and how many crumbs there can be. The house,
@@ -100,8 +92,8 @@ its shards and what holds are the same everywhere.
 
 ```sh
 godot --path .                                                # play
-godot --headless --path . res://tests/test_runner.tscn        # tests
-godot --headless --path . res://tests/test_runner.tscn -- --only=house
+godot --headless --fixed-fps 60 --path . res://tests/test_runner.tscn   # tests
+godot --headless --fixed-fps 60 --path . res://tests/test_runner.tscn -- --only=house
 pip install "gdtoolkit==4.*" && gdlint scripts tests && gdformat --check scripts tests
 ```
 
@@ -115,26 +107,23 @@ browser as `index.html?mode=...`:
 # A fixed tour that takes the house apart, with the cost of the physics.
 godot --headless --fixed-fps 60 --path . -- --mode=showcase --seed=1 --prof --quality=low \
   | python3 tools/perf_gate.py
-# Your own steps: aim, shock wave, wait, walk forward, orb open (g) and let go (t)...
-godot --path . -- --mode=play --from=-2.5,0.05,4.2 --steps="a@-2.5,1.4,-0.6;o;w2;f0.8;o;w3"
-godot --path . -- --mode=play --from=0,0.05,8.5 --steps="o@-1.5,1.4,2.7;w2;g;w4;t;w2"
+# Your own steps: aim, shoot, wait, walk forward...
+godot --path . -- --mode=play --from=-2.5,0.05,4.2 --steps="a@-2.5,1.4,-0.6;o;w1;o@-2,2,-0.6;w2;f0.8"
 # How loaded the house is as built (1 = a bond breaks).
 godot --headless --path . -- --mode=check
 ```
 
-Add `--write-movie out.avi --fixed-fps 30` before `--path` to record a run,
-and `--touch` after `--` to see the thumb controls on a desktop.
+Add `--write-movie out.avi --fixed-fps 30` before `--path` to record a run.
 
 ## Checks
 
 - `tests/`: a small headless runner; files `tests/test_*.gd`, methods
   `test_*` (they may `await`). They cover the cut (volumes, shared faces),
-  what holds and what falls, the shock wave on the house, the orb, and the
-  controls.
+  what holds and what falls, shots at the house, and the controls.
 - `tools/perf_gate.py`: reads a profiled showcase and fails when the
   physics gets too slow.
 - `tools/web_probe.mjs`: loads the web export in headless Chromium, breaks
-  the house, opens the orb on the debris, and fails on any error (`npm install playwright`, then
+  the house and fails on any error (`npm install playwright`, then
   `node tools/web_probe.mjs build/web shot.png`). WebGL2 is stricter than
   desktop OpenGL: two bugs only showed there.
 - `.github/workflows/ci.yml` runs lint, tests, the perf gate, the web
@@ -144,27 +133,17 @@ and `--touch` after `--` to see the thumb controls on a desktop.
 ## Measured
 
 Headless on a 2-core cloud machine, one physics step per frame
-(`--fixed-fps 60`), phone settings, the showcase tour (14 shock waves, about
-1050 of the 1516 shards down, up to 950 pieces and 450 to 500 moving at
-once), 8 seeds, twice:
+(`--fixed-fps 60`), phone settings, the showcase tour (84 shots from 14
+places, about 1300 of the 1516 shards down, 900 to 1300 pieces and 190 to
+310 moving at once), 8 seeds:
 
-- a physics step costs 1.4 ms at the median, and 1.8 to 2.4 ms on average
-  while things move depending on the seed (1.9 over all of them);
-- 99% of the steps are under 6 to 9.5 ms (7 over all seeds), the slowest
-  takes 10 to 13 ms: mostly the physics engine with 300 to 500 pieces
-  moving at once;
-- the same runs before leaning cuts and crumbs: 1.8 ms on average, 99%
-  under 5.7 ms. So the finer rubble costs about 5% on average and 20 to 30%
-  on the slowest steps;
-- browser settings (450 crumbs instead of 250): 2.0 to 2.3 ms on average,
-  99% under 7 to 9 ms (3 seeds);
-- the same kind of tour of the archived Gravity (another scene, measured in
-  real time, so only an order of magnitude) averaged 5 ms per step while
-  things moved.
+- a physics step costs 0.7 to 1.0 ms at the median, and 1.3 to 1.6 ms on
+  average while things move;
+- 99% of the steps are under 3.8 to 4.6 ms, the slowest takes 5.5 to
+  7.5 ms.
 
-The orb, same machine and settings (the balcony brought down, then the orb
-held open for 7 s): 0.2 to 0.4 ms per step while it draws debris in, and
-the 300 loose pieces become about 115.
+The tour is not the one of earlier versions (14 shock waves, which brought
+down more at once), so these figures do not compare with theirs.
 
 Not measured: a real phone. The line at the top left is there for that.
 

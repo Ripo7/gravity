@@ -1,8 +1,7 @@
 class_name Main
 extends Node3D
-## The test ground, in greybox: a house you can take apart with a shock
-## wave (see Structure for how it breaks) and whose debris an orb swallows
-## when you want it gone (see Orb), walked around in first person.
+## The test ground, in greybox: a house you can take apart by shooting at
+## it (see Structure for how it breaks), walked around in first person.
 ## Textures: Kenney's prototype textures (CC0).
 
 const TEXTURES := "res://addons/kenney_prototype_textures/"
@@ -13,7 +12,6 @@ var dust: Dust
 var chips: Chips
 var clock: PhysicsClock
 var hud: Hud
-var orb: Orb  ## the one held open, if any
 ## Where the house stands.
 var house_at := Transform3D(Basis(), Vector3(0, 0, -4))
 ## Milliseconds it took to cut and bond the house.
@@ -40,23 +38,14 @@ func _ready() -> void:
 	player.pieces = structure.pieces
 	add_child(player)
 	player.global_position = house_at * Vector3(0, 0.05, 15)
-	player.fired.connect(cast_shockwave)
-	player.gathering_changed.connect(
-		func(on: bool) -> void:
-			if on:
-				start_orb()
-			else:
-				drop_orb()
-	)
+	player.fired.connect(shoot)
 	var ui := CanvasLayer.new()
 	add_child(ui)
 	hud = Hud.new()
 	hud.world = self
 	ui.add_child(hud)
 	hud.rebuild_pressed.connect(rebuild)
-	var options: Dictionary = get_node("/root/Launch").options
-	# (--touch: the thumb controls on a desktop, to look at them.)
-	if TouchControls.should_show() or options.has("touch"):
+	if TouchControls.should_show():
 		var touch := TouchControls.new()
 		touch.player = player
 		ui.add_child(touch)
@@ -72,6 +61,7 @@ func _ready() -> void:
 			]
 		)
 	)
+	var options: Dictionary = get_node("/root/Launch").options
 	if options.has("mode"):
 		var director := Director.new()
 		director.options = options
@@ -83,35 +73,25 @@ func _unhandled_input(event: InputEvent) -> void:
 		rebuild()
 
 
-## A shock wave from `from` along `direction`.
-func cast_shockwave(from: Vector3, direction: Vector3) -> Shockwave:
-	var wave := Shockwave.new()
-	wave.setup(structure, from, direction)
-	add_child(wave)
-	return wave
-
-
-## Opens the orb in front of the player: it swallows the loose debris
-## around for as long as it is held.
-func start_orb() -> Orb:
-	if orb == null or not is_instance_valid(orb) or not orb.open:
-		orb = Orb.new()
-		orb.setup(structure, player.camera)
-		add_child(orb)
-	return orb
-
-
-## Lets go of the orb: it closes.
-func drop_orb() -> void:
-	if orb != null and is_instance_valid(orb):
-		orb.close()
-	orb = null
+## A projectile from `from` along `direction`.
+func shoot(from: Vector3, direction: Vector3) -> Projectile:
+	var shot := Projectile.new()
+	shot.setup(structure, from, direction)
+	shot.landed.connect(_on_landed.bind(direction))
+	add_child(shot)
+	return shot
 
 
 ## Puts the house back up (starts the scene again).
 func rebuild() -> void:
 	if get_tree().current_scene == self:
 		get_tree().reload_current_scene()
+
+
+## A projectile stopped: a little dust, and bits knocked back.
+func _on_landed(at: Vector3, normal: Vector3, _torn: int, direction: Vector3) -> void:
+	dust.puff(at + normal * 0.1, 0.8, normal * 0.5)
+	chips.burst(at + normal * 0.05, 4, direction.bounce(normal) * 3.0, 2.0)
 
 
 ## Something came off or broke up: dust, and bits thrown out.

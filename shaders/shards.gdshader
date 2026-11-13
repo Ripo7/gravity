@@ -12,7 +12,7 @@ shader_type spatial;
 // by facet, like broken stone.
 
 uniform sampler2D slot_of : filter_nearest, repeat_disable;  // per shard: its body (-1 hidden)
-uniform sampler2D bodies : filter_nearest, repeat_disable;   // per body: where it is and its size, how it is turned (2 texels)
+uniform sampler2D bodies : filter_nearest, repeat_disable;   // per body: where it is (2 texels)
 uniform sampler2D grid : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform float squares_per_metre = 0.25;
 uniform vec3 core : source_color = vec3(0.46, 0.45, 0.45);  // the inside of a wall
@@ -48,8 +48,7 @@ void vertex() {
 		int bw = textureSize(bodies, 0).x;
 		vec4 at = texelFetch(bodies, ivec2(t % bw, t / bw), 0);
 		vec4 q = texelFetch(bodies, ivec2((t + 1) % bw, (t + 1) / bw), 0);
-		// (at.w: 1, or less for a piece dwindling into an orb.)
-		VERTEX = at.xyz + turn(q, VERTEX) * at.w;
+		VERTEX = at.xyz + turn(q, VERTEX);
 		NORMAL = turn(q, NORMAL);
 	}
 }
