@@ -17,17 +17,22 @@ func test_the_player_stands_and_walks() -> void:
 	await _unload()
 
 
-func test_firing_sends_one_shock_wave_then_waits() -> void:
+func test_firing_sends_one_shot_then_waits() -> void:
 	await _load()
 	var p := main.player
 	await frames(5)
 	check(p.fire(), "it goes off")
 	check(not p.fire(), "not twice in a row")
-	await frames(2)
-	check_eq(get_tree().get_nodes_in_group("shockwave").size(), 1, "one shock wave")
-	var wave := get_tree().get_first_node_in_group("shockwave") as Shockwave
-	check(wave.direction.dot(-p.camera.global_basis.z) > 0.99, "along where you look")
-	check(wave.origin.distance_to(p.camera.global_position) < 1.0, "from your hands")
+	check_eq(get_tree().get_nodes_in_group("projectile").size(), 1, "one projectile")
+	var shot := get_tree().get_first_node_in_group("projectile") as Projectile
+	var ball := shot.get_child(0) as MeshInstance3D
+	check(shot.direction.dot(-p.camera.global_basis.z) > 0.99, "along where you look")
+	check(shot.global_position.distance_to(p.camera.global_position) < 0.01, "from your eye")
+	check(not ball.visible, "not drawn while it is in your face")
+	await frames(6)
+	var off := shot.global_position - p.camera.global_position
+	check(off.length() > 2.0 and off.cross(shot.direction).length() < 0.01, "it flies straight")
+	check(ball.visible, "and is drawn once it is away")
 	await frames(int(Player.COOLDOWN * 60) + 2)
 	check(p.fire(), "again after the wait")
 	await _unload()
@@ -64,41 +69,13 @@ func test_touch_controls_move_look_and_fire() -> void:
 	# A third finger on the blue button.
 	tc._on_touch(_touch(2, tc.fire_center(), true))
 	await frames(2)
-	check_eq(get_tree().get_nodes_in_group("shockwave").size(), 1, "the button sends a shock wave")
+	check_eq(get_tree().get_nodes_in_group("projectile").size(), 1, "the button shoots")
 	tc._on_touch(_touch(2, tc.fire_center(), false))
 	tc._on_touch(_touch(0, left - Vector2(0, tc.stick_radius()), false))
 	check_eq(p.touch_move, Vector2.ZERO, "lifting the thumb stops")
 	tc._on_touch(_touch(3, tc.jump_center(), true))
 	await frames(3)
 	check(p.velocity.y > 1.0 or not p.is_on_floor(), "the arrow jumps")
-	await _unload()
-
-
-func test_the_orb_button_is_held_then_let_go() -> void:
-	await _load()
-	var p := main.player
-	var tc := TouchControls.new()
-	tc.player = p
-	main.add_child(tc)
-	await frames(3)
-	var gap := (
-		tc.gather_center().distance_to(tc.fire_center()) - tc.gather_radius() * 1.3 - tc.fire_radius() * 1.3
-	)
-	check(gap > 0.0, "the orb button is apart from the shock wave's")
-	check(tc.gather_center().x > tc.size.x * 0.5, "under the right thumb")
-	tc._on_touch(_touch(1, tc.gather_center(), true))
-	await frames(3)
-	check(p.gathering, "holding it gathers")
-	check(main.orb != null and main.orb.open, "the orb is open in front of you")
-	var orb := main.orb
-	var yaw := p.rotation.y
-	tc._on_drag(_drag(1, tc.gather_center() - Vector2(40, 0)))
-	check(p.rotation.y > yaw, "dragging from the button still aims")
-	tc._on_touch(_touch(1, tc.gather_center() - Vector2(40, 0), false))
-	await frames(3)
-	check(not p.gathering, "letting go stops")
-	check(main.orb == null, "and the orb is let go")
-	check(not is_instance_valid(orb) or not orb.open, "it closes")
 	await _unload()
 
 

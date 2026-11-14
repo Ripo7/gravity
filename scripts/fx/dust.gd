@@ -35,6 +35,11 @@ func _ready() -> void:
 	var swell := Curve.new()
 	swell.add_point(Vector2(0, 0.35))
 	swell.add_point(Vector2(1, 1.0))
+	# Opaque, then fading out over the last two thirds of a puff's life.
+	var fade := Gradient.new()
+	fade.set_color(0, Color(1, 1, 1, 1))
+	fade.set_color(1, Color(1, 1, 1, 0))
+	fade.add_point(0.35, Color(1, 1, 1, 1))
 	for k in POOL:
 		var p := CPUParticles3D.new()
 		p.mesh = quad
@@ -57,7 +62,7 @@ func _ready() -> void:
 		p.scale_amount_max = 1.3
 		p.scale_amount_curve = swell
 		p.color = Color(0.66, 0.65, 0.63, 0.7)
-		p.color_ramp = Fx.fade_ramp()
+		p.color_ramp = fade
 		p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(p)
 		_emitters.append(p)

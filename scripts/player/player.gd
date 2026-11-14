@@ -1,16 +1,13 @@
 class_name Player
 extends CharacterBody3D
 ## First-person controller (mouse + keyboard, gamepad, touch). The fire
-## button sends a shock wave out of your hands, along where you look. The
-## gather button, held, opens an orb in front of you that swallows loose
-## debris; let go and it closes.
+## button shoots a projectile along where you look.
 
-## The shock wave leaves from `from` along `direction`.
+## A shot leaves from `from` (your eye) along `direction`.
 signal fired(from: Vector3, direction: Vector3)
-## The gather button went down (true) or came up.
-signal gathering_changed(on: bool)
 
-const COOLDOWN := 0.9  ## seconds between two shock waves
+const COOLDOWN := 0.3  ## seconds between two shots
+const FOV := 80.0
 const KILL_Y := -25.0
 ## Loose pieces lighter than this (kg) are shoved aside when you walk into
 ## them; heavier ones are obstacles.
@@ -33,11 +30,9 @@ var input_enabled := true
 var touch_move := Vector2.ZERO
 var touch_jump := false
 var touch_fire := false
-var touch_gather := false  ## held down
 var cooldown_left := 0.0
-var gathering := false
 var head: Node3D
-var camera: CameraShake
+var camera: Camera3D
 ## Set by the world, to shove loose pieces aside.
 var pieces: Pieces
 
@@ -60,7 +55,8 @@ func _init() -> void:
 	head = Node3D.new()
 	head.position.y = EYES
 	add_child(head)
-	camera = CameraShake.new()
+	camera = Camera3D.new()
+	camera.fov = FOV
 	camera.near = 0.05
 	camera.far = 400.0
 	camera.current = true
@@ -99,13 +95,12 @@ func look(delta_angles: Vector2) -> void:
 	head.rotation.x = clampf(head.rotation.x + delta_angles.y, -1.5, 1.5)
 
 
-## Sends a shock wave if the last one is far enough behind.
+## Shoots if the last shot is far enough behind.
 func fire() -> bool:
 	if cooldown_left > 0.0:
 		return false
 	cooldown_left = COOLDOWN
-	var dir := -camera.global_basis.z
-	fired.emit(camera.global_position + dir * 0.6 + Vector3.DOWN * 0.25, dir)
+	fired.emit(camera.global_position, -camera.global_basis.z)
 	return true
 
 
@@ -120,10 +115,6 @@ func _physics_process(delta: float) -> void:
 		if touch_fire:
 			fire()
 	touch_fire = false
-	var hold := input_enabled and (touch_gather or _gather_held())
-	if hold != gathering:
-		gathering = hold
-		gathering_changed.emit(hold)
 	if stick != Vector2.ZERO:
 		# Squared response curve gives fine aim near the centre.
 		look(stick * stick.length() * stick_sensitivity * delta)
@@ -148,16 +139,6 @@ func _physics_process(delta: float) -> void:
 	if global_position.y < KILL_Y:
 		global_transform = _spawn
 		velocity = Vector3.ZERO
-
-
-## The gather key or button is down. (A right click only counts once the
-## mouse is taken, like a left click.)
-func _gather_held() -> bool:
-	if not Input.is_action_pressed("gather"):
-		return false
-	return (
-		Input.mouse_mode == Input.MOUSE_MODE_CAPTURED or not Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT)
-	)
 
 
 ## Stopped by something low while walking: step up onto it.

@@ -2,7 +2,7 @@ class_name Director
 extends Node
 ## Scripted runs, for clips and measurements:
 ##   --mode=play --steps="a@x,y,z;o;w1.5" [--from=x,y,z]
-##        steps separated by ";": "o" a shock wave ("o@x,y,z" aims first),
+##        steps separated by ";": "o" a shot ("o@x,y,z" aims first),
 ##        "a@x,y,z" look there, "m<x,y,z>" go there, "w<seconds>" wait,
 ##        "f<seconds>" walk forward,
 ##        "c@x0,y0,z0,x1,y1,z1" knock out what stands in that box.
@@ -14,6 +14,8 @@ extends Node
 
 ## ms: a physics step longer than this on a desktop is a hitch on a phone.
 const SLOW_STEP := 6.0
+## Shots at each stop of the showcase.
+const VOLLEY := 6
 
 var options := {}
 var world: Main
@@ -108,15 +110,6 @@ func _play() -> void:
 					Vector3(box[3] - box[0], box[4] - box[1], box[5] - box[2])
 				)
 			)
-		elif kind == "g":
-			# The orb button goes down; "t" lets it go.
-			player.touch_gather = true
-			print("GATHER pieces=%d" % world.structure.pieces.live)
-		elif kind == "t":
-			var held: Orb = world.orb
-			var gone := held.swallowed if held != null and is_instance_valid(held) else 0.0
-			print("ORB %.2f m3 pieces=%d" % [gone, world.structure.pieces.live])
-			player.touch_gather = false
 		elif kind == "o":
 			if spec.contains("@"):
 				_aim(_vec(spec.split("@")[1]))
@@ -132,15 +125,16 @@ func _play() -> void:
 	_end("PLAY_DONE")
 
 
-## Around the house, one shock wave after another: holes in the front, the
-## porch's pillars, then the corners until the upper floor comes down.
+## Around the house, a volley at each stop: holes in the front, the porch's
+## pillars, the sides, the back, then the pillars inside through the holes,
+## until the upper floor comes down.
 func _showcase() -> void:
 	var house := world.house_at
-	var shots: Array[Array] = [
+	var stops: Array[Array] = [
 		[Vector3(-2.5, 0, 9.5), Vector3(-2.5, 1.4, 3.3)],
 		[Vector3(2.7, 0, 9.5), Vector3(2.7, 1.5, 3.3)],
-		[Vector3(-7.5, 0, 9.0), Vector3(-4.3, 1.4, 5.9)],
-		[Vector3(7.5, 0, 9.0), Vector3(4.3, 1.4, 5.9)],
+		[Vector3(-7.5, 0, 9.0), Vector3(-4.3, 1.4, 6.7)],
+		[Vector3(7.5, 0, 9.0), Vector3(4.3, 1.4, 6.7)],
 		[Vector3(-8.5, 0, 0.5), Vector3(-4.3, 1.4, 0.5)],
 		[Vector3(-8.5, 0, -2.0), Vector3(-4.3, 1.6, -2.0)],
 		[Vector3(8.5, 0, 0.5), Vector3(4.3, 1.4, 0.5)],
@@ -149,15 +143,21 @@ func _showcase() -> void:
 		[Vector3(-3.0, 0, -8.5), Vector3(-3.0, 1.4, -3.3)],
 		[Vector3(3.0, 0, -8.5), Vector3(3.0, 1.4, -3.3)],
 		[Vector3(0, 0, 10.0), Vector3(0, 1.2, 0.0)],
-		[Vector3(-3.0, 0, 10.0), Vector3(-2.0, 2.0, 0.0)],
-		[Vector3(3.0, 0, 10.0), Vector3(2.0, 2.0, 0.0)],
+		[Vector3(-3.0, 0, 10.0), Vector3(-2.5, 1.4, 0.0)],
+		[Vector3(3.0, 0, 10.0), Vector3(2.5, 1.4, 0.0)],
 	]
 	await _wait(0.5)
-	for shot in shots:
-		_place(house * (shot[0] as Vector3) + Vector3.UP * 0.05, house * (shot[1] as Vector3))
+	for stop in stops:
+		var from := house * (stop[0] as Vector3) + Vector3.UP * 0.05
+		var target := house * (stop[1] as Vector3)
+		_place(from, target)
 		await _wait(0.25)
-		await _fire()
-		await _wait(1.25)
+		# Six shots, in two rows of three across what is aimed at.
+		var across := (target - from).cross(Vector3.UP).normalized()
+		for k in VOLLEY:
+			_aim(target + across * (k % 3 - 1) * 0.8 + Vector3.UP * (k / 3 - 0.5) * 1.0)
+			await _fire()
+		await _wait(1.0)
 	await _wait(4.0)
 	_end("SHOWCASE_DONE")
 
@@ -202,7 +202,7 @@ func _end(tag: String) -> void:
 				_most_awake,
 				s.standing_volume() + s.pieces.volume(),
 				s.total_volume,
-				s.crumbs_out,
+				s.total - s.count,
 			]
 		)
 	)
