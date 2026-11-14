@@ -254,6 +254,88 @@ func test_ducking_brings_the_head_down() -> void:
 	await _unload()
 
 
+func test_a_blow_that_lands_holds_both_for_an_instant_and_shakes_the_camera() -> void:
+	await _load()
+	var at := d.global_position
+	# Too far, and not locked on: a blow at nothing.
+	_stand(at + Vector3(0, 0, 6.0), at + Vector3.UP * 1.3)
+	await frames(10)
+	p.punch()
+	var shook := 0.0
+	var held := false
+	for k in 70:
+		await frames(1)
+		shook = maxf(shook, p.camera.rotation.length())
+		held = held or p.fighter.held()
+	check(not held and shook == 0.0, "a blow at nothing holds nothing and shakes nothing")
+	# At arm's length.
+	await frames(int((Character.GUARD_TIME + 1.0) * 60.0))
+	_stand(at + Vector3(0, 0, 1.3), at + Vector3.UP * 1.3)
+	await frames(10)
+	p.punch()
+	var waited := 0
+	while not d.fighter.held() and waited < 60:
+		await frames(1)
+		waited += 1
+	check(d.fighter.held() and p.fighter.held(), "the instant a blow lands, both are held")
+	var fist := _bone(p.character, "hand.R")
+	var stood := d.global_position
+	var short := Vector2(fist.x - stood.x, fist.z - stood.z).length()
+	check(short < 0.35, "the fist where it landed: on the other (%.2f m from its axis)" % short)
+	await frames(2)
+	check(_bone(p.character, "hand.R").distance_to(fist) < 0.002, "the arm does not move meanwhile")
+	check(d.global_position.distance_to(stood) < 0.002, "nor does the other")
+	check(p.camera.rotation.length() > 0.0005, "and the camera shakes")
+	await frames(int(Fighter.STOP[2] * 60.0) + 3)
+	check(not p.fighter.held() and not d.fighter.held(), "then both are let go")
+	await frames(12)
+	var went := stood.z - d.global_position.z
+	check(went > 0.3, "and the other goes back (%.2f m)" % went)
+	await frames(int(Player.SHAKE_FOR * 60.0) + 5)
+	check(p.camera.rotation.length() < 0.0001, "the shake has died out")
+	await _unload()
+
+
+func test_who_takes_a_blow_goes_the_way_the_blow_goes() -> void:
+	await _load()
+	var at := d.global_position
+	_stand(at + Vector3(0, 0, 1.3), at + Vector3.UP * 1.3)
+	await frames(10)
+	# The long right goes straight ahead: the other goes straight back, its
+	# head first.
+	p.punch()
+	var waited := 0
+	while not d.fighter.held() and waited < 60:
+		await frames(1)
+		waited += 1
+	p.punch()  # the swing is asked for: it follows
+	var line := _flat(d.global_position - p.global_position)
+	var head := 0.0
+	for k in 30:
+		await frames(1)
+		head = maxf(head, (_bone(d.character, "head") - d.global_position).dot(line))
+	check(head > 0.3, "its head goes back first (%.2f m behind its feet)" % head)
+	var first := d.global_position - at
+	var aside := (first - line * first.dot(line)).length()
+	check(
+		first.dot(line) > 0.3 and aside < 0.15,
+		"it goes straight back (%.2f m, %.2f aside)" % [first.dot(line), aside]
+	)
+	# The swing comes across: it goes sideways.
+	waited = 0
+	while not d.fighter.held() and waited < 90:
+		await frames(1)
+		waited += 1
+	check_eq(p.character.state, "swing", "the swing lands in its turn")
+	var from := d.global_position
+	line = _flat(from - p.global_position)
+	await frames(30)
+	var second := d.global_position - from
+	aside = (second - line * second.dot(line)).length()
+	check(aside > 0.25, "it goes to the side the fists go (%.2f m aside)" % aside)
+	await _unload()
+
+
 func test_locking_on_turns_the_camera_to_the_other() -> void:
 	await _load()
 	var at := d.global_position
@@ -264,9 +346,10 @@ func test_locking_on_turns_the_camera_to_the_other() -> void:
 	p.lock()
 	check(p.locked == d, "locking picks the other brute")
 	await frames(60)
-	var to := (at + Vector3.UP * 1.0 - p.camera.global_position).normalized()
-	var off := to.angle_to(-p.camera.global_basis.z)
-	check(off < 0.35, "a second later the camera is on it (%.2f rad off)" % off)
+	var seen := _seen(at + Vector3.UP)
+	check(seen < -0.05 and seen > -0.7, "a second later it is in view, left of the middle (%.2f rad)" % seen)
+	var apart := _seen(p.global_position + Vector3.UP) - seen
+	check(apart > 0.15, "and the character to its right, not in front of it (%.2f rad apart)" % apart)
 	var yaw := p.yaw
 	p.look(Vector2(0.6, 0.0))
 	check_eq(p.yaw, yaw, "and stays on it: dragging does not turn it")
@@ -389,6 +472,16 @@ func _touch(index: int, at: Vector2, pressed: bool) -> InputEventScreenTouch:
 func _bone(c: Character, named: String) -> Vector3:
 	var sk := c.skeleton
 	return sk.global_transform * sk.get_bone_global_pose(sk.find_bone("DEF-" + named)).origin
+
+
+## Where `point` is seen by the camera: rad to the right of the middle.
+func _seen(point: Vector3) -> float:
+	var local := p.camera.global_transform.affine_inverse() * point
+	return atan2(local.x, -local.z)
+
+
+func _flat(v: Vector3) -> Vector3:
+	return Vector3(v.x, 0, v.z).normalized()
 
 
 ## How far ahead of the player (m, the way it faces) its bone `named` is.

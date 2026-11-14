@@ -46,8 +46,9 @@ const FALL_AFTER := 0.12
 const SEEK := 2.4
 const CONE := 1.2
 ## Locked on (see `lock`), the camera closes LOCK_TURN of its angle to the
-## other brute every second and looks LOCK_TILT rad below the line to it;
-## a strike always goes to it. Asked for from farther than it reaches, the
+## other brute every second and looks LOCK_TILT rad below the line to it
+## and LOCK_SIDE rad to the right of it, so that the two are seen side by
+## side and not one behind the other; a strike always goes to it. Asked for from farther than it reaches, the
 ## character runs at the other first and strikes once the blow would land
 ## with a step of STEP_IN m at most and nothing stands between them (looked
 ## for CHEST m up); it gives up after CHARGE_MOST s. Held up HELD_UP s by
@@ -55,10 +56,15 @@ const CONE := 1.2
 const LOCK_RANGE := 60.0
 const LOCK_TURN := 7.0
 const LOCK_TILT := -0.2
+const LOCK_SIDE := 0.6
 const STEP_IN := 0.5
 const CHEST := 1.1
 const CHARGE_MOST := 4.0
 const HELD_UP := 0.15
+## A jolt (Fighter.jolted, 0 to 1) shakes the camera: SHAKE rad for the
+## hardest, less by the square, dying out in SHAKE_FOR s.
+const SHAKE := 0.05
+const SHAKE_FOR := 0.35
 
 ## Full tilt of the stick, or the keys: a jog. The clips' feet do not slide
 ## at these speeds (see Character).
@@ -110,6 +116,8 @@ var _charge := ""  # the strike to throw on reaching who it is locked on
 var _charge_for := 0.0  # s it has been running at it
 var _stopped := 0.0  # s it has been stopped by something on the way there
 var _mark: MeshInstance3D  # the ring at the feet of who it is locked on
+var _shake := 0.0  # how much the camera shakes (1 to 0)
+var _shaken := 0.0  # s it has shaken in all: where its tremor is
 
 
 func _init() -> void:
@@ -155,6 +163,7 @@ func _init() -> void:
 	_mark.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_mark)
 	fighter = Fighter.new(self, character)
+	fighter.jolted.connect(shake)
 	character.swung.connect(_on_swung)
 	character.struck.connect(func(move: String) -> void: fighter.strike(move, facing))
 	_pose_camera()
@@ -218,6 +227,12 @@ func look_at_point(target: Vector3) -> void:
 		_pose_camera()
 
 
+## A blow has landed, been taken or broken a wall: the camera shakes,
+## `amount` (0 to 1) of the most it can.
+func shake(amount: float) -> void:
+	_shake = maxf(_shake, amount)
+
+
 ## Locks on the nearest other brute, or lets go of the one it is locked
 ## on. Locked, the camera stays on it and strikes go to it.
 func lock() -> void:
@@ -251,6 +266,11 @@ func dodge() -> bool:
 
 
 func _physics_process(delta: float) -> void:
+	if fighter.held():
+		# The instant a blow lands: nothing moves, what is pressed waits.
+		_track(delta)
+		_pose_camera(delta)
+		return
 	if fighter.step(delta):
 		# Knocked off its feet: nothing to steer until it is up again.
 		touch_punch = false
@@ -465,7 +485,7 @@ func _track(delta: float) -> void:
 	var flat := Vector2(d.x, d.z).length()
 	var closes := 1.0 - exp(-LOCK_TURN * delta)
 	if flat > 0.5:
-		yaw = lerp_angle(yaw, atan2(-d.x, -d.z), closes)
+		yaw = lerp_angle(yaw, atan2(-d.x, -d.z) - LOCK_SIDE, closes)
 	pitch = lerpf(pitch, clampf(atan2(d.y, maxf(flat, 0.5)) + LOCK_TILT, LOOK_DOWN, LOOK_UP), closes)
 
 
@@ -501,6 +521,10 @@ func _pose_camera(delta := 0.0) -> void:
 		_shoulder = minf(shoulder, move_toward(_shoulder, shoulder, EASE_OUT * delta))
 		_back = minf(away, move_toward(_back, away, EASE_OUT * delta))
 	camera.position = Vector3(_shoulder * SIDE, RAISED * _back / BACK, _back)
+	_shake = maxf(_shake - delta / SHAKE_FOR, 0.0)
+	_shaken += delta
+	var tremor := Vector3(sin(_shaken * 110.0), sin(_shaken * 90.0 + 1.0), sin(_shaken * 130.0 + 2.0) * 0.5)
+	camera.rotation = tremor * (SHAKE * _shake * _shake)
 	character.visible = _back > TOO_CLOSE
 
 

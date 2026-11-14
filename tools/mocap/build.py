@@ -38,13 +38,19 @@ STEPS = 0.12
 ANKLE = 0.10  # m: how high the ankle of a foot flat on the ground is
 FOOT = 0.15  # m: from the ankle to the ball of the foot
 
-# The last SNAP s before a blow lands are played as performed.
-SNAP = 0.1
+# A blow reads as heavy when it is slow to come and sudden when it does:
+# the last SNAP s before it lands take QUICK of the time they took, and the
+# SETTLE s after it LINGERS times as long (the pose is all but held).
+SNAP = 0.12
+QUICK = 0.65
+SETTLE = 0.06
+LINGERS = 2.5
 
 # name, take, from, to (s in the take), then:
 #   hit: when the fist or foot is there; limb: which one; next: when the
 #   next move may start; power: 2 a blow, 3 one that throws
 #   slow: how much longer the wind-up and the recovery take than performed
+#   (the blow itself is retimed the same way for all, see SNAP)
 #   above: the blow comes down from overhead (ducking does not avoid it)
 #   steps: the root takes the steps (else the clip stays where it is)
 #   loop: the end is made to run into the start
@@ -71,15 +77,15 @@ CLIPS = [
 
 
 def warp(count, hit, before, after):
-    """Slows a strike of `count` frames whose blow lands at frame `hit`:
-    returns, for every frame of the slowed clip, where it is in the
-    original (a fraction of a frame), and where `hit` ends up."""
-    snap = max(hit - SNAP * FPS, 0.0)
-    first, last = snap * before, (count - 1 - hit) * after
-    t = np.arange(0, int(round(first + (hit - snap) + last)) + 1, dtype=float)
-    src = np.where(t < first, t / before, np.where(t < first + hit - snap, snap + t - first,
-                                                   hit + (t - first - (hit - snap)) / after))
-    return np.clip(src, 0, count - 1), first + hit - snap
+    """Retimes a strike of `count` frames whose blow lands at frame `hit`:
+    the wind-up takes `before` times as long, the last stretch is quick, the
+    contact lingers, the recovery takes `after` times as long. Returns, for
+    every frame of the new clip, where it is in the original (a fraction of
+    a frame), and what tells where a frame of the original ends up."""
+    marks = np.array([0.0, max(hit - SNAP * FPS, 0.0), hit, min(hit + SETTLE * FPS, count - 1.0), count - 1.0])
+    ends = np.concatenate([[0.0], np.cumsum(np.diff(marks) * [before, QUICK, LINGERS, after])])
+    t = np.arange(0, int(round(ends[-1])) + 1, dtype=float)
+    return np.interp(t, ends, marks), lambda frame: float(np.interp(frame, marks, ends))
 
 
 def resample(values, src):
@@ -204,15 +210,7 @@ def build(cap, spec):
     hit_at = (cap.frame(spec["hit"]) - f0) if "hit" in spec else 0.0
     slowed = lambda frame: float(frame)  # noqa: E731
     if "slow" in spec:
-        src, new_hit = warp(len(frames), hit_at, *spec["slow"])
-        before, after = spec["slow"]
-        snap = max(hit_at - SNAP * FPS, 0.0)
-
-        def slowed(frame, snap=snap, before=before, after=after, hit=hit_at, new_hit=new_hit):
-            if frame <= snap:
-                return frame * before
-            return snap * before + frame - snap if frame <= hit else new_hit + (frame - hit) * after
-
+        src, slowed = warp(len(frames), hit_at, *spec["slow"])
         quats = resample(quats, src)
         quats /= np.linalg.norm(quats, axis=-1, keepdims=True)
         hips = resample(hips, src)
@@ -232,9 +230,13 @@ def build(cap, spec):
         at = (cap.pos[fh, s.index(bone)] - cap.walk[fh]) @ turn.T
         # (to the wrist; for a kick, to the ball of the foot: FOOT past the ankle)
         reach = float(np.hypot(at[0], at[2])) + (FOOT if spec["limb"].endswith("Foot") else 0.0)
+        # Which way the fist or foot is going when it gets there (x aside, y up, z ahead).
+        going = (cap.pos[fh, s.index(bone)] - cap.pos[max(fh - 3, 0), s.index(bone)]) @ turn.T
+        going /= max(np.linalg.norm(going), 1e-6)
         meta.update(hit=slowed(fh - f0) / FPS, next=slowed(cap.frame(spec["next"]) - f0) / FPS,
                     power=spec["power"], reach=reach, height=float(at[1]), aside=float(at[0]),
-                    above=1.0 if spec.get("above") else 0.0)
+                    above=1.0 if spec.get("above") else 0.0,
+                    way_x=float(going[0]), way_y=float(going[1]), way_z=float(going[2]))
     if "low" in spec:
         meta["low"] = (cap.frame(spec["low"]) - f0) / FPS
     return {"name": spec["name"], "dt": 1.0 / FPS, "tracks": tracks, "meta": meta, "loop": "loop" in spec}, heading, (f0, f1), walk

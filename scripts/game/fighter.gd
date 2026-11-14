@@ -8,6 +8,10 @@ extends RefCounted
 ## Each brute (the Player, the Brute) is a body with a Character, a
 ## `facing` and one of these, called `fighter`, and is in GROUP.
 
+## A blow lands, is taken, or breaks what stands: how hard it jolts whoever
+## watches from behind this brute (0 to 1; the player's camera shakes).
+signal jolted(amount: float)
+
 const GROUP := "fighter"
 ## A fist is on the other when it is CONTACT m from its axis; a strike
 ## that would stop short carries its owner there, at LUNGE m/s at most. It
@@ -19,11 +23,19 @@ const WIDE := 0.5
 const LUNGE := 5.0
 ## The moves that send who takes them flying (the blow from overhead that
 ## ends the combination, the kick), at THROW m/s along the ground and LIFT
-## up. The others push it back SHOVE m/s for each point of power.
+## up. The others push it SHOVE m/s for each point of power, the way the
+## fist goes (and half as much away from who throws it).
 const LAUNCHERS: Array[String] = ["smash", "kick"]
 const THROW := 12.0
 const LIFT := 4.0
-const SHOVE := 1.5
+const SHOVE := 2.5
+## The instant a blow lands, both brutes are held still: this long (s), by
+## power. And what it jolts: who lands it, who takes it, and a blow that
+## only breaks what stands.
+const STOP: Array[float] = [0.0, 0.05, 0.07, 0.12]
+const JOLT_GIVEN: Array[float] = [0.0, 0.35, 0.5, 0.75]
+const JOLT_TAKEN: Array[float] = [0.0, 0.4, 0.6, 1.0]
+const JOLT_WALL := 0.25
 ## Ducking, a blow higher than this (m) goes over.
 const DUCKS_UNDER := 1.2
 ## What a fist or a foot knocks out of what stands: within this radius
@@ -85,6 +97,8 @@ func strike(move: String, facing: float) -> void:
 	var height := character.height()
 	# What comes down from overhead is not ducked: for that, it is low.
 	var avoided_under := 0.0 if character.about(move, "above") > 0.0 else height
+	var going := Basis(Vector3.UP, facing) * character.way()
+	var landed := false
 	for node in body.get_tree().get_nodes_in_group(GROUP):
 		if node == body:
 			continue
@@ -92,27 +106,44 @@ func strike(move: String, facing: float) -> void:
 		var along := d.dot(ahead)
 		if absf(d.y) < 1.0 and along > 0.0 and along < reach + CONTACT + SLACK:
 			if absf(d.cross(ahead).y) < WIDE:
-				(node.get("fighter") as Fighter).take_hit(ahead, power, move in LAUNCHERS, avoided_under)
+				var other := node.get("fighter") as Fighter
+				if other.take_hit(ahead, power, move in LAUNCHERS, avoided_under, going):
+					landed = true
+	var broken := 0
 	if structure != null:
 		var at := body.global_position + ahead * (reach + 0.1) + Vector3.UP * height
 		_scatter(at, HOLE[power], ahead, RUBBLE * power)
 		clear(ahead, RUBBLE * power)
-		smash(structure, at, HOLE[power], ahead * 6.0)
+		broken = smash(structure, at, HOLE[power], ahead * 6.0)
+	if landed:
+		character.hold(STOP[power])
+		jolted.emit(JOLT_GIVEN[power])
+	elif broken > 0:
+		jolted.emit(JOLT_WALL)
 
 
-## A blow going along `way`, of `power`, at `height` m. `thrown`: it sends
-## the body flying. Returns false if it does not take it (off its feet
-## already, or ducking under it).
-func take_hit(way: Vector3, power: int, thrown: bool, height := 1.3) -> bool:
+## A blow from a brute that faces along `way`, of `power`, at `height` m,
+## its fist going along `going` (along `way` if nothing is said).
+## `thrown`: it sends the body flying. Returns false if it does not take
+## it (off its feet already, or ducking under it).
+func take_hit(way: Vector3, power: int, thrown: bool, height := 1.3, going := Vector3.ZERO) -> bool:
 	if state != "up" or (character.state == "duck" and height > DUCKS_UNDER):
 		return false
 	var flat := Vector3(way.x, 0, way.z).normalized()
 	if thrown:
 		launch(flat * THROW + Vector3.UP * LIFT)
 	else:
-		character.hit(power > 1)
-		body.velocity += flat * SHOVE * power
+		var pushed := (Vector3(going.x, 0, going.z) + flat * 0.5).normalized()
+		character.hit(power > 1, pushed)
+		body.velocity += pushed * SHOVE * power
+	character.hold(STOP[power], true)
+	jolted.emit(JOLT_TAKEN[power])
 	return true
+
+
+## Held still by a blow that has just landed: nothing moves it meanwhile.
+func held() -> bool:
+	return character.held()
 
 
 ## Off its feet, at `velocity`: back first, through what stands.

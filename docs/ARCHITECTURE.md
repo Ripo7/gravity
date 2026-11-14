@@ -101,11 +101,12 @@ blow does, being thrown) is in `scripts/game/fighter.gd`.
   skeleton (every bone takes the turn its joint made since the T pose;
   the hips go where the hip joints were, scaled by the length of the
   legs), cuts the moves out, turns each so that its blow goes straight
-  ahead, slows its wind-up and its recovery (the last tenth of a second
-  before the blow lands is as performed) and writes one animation
-  library. What it measures on each move is stored with it: when the fist
-  or foot gets there (the blow counts then), when the next move may start,
-  how far and how high it reaches.
+  ahead, retimes it (a slow wind-up, the last 0.12 s before the blow
+  lands in two thirds of their time, the pose all but held for an instant
+  after it) and writes one animation library. What it measures on each
+  move is stored with it: when the fist or foot gets there (the blow
+  counts then), when the next move may start, how far and how high it
+  reaches, and which way it is going.
 - **The combination.** A long right, both fists across, both from
   overhead, then round again. They are three takes of three people, so
   one runs into the next by a blend, not by one person's own motion.
@@ -120,13 +121,25 @@ blow does, being thrown) is in `scripts/game/fighter.gd`.
   rubble, and its steps go up onto rubble like any others.
 - **Blows.** When a fist or a foot gets there, the other brute takes it
   if it is in front and within reach. The long right and the swing make
-  it flinch, flash white and step back. The blow from overhead, which
-  ends the combination, and the kick throw it: 12 m/s along the ground, 4
-  up. Ducking lets a blow higher than 1.2 m go over, but not the one that
-  comes down from overhead.
+  it flinch, flash white, lean and slide the way the fist goes (straight
+  back for the right, to the side for the swing: 5 m/s, about 0.6 m). The
+  blow from overhead, which ends the combination, and the kick throw it:
+  12 m/s along the ground, 4 up. Ducking lets a blow higher than 1.2 m go
+  over, but not the one that comes down from overhead.
+- **The instant a blow lands** (`Fighter.STOP`, `Character.hold`). Both
+  brutes are held still, 0.07 s for a blow and 0.12 s for one that
+  throws: the pose, the move under way and the body, on the frame in
+  which the fist is on the other (who trembles, white). What is pressed
+  meanwhile waits. `Fighter.jolted` says how hard it was; the player's
+  camera shakes by it (about 2.9 degrees when it is thrown, 0.7 for a
+  blow it lands, dying out in a third of a second). A blow at nothing does
+  neither.
 - **Locking on** (`Player.lock`; the fight starts locked). The nearest
-  other brute is marked with a ring, the camera turns to it and stays on
-  it, and a strike always goes to it. If the blow would not land from
+  other brute is marked with a ring and a strike always goes to it. The
+  camera stays on it, looking 0.6 rad to the right of the line to it: the
+  two are seen side by side, the character on the right, instead of one
+  behind the other (0.17 rad apart on screen at arm's length, 0.04 with
+  the camera straight behind). If the blow would not land from
   where the character stands (the other is farther than its reach and a
   step of 0.5 m, or something stands between them at chest height), the
   character sprints at it first and strikes when it would: no blow is
@@ -147,16 +160,18 @@ blow does, being thrown) is in `scripts/game/fighter.gd`.
   arm's length, and after a wait of 0.5 to 1.3 s kicks (3 times in 10) or
   throws one to three blows of the combination. It steps onto rubble;
   stopped by a wall for a third of a second, it kicks it in and goes
-  through. From behind the house it reaches you in front of it in 9 to
-  10 s, 27 to 38 shards knocked out on the way.
+  through. From behind the house it reaches you in front of it in 5 to
+  8 s, 25 to 37 shards knocked out on the way.
 
 Not there: strafing and walking backwards (the free clips only go
 forward, so the character always turns to where it goes), feet placed on
 uneven ground. For the fight: no health and no end (it goes on until the
 house is gone), moving around in the stance (it is dropped to walk),
 blocking, a real tumble in the air (the thrown body holds one pose), the
-brutes being any bigger than people. Locked on, the camera cannot be
-turned and there is no circling around the other. Between two blows of
+brutes being any bigger than people. Who takes a blow leans in one piece,
+about its feet. Locked on, the camera cannot be turned, there is no
+circling around the other, and the stick still pushes the character
+where the camera looks, which is no longer straight at the other. Between two blows of
 the combination the weight does not shift as one person's would. A
 thrown body passes through loose rubble; a brute that stands is still
 pushed a little by a piece that lands against it.

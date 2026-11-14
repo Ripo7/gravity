@@ -51,8 +51,12 @@ both brought down from overhead, then round again. The blow from overhead
 and the kick throw the other brute; it throws you the same way. Ducking
 lets what comes at your head go over, but not what comes down from above.
 
+A blow that lands stops both brutes for an instant and shakes the camera;
+who takes it leans and slides the way the fist goes.
+
 The fight starts locked on the other brute: an orange ring marks it, the
-camera follows it and looking around waits. A strike then always goes to
+camera follows it from a little to the side, so that the two are seen
+side by side, and looking around waits. A strike then always goes to
 it: from too far, the character sprints at it first and strikes on
 arrival, going through what stands in between. The sight lets go (and
 locks on again); dodging or jumping calls a run off.
@@ -106,8 +110,10 @@ Add `--write-movie out.avi --fixed-fps 30` before `--path` to record a run.
   other brute when the blow counts, what is out of reach, the blow from
   overhead throwing it through the house, the kick, fists breaking a
   wall, the other brute coming through the house to hit back and throwing
-  the player, ducking; and locking on: the camera turning to the other,
-  a blow from afar running in and landing, through a wall too.
+  the player, ducking; a blow that lands holding both for an instant and
+  shaking the camera, who takes it going the way it goes; and locking on:
+  the camera showing the two side by side, a blow from afar running in
+  and landing, through a wall too.
 - `tools/perf_gate.py`: reads a profiled showcase and fails when the
   physics gets too slow.
 - `tools/web_probe.mjs`: loads the web export in headless Chromium, breaks

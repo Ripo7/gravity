@@ -64,6 +64,8 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if fighter.held():
+		return
 	if fighter.step(delta):
 		character.rotation.y = facing
 		return
