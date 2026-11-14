@@ -16,11 +16,11 @@ var _bindings := {
 	"look_right": [_axis(JOY_AXIS_RIGHT_X, 1.0)],
 	"jump": [_key(KEY_SPACE), _button(JOY_BUTTON_A)],
 	"sprint": [_key(KEY_SHIFT), _button(JOY_BUTTON_LEFT_STICK)],
-	"fire":
+	"punch":
 	[_mouse(MOUSE_BUTTON_LEFT), _key(KEY_F), _axis(JOY_AXIS_TRIGGER_RIGHT, 1.0), _button(JOY_BUTTON_X)],
-	"punch": [_mouse(MOUSE_BUTTON_RIGHT), _key(KEY_E), _button(JOY_BUTTON_B)],
-	"kick": [_key(KEY_Q), _button(JOY_BUTTON_Y)],
-	"dodge": [_key(KEY_C), _key(KEY_CTRL), _button(JOY_BUTTON_RIGHT_SHOULDER)],
+	"kick": [_mouse(MOUSE_BUTTON_RIGHT), _key(KEY_E), _button(JOY_BUTTON_Y)],
+	"dodge": [_key(KEY_C), _key(KEY_CTRL), _button(JOY_BUTTON_B)],
+	"lock": [_mouse(MOUSE_BUTTON_MIDDLE), _key(KEY_TAB), _button(JOY_BUTTON_RIGHT_STICK)],
 	"rebuild": [_key(KEY_R), _button(JOY_BUTTON_BACK)],
 	"release_mouse": [_key(KEY_ESCAPE), _button(JOY_BUTTON_START)],
 }

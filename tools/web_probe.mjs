@@ -1,5 +1,5 @@
 // Loads the web export in headless Chromium (software WebGL2), plays a short
-// scripted run (three shots at the house) and checks that the house was
+// scripted run (three blows at the house) and checks that the house was
 // built, that it broke, and that nothing failed on the way (a shader that
 // does not compile in WebGL shows up here, not on desktop).
 // Usage: node tools/web_probe.mjs build/web [screenshot.png]
@@ -32,7 +32,7 @@ const lines = [];
 page.on("console", (m) => {
   const t = m.text();
   lines.push(t);
-  if (/BUILD|CAST|PLAY_DONE|ERROR|error|shader/i.test(t)) console.log(t);
+  if (/BUILD|BLOW|PLAY_DONE|ERROR|error|shader/i.test(t)) console.log(t);
 });
 page.on("pageerror", (e) => console.log("PAGE ERROR " + e.message));
 const steps = "a@-2.5,1.4,-0.6;w0.3;o;w0.8;o@-1.9,2.0,-0.6;w0.8;o@-1.5,1.4,2.7;w2.5";
@@ -41,7 +41,7 @@ await page.goto(`http://localhost:8061/index.html?mode=play&from=-2.5,0.05,4.5&s
 let done;
 for (let i = 0; i < 600 && !done; i++) {
   await page.waitForTimeout(500);
-  if (shot && lines.some((t) => t.startsWith("CAST 3")) && !lines.shot) {
+  if (shot && lines.some((t) => t.startsWith("BLOW 3")) && !lines.shot) {
     lines.shot = true;
     await page.waitForTimeout(4000);
     await page.screenshot({ path: shot });

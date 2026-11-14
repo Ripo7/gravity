@@ -21,14 +21,21 @@ regression, not 10%.
 Headless on a 2-core cloud machine, one physics step per frame
 (`--fixed-fps 60`), phone settings.
 
-The showcase tour of the house (84 shots from 14 places, 1100 to 1250 of
-the 1516 shards down, 900 to 1200 pieces and 150 to 560 moving at once),
-8 seeds:
+The showcase tour of the house (84 blows from 14 places, 1150 to 1220 of
+the 1516 shards down, 1060 to 1260 pieces and 310 to 520 moving at once),
+5 seeds:
 
-- a physics step costs 0.4 to 1.1 ms at the median, and 1.2 to 1.6 ms on
+- a physics step costs 0.6 to 0.8 ms at the median, and 1.9 to 2.5 ms on
   average while things move;
-- 99% of the steps are under 3.6 to 6.8 ms, the slowest takes 5.5 to
-  10.7 ms.
+- 99% of the steps are under 6.1 to 8.3 ms, the slowest takes 10.6 to
+  16.3 ms.
+
+The tour used to shoot a ball; it now lands a brute's blow where the
+camera looks. A blow arrives at once and loose pieces on the way do not
+stop it, so more comes down at a time and the two tours are not the same
+load: the day the ball was removed, on the same machine, the tour with the
+ball cost 1.3 to 1.9 ms on average while things move, 99% of the steps
+under 4.7 to 6.9 ms, the slowest 8.5 to 10.8 ms (3 seeds).
 
 The character: a whole frame (one physics step and one idle step, the
 house standing, nothing drawn) takes 0.10 to 0.13 ms while it runs, and
@@ -38,17 +45,24 @@ about 0.02 to 0.04 ms a frame here. The planted foot slides 0.05 to
 (7.8 m/s). The other brute, a second body with its own tree, adds 0.03
 to 0.05 ms to that frame.
 
-The fight: the four punches of the combination land 0.13, 0.37, 0.78 and
-1.05 s after the first press; the kick lands 0.42 s after the press. When
-a punch counts, the wrist is 0.59 to 0.76 m ahead of the body and within
-0.11 m of the line to the other brute. Thrown by the fourth punch from in
-front of the house, the other brute goes through the front wall, the room
-and the back wall and lands 10.4 m away, 53 shards knocked out on the
-way; it is back on its feet 3.3 s after the blow. In the open a kick
-sends it 14 m. A scripted fight of 30 s in which each brute goes
-through the house once (69 shards down, 80 pieces moving at once) costs
-0.2 ms a physics step at the median, 99% of the steps under 2.4 ms, the
-slowest 3.7 to 7.5 ms (two seeds). The boxing library is
-0.33 MB of text (0.2 MB more in the web export, 2.8 MB in all).
+The fight: the three blows of the combination land 0.35, 1.12 and 2.08 s
+after the first press; the kick lands 0.57 s after the press. Thrown by
+the third blow from in front of the house, the other brute goes through
+the front wall, the room and the back wall and lands 9.4 m away, 68
+shards knocked out on the way; it is back on its feet 3.1 s after the
+blow. In the open a kick sends it 11 m. From behind the house the other
+brute reaches the player in front of it in 9.0 to 9.8 s, 27 to 38 shards
+knocked out on the way (3 seeds).
+
+Locked on: from 10 m in the open, a blow lands 1.6 s after the press.
+From 7.8 m with a wall in between, it lands 2.2 to 3.8 s after the press,
+11 to 18 shards knocked out (20 seeds; it landed in all of them).
+
+A scripted fight of 27 s as played (the other brute attacking, the player
+locked on, three combinations and three kicks) costs 0.2 ms a physics
+step at the median, 99% of the steps under 2.2 to 5.9 ms; the slowest
+step took 4.9 to 9.1 ms in four runs and 21.9 ms in a fifth, which did
+not come back. The move library is 0.43 MB of text; the web export's data
+file is 2.3 MB.
 
 Not measured: a real phone. The line at the top left is there for that.

@@ -5,9 +5,9 @@ extends Control
 ##   how far it is pushed sets the pace, from a walk to a run, and held at
 ##   full tilt it breaks into a sprint.
 ##   Right half: drag to look.
-##   Bottom-right: the fire button. Above it: jump. Left of it: punch,
-##   with the kick above and the duck farther left.
-## Multi-touch is tracked per finger so you can move, look and fire at once.
+##   Bottom-right: the punch button. Above it: jump. Left of it: the kick,
+##   with the duck above and the lock farther left.
+## Multi-touch is tracked per finger so you can move, look and strike at once.
 
 @export var player: Player
 ## Radians per pixel of drag, scaled by screen height so it feels the same
@@ -23,11 +23,11 @@ var _stick_finger := -1
 var _stick_origin := Vector2.ZERO
 var _stick_pos := Vector2.ZERO
 var _look_finger := -1
-var _fire_finger := -1
 var _jump_finger := -1
 var _punch_finger := -1
 var _kick_finger := -1
 var _dodge_finger := -1
+var _lock_finger := -1
 ## Last position per finger. Deltas are computed from these instead of the
 ## event's `relative`: on the web, Godot pairs multi-touch moves with the
 ## wrong previous finger, which made the camera jump and spin on iOS.
@@ -48,33 +48,29 @@ func stick_radius() -> float:
 	return size.y * 0.13
 
 
-func fire_center() -> Vector2:
+func punch_center() -> Vector2:
 	return Vector2(size.x - size.y * 0.2, size.y * 0.76)
 
 
-func fire_radius() -> float:
+func punch_radius() -> float:
 	return size.y * 0.11
 
 
-func punch_center() -> Vector2:
+func kick_center() -> Vector2:
 	return Vector2(size.x - size.y * 0.47, size.y * 0.82)
 
 
-func punch_radius() -> float:
-	return size.y * 0.085
-
-
-func kick_center() -> Vector2:
+func dodge_center() -> Vector2:
 	return Vector2(size.x - size.y * 0.44, size.y * 0.585)
 
 
-func dodge_center() -> Vector2:
+func lock_center() -> Vector2:
 	return Vector2(size.x - size.y * 0.7, size.y * 0.86)
 
 
-## The radius of the kick and duck buttons.
+## The radius of the kick, duck and lock buttons.
 func small_radius() -> float:
-	return size.y * 0.075
+	return size.y * 0.08
 
 
 func jump_center() -> Vector2:
@@ -99,7 +95,7 @@ func _input(event: InputEvent) -> void:
 
 func _release_all() -> void:
 	var fingers: Array[int] = [
-		_stick_finger, _look_finger, _fire_finger, _jump_finger, _punch_finger, _kick_finger, _dodge_finger
+		_stick_finger, _look_finger, _jump_finger, _punch_finger, _kick_finger, _dodge_finger, _lock_finger
 	]
 	if fingers.max() < 0:
 		return
@@ -108,7 +104,7 @@ func _release_all() -> void:
 	_dodge_finger = -1
 	_stick_finger = -1
 	_look_finger = -1
-	_fire_finger = -1
+	_lock_finger = -1
 	_jump_finger = -1
 	_last.clear()
 	if player:
@@ -132,9 +128,9 @@ func _physics_process(delta: float) -> void:
 func _on_touch(e: InputEventScreenTouch) -> void:
 	if e.pressed:
 		_last[e.index] = e.position
-		if e.position.distance_to(fire_center()) < fire_radius() * 1.3 and _fire_finger < 0:
-			_fire_finger = e.index
-			player.touch_fire = true
+		if e.position.distance_to(lock_center()) < small_radius() * 1.3 and _lock_finger < 0:
+			_lock_finger = e.index
+			player.lock()
 		elif e.position.distance_to(jump_center()) < jump_radius() * 1.4 and _jump_finger < 0:
 			_jump_finger = e.index
 			player.touch_jump = true
@@ -155,8 +151,8 @@ func _on_touch(e: InputEventScreenTouch) -> void:
 			_look_finger = e.index
 	else:
 		_last.erase(e.index)
-		if e.index == _fire_finger:
-			_fire_finger = -1
+		if e.index == _lock_finger:
+			_lock_finger = -1
 		elif e.index == _jump_finger:
 			_jump_finger = -1
 		elif e.index == _punch_finger:
@@ -188,8 +184,7 @@ func _on_drag(e: InputEventScreenDrag) -> void:
 		if _stick_pos.distance_to(_stick_origin) > r:
 			_stick_origin = _stick_pos - (_stick_pos - _stick_origin).normalized() * r
 		queue_redraw()
-	elif e.index == _look_finger or e.index == _fire_finger:
-		# Dragging from the fire button also aims, like a real thumb would.
+	elif e.index == _look_finger:
 		var k := look_sensitivity / maxf(size.y, 1.0)
 		player.look(Vector2(-step.x, -step.y) * k)
 
@@ -203,15 +198,10 @@ func _draw() -> void:
 	else:
 		var hint := Vector2(size.y * 0.24, size.y * 0.76)
 		draw_arc(hint, stick_radius(), 0, TAU, 48, ink, 3.0, true)
-	# The fire button: a ball.
-	var c := fire_center()
-	var r := fire_radius()
-	draw_circle(c, r * (1.08 if _fire_finger >= 0 else 1.0), Color(0.3, 0.55, 1.0, 0.6))
-	draw_arc(c, r * 1.12, 0, TAU, 48, Color(1, 1, 1, 0.6), 3.0, true)
-	draw_circle(c, r * 0.3, Color(1, 1, 1, 0.9))
-	# The punch button: a fist seen from the front (four knuckles, a thumb).
-	c = punch_center()
-	r = punch_radius()
+	# The punch button, the big one: a fist seen from the front (four
+	# knuckles, a thumb).
+	var c := punch_center()
+	var r := punch_radius()
 	draw_circle(c, r * (1.08 if _punch_finger >= 0 else 1.0), Color(0.95, 0.35, 0.25, 0.6))
 	draw_arc(c, r * 1.12, 0, TAU, 48, Color(1, 1, 1, 0.6), 3.0, true)
 	for k in 4:
@@ -239,6 +229,15 @@ func _draw() -> void:
 	draw_arc(
 		c + Vector2(0, -r * 0.35), r * 0.55, 0.15 * PI, 0.85 * PI, 16, Color(1, 1, 1, 0.9), r * 0.16, true
 	)
+	# The lock: a sight, filled while the other brute is locked on.
+	c = lock_center()
+	var on := player != null and player.locked != null
+	draw_circle(c, r, Color(1.0, 0.75, 0.2, 0.6) if on else Color(1, 1, 1, 0.2))
+	draw_arc(c, r * 1.12, 0, TAU, 48, Color(1, 1, 1, 0.6), 3.0, true)
+	draw_arc(c, r * 0.5, 0, TAU, 32, Color(1, 1, 1, 0.9), r * 0.12, true)
+	for k in 4:
+		var out := Vector2.RIGHT.rotated(k * PI * 0.5)
+		draw_line(c + out * r * 0.35, c + out * r * 0.8, Color(1, 1, 1, 0.9), r * 0.12, true)
 	draw_circle(jump_center(), jump_radius(), ink_strong if _jump_finger >= 0 else ink)
 	var a := jump_center() + Vector2(0, -jump_radius() * 0.35)
 	var w := jump_radius() * 0.4

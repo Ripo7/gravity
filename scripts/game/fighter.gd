@@ -17,17 +17,17 @@ const CONTACT := 0.22
 const SLACK := 0.25
 const WIDE := 0.5
 const LUNGE := 5.0
-## The moves that send who takes them flying (the last punch of the
-## combination, the kick), at THROW m/s along the ground and LIFT up. The
-## others push it back SHOVE m/s for each point of power.
-const LAUNCHERS: Array[String] = ["hook_r", "kick"]
+## The moves that send who takes them flying (the blow from overhead that
+## ends the combination, the kick), at THROW m/s along the ground and LIFT
+## up. The others push it back SHOVE m/s for each point of power.
+const LAUNCHERS: Array[String] = ["smash", "kick"]
 const THROW := 12.0
 const LIFT := 4.0
 const SHOVE := 1.5
 ## Ducking, a blow higher than this (m) goes over.
 const DUCKS_UNDER := 1.2
 ## What a fist or a foot knocks out of what stands: within this radius
-## (m), by power (1 a jab, 2 a punch, 3 a kick).
+## (m), by power (2 a blow, 3 one that throws).
 const HOLE: Array[float] = [0.0, 0.45, 0.7, 1.0]
 ## Loose pieces within that radius are sent off: RUBBLE kg.m/s for each
 ## point of power, RUBBLE_MOST m/s at most.
@@ -38,6 +38,12 @@ const RUBBLE_MOST := 12.0
 const PLOW := 0.95
 const PLOW_FROM := 3.0
 const SLOWED := 0.012
+## A brute stopped STUCK s by what stands on its way goes through it: what
+## is within BREACH m of two points in front of it, at its knees and at its
+## shoulders (BREACH_AT, m up), is knocked out (see `breach`).
+const STUCK := 0.35
+const BREACH := 0.9
+const BREACH_AT: Array[float] = [0.6, 1.5]
 ## On the ground it slides to a stop (m/s2), lies LIES s, then gets up.
 const SLIDES := 14.0
 const LIES := 0.7
@@ -59,6 +65,9 @@ var _rises := 0.0  # s it takes to get up
 func _init(of: CharacterBody3D, with: Character) -> void:
 	body = of
 	character = with
+	# A piece that goes off under its feet does not take it along (its
+	# speed would be added to a throw).
+	of.platform_floor_layers = 0
 	_layer = of.collision_layer
 	_mask = of.collision_mask
 
@@ -74,6 +83,8 @@ func strike(move: String, facing: float) -> void:
 	var reach := character.reach()
 	var power := character.power()
 	var height := character.height()
+	# What comes down from overhead is not ducked: for that, it is low.
+	var avoided_under := 0.0 if character.about(move, "above") > 0.0 else height
 	for node in body.get_tree().get_nodes_in_group(GROUP):
 		if node == body:
 			continue
@@ -81,7 +92,7 @@ func strike(move: String, facing: float) -> void:
 		var along := d.dot(ahead)
 		if absf(d.y) < 1.0 and along > 0.0 and along < reach + CONTACT + SLACK:
 			if absf(d.cross(ahead).y) < WIDE:
-				(node.get("fighter") as Fighter).take_hit(ahead, power, move in LAUNCHERS, height)
+				(node.get("fighter") as Fighter).take_hit(ahead, power, move in LAUNCHERS, avoided_under)
 	if structure != null:
 		var at := body.global_position + ahead * (reach + 0.1) + Vector3.UP * height
 		_scatter(at, HOLE[power], ahead, RUBBLE * power)
@@ -150,6 +161,23 @@ func step(delta: float) -> bool:
 	return true
 
 
+## Goes through what stands in front of it, on the side of `ahead`: a hole
+## its size, and the rubble out of the way.
+func breach(ahead: Vector3) -> void:
+	if structure == null:
+		return
+	for height: float in BREACH_AT:
+		var at := body.global_position + ahead * 0.8 + Vector3.UP * height
+		Fighter.smash(structure, at, BREACH, ahead * 5.0)
+	# And what it is up against: the edge of a hole too small holds it too.
+	for k in body.get_slide_collision_count():
+		var touched := body.get_slide_collision(k)
+		var i := structure.owner_of(touched.get_collider_rid())
+		if i >= 0 and structure.held[i] == 1 and touched.get_normal().y < 0.7:
+			structure.blow(i, ahead * 5.0)
+	clear(ahead, RUBBLE * 3.0)
+
+
 ## Sends off the rubble that lies at its feet, on the side of `ahead`.
 func clear(ahead: Vector3, impulse: float) -> void:
 	_scatter(body.global_position + ahead * 0.6 + Vector3.UP * 0.4, 0.7, ahead, impulse)
@@ -172,7 +200,7 @@ func _scatter(at: Vector3, radius: float, way: Vector3, impulse: float) -> void:
 			pieces.push(i, (way + Vector3.UP * 0.25) * speed, spin)
 
 
-## The speed over the ground (m/s) of `of` during a boxing move: where the
+## The speed over the ground (m/s) of `of` during a blow: where the
 ## move itself steps and, for a strike that would stop short of `opponent`,
 ## what brings its fist or foot onto it by the time it gets there.
 static func move_speed(of: Node3D, with: Character, opponent: Node3D, delta: float) -> Vector3:
@@ -200,7 +228,8 @@ static func climb(of: CharacterBody3D, wish: Vector3, stride: float, height: flo
 	var blocked := false
 	for k in of.get_slide_collision_count():
 		var n := of.get_slide_collision(k).get_normal()
-		if absf(n.y) < 0.5 and n.dot(wish) < -0.3:
+		# (Anything it cannot walk up: a face steeper than a floor too.)
+		if n.y > -0.5 and n.y < 0.7 and n.dot(wish) < -0.3:
 			blocked = true
 	if not blocked:
 		return 0.0

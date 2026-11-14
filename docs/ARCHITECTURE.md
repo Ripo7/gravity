@@ -12,11 +12,11 @@ matter (what breaks, what moves) work. Numbers are in
 | `scripts/main.gd` | builds the scene: sky, ground, house, the two brutes, HUD |
 | `scripts/core/` | launch options, input map, quality tiers, the physics clock, scripted runs (`director.gd`) |
 | `scripts/destruction/` | what stands and how it breaks: `Fracture`, `Structure`, `Support`, `Pieces`, `ShardMesh` |
-| `scripts/game/` | the level (`House`), what the brutes have in common (`Fighter`), the other brute (`Brute`), the ball (`Projectile`) |
+| `scripts/game/` | the level (`House`), what the brutes have in common (`Fighter`), the other brute (`Brute`) |
 | `scripts/player/` | `Player` (controls, camera) and `Character` (the animated body, shared by both brutes) |
 | `scripts/fx/`, `scripts/ui/` | dust and chips; HUD and touch controls |
 | `shaders/` | the one shader that draws every shard |
-| `assets/` | the mannequin and the boxing moves (made by `tools/mocap`) |
+| `assets/` | the mannequin and the fighting moves (made by `tools/mocap`) |
 | `tools/` | CI and build scripts, the perf gate, the web probe, the asset tools |
 | `tests/` | headless tests, one file per subject |
 
@@ -46,10 +46,12 @@ node with `main.gd`) and the test runner's.
 
 `Player` and `Brute` move their capsules, then each `Character` advances
 its move and its animation tree (the trees are stepped with the physics, so
-the steps of a boxing move reach the capsule at the same pace), then
+the steps of a blow reach the capsule at the same pace), then
 `Structure` spreads what it has to do (what holds, what falls) over the
 step. Collision layers: 1 world, 2 structure, 3 debris, 4 player, 5 actor
-(the other brute); a body off its feet keeps only the ground.
+(the other brute); a body off its feet keeps only the ground. Loose
+pieces are stopped by the brutes as by a wall: a piece that only went
+through one would carry it along.
 
 ## Conventions
 
@@ -68,12 +70,12 @@ step. Collision layers: 1 world, 2 structure, 3 debris, 4 player, 5 actor
 
 The mannequin and its clips are the free part of Quaternius's Universal
 Animation Library (CC0, see `assets/mannequin/SOURCE.md`): one rigged
-figure, 46 clips, of which 11 are used. The boxing moves are not from
-that library: they are motion capture (see below).
+figure, 46 clips, of which 10 are played. The blows are not from that
+library: they are motion capture (see below).
 `scripts/player/character.gd` builds the tree that blends all of them;
 `scripts/player/player.gd` moves the capsule and tells the character how
-fast it goes, whether it is in the air, and when it jumps, lands, shoots,
-punches, kicks or ducks. The other brute (`scripts/game/brute.gd`) is the
+fast it goes, whether it is in the air, and when it jumps, lands,
+strikes, kicks or ducks. The other brute (`scripts/game/brute.gd`) is the
 same character in other colours; what the two have in common (what a
 blow does, being thrown) is in `scripts/game/fighter.gd`.
 
@@ -88,36 +90,49 @@ blow does, being thrown) is in `scripts/game/fighter.gd`.
 - **The air.** A jump leaves at once (the clip's crouch is skipped), runs
   into the pose held in the air, and ends in a landing only when you come
   down hard or on the spot: running, the legs run on.
-- **The arm that shoots.** The casting clip is laid over whatever the legs
-  do, on the left arm and the chest only; the body turns a little so that
-  the arm points at what is aimed at.
-
-- **Boxing, from motion capture.** The guard, the punches, the duck and
-  the kick are what real people did: a boxer shadow-boxing and a karateka,
-  recorded in the CMU motion capture database (free to use, see
-  `assets/boxing/SOURCE.md`). `tools/mocap/build.py` reads the takes, puts
-  them on the mannequin's skeleton (every bone takes the turn its joint
-  made since the T pose; the hips go where the hip joints were, scaled by
-  the length of the legs), cuts the moves out and writes one animation
+- **Blows, from motion capture.** The stance, the three blows, the kick
+  and the duck are what real people did, recorded in the CMU motion
+  capture database (free to use, see `assets/fight/SOURCE.md`). They were
+  picked for weight, not for technique: a strong man waiting (the
+  stance), a boxer's long right, a baseball swing without the bat (both
+  fists across), wood being chopped without the axe (both fists from
+  overhead), a karateka's front kick, a boxer ducking.
+  `tools/mocap/build.py` reads the takes, puts them on the mannequin's
+  skeleton (every bone takes the turn its joint made since the T pose;
+  the hips go where the hip joints were, scaled by the length of the
+  legs), cuts the moves out, turns each so that its blow goes straight
+  ahead, slows its wind-up and its recovery (the last tenth of a second
+  before the blow lands is as performed) and writes one animation
   library. What it measures on each move is stored with it: when the fist
   or foot gets there (the blow counts then), when the next move may start,
-  how far it reaches.
-- **The combination.** Jab and cross are one passage of the take, cut in
-  two between the punches, and so are the left and the right to the body:
-  chained, the motion is the boxer's own, weight going from one foot to
-  the other. Pressed once, a punch runs into the guard instead.
-- **Steps that are real.** A boxer steps with his punches. Those steps are
-  taken out of the pose and given to the skeleton's root bone; the game
-  moves the body by them (root motion), so a foot that is planted in the
-  capture is planted in the game. A strike also goes for the opponent in
-  front: the character turns to it, and if the fist would stop short it
-  is carried the rest of the way while the arm goes out (that part
-  slides).
+  how far and how high it reaches.
+- **The combination.** A long right, both fists across, both from
+  overhead, then round again. They are three takes of three people, so
+  one runs into the next by a blend, not by one person's own motion.
+  Pressed once, a blow runs into the stance instead.
+- **Steps that are real.** Those people step with their blows. The steps
+  are taken out of the pose and given to the skeleton's root bone; the
+  game moves the body by them (root motion), so a foot that is planted in
+  the capture is planted in the game. A strike also goes for the opponent
+  in front: the character turns to it, and if the fist would stop short
+  it is carried the rest of the way while the arm goes out (that part
+  slides). A blow under way is not cut short by stepping off a heap of
+  rubble, and its steps go up onto rubble like any others.
 - **Blows.** When a fist or a foot gets there, the other brute takes it
-  if it is in front and within reach. A jab, a cross and the left to the
-  body make it flinch (a small clip or a bigger one), flash white and
-  step back. The right to the body, which ends the combination, and the
-  kick throw it: 12 m/s along the ground, 4 up.
+  if it is in front and within reach. The long right and the swing make
+  it flinch, flash white and step back. The blow from overhead, which
+  ends the combination, and the kick throw it: 12 m/s along the ground, 4
+  up. Ducking lets a blow higher than 1.2 m go over, but not the one that
+  comes down from overhead.
+- **Locking on** (`Player.lock`; the fight starts locked). The nearest
+  other brute is marked with a ring, the camera turns to it and stays on
+  it, and a strike always goes to it. If the blow would not land from
+  where the character stands (the other is farther than its reach and a
+  step of 0.5 m, or something stands between them at chest height), the
+  character sprints at it first and strikes when it would: no blow is
+  thrown at nothing. Held up 0.15 s on the way by what stands, it goes
+  through: a hole its size (`Fighter.breach`, the one the other brute
+  makes). It gives up after 4 s; ducking or jumping calls the run off.
 - **Thrown.** A brute off its feet goes over backwards and flies, back
   first. Nothing that stands stops it: every step of its flight, the
   shards within 0.95 m of its middle are knocked out (the nearest in
@@ -126,26 +141,25 @@ blow does, being thrown) is in `scripts/game/fighter.gd`.
   0.7 s and gets up (the fall played backwards, the library having no
   clip for getting up).
 - **Fists break what stands.** A strike that reaches a wall or a pillar
-  knocks out what is within 0.45 m of a jab, 0.7 m of a punch, 1 m of a
-  kick, and sends off the loose pieces that lie there.
+  knocks out what is within 0.7 m of a blow, 1 m of the blow from
+  overhead or of a kick, and sends off the loose pieces that lie there.
 - **The other brute** has no plan: it walks straight at you, stops at
   arm's length, and after a wait of 0.5 to 1.3 s kicks (3 times in 10) or
-  throws one to four punches of the combination. It steps onto rubble;
+  throws one to three blows of the combination. It steps onto rubble;
   stopped by a wall for a third of a second, it kicks it in and goes
-  through. From behind the house it reaches you in front of it in about
-  12 s, 38 shards knocked out on the way.
+  through. From behind the house it reaches you in front of it in 9 to
+  10 s, 27 to 38 shards knocked out on the way.
 
 Not there: strafing and walking backwards (the free clips only go
-forward, so the character always turns to where it goes, and slides for
-half a second when it shoots while running sideways), feet placed on
-uneven ground, the head or the arm following the aim up and down. For
-the fight: no health and no end (it goes on until the house is gone),
-moving around in the guard (the stance is dropped to walk), blocking,
-hooks and uppercuts to the head, a real tumble in the air (the thrown
-body holds one pose), the brutes being any bigger than people. The
-brutes stand upright when hit and the boxer crouches, so punches land on
-the chest. After the kick the leg comes back by a blend, not by the
-karateka's own step. A thrown body passes through loose rubble.
+forward, so the character always turns to where it goes), feet placed on
+uneven ground. For the fight: no health and no end (it goes on until the
+house is gone), moving around in the stance (it is dropped to walk),
+blocking, a real tumble in the air (the thrown body holds one pose), the
+brutes being any bigger than people. Locked on, the camera cannot be
+turned and there is no circling around the other. Between two blows of
+the combination the weight does not shift as one person's would. A
+thrown body passes through loose rubble; a brute that stands is still
+pushed a little by a piece that lands against it.
 
 
 ## How the destruction works
@@ -177,7 +191,7 @@ karateka's own step. A thrown body passes through loose rubble.
    goes into the building if that is what it hit. So a big slab does not
    survive coming down. Pieces that lie still are frozen (static) and wake
    when something near them moves.
-5. **Crumbs.** A shard that is hit hard (where a shot lands, a
+5. **Crumbs.** A shard that is hit hard (where a blow lands, a
    lone shard that lands or is thrown against something at 6 m/s or more,
    the point where a falling piece strikes) is cut once more, there and
    then, into 2 to 6 crumbs that fill it exactly. Each crumb is one more
@@ -199,12 +213,10 @@ karateka's own step. A thrown body passes through loose rubble.
    through what still stands for 5 steps: with leaning cuts it would often
    be wedged in its own hole.
 
-The projectile (`scripts/game/projectile.gd`) is a placeholder: a ball
-that leaves the character's chest at 36 m/s, flies straight and stops at the first thing
-it touches. In a standing wall, the shards centred within 0.7 m of the
-impact are knocked out (the nearest half in crumbs) and the bonds of those
-up to 1.3 m crack; a loose piece is shoved; the ground only stops it. One
-shot every 0.3 s.
+Scripted runs break the house without a fight: `Main.blow` lands a
+brute's blow on the first standing thing along a ray (the shards centred
+within 0.7 m are knocked out, the nearest half in crumbs, and those up to
+1.05 m crack). The showcase and the web probe use it, one every 0.3 s.
 
 Quality tiers (`scripts/core/quality.gd`: phone, browser, desktop) change
 the dust, the decorative bits and how many crumbs there can be. The house,

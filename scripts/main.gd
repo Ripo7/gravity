@@ -1,8 +1,8 @@
 class_name Main
 extends Node3D
-## The test ground, in greybox: a house you can take apart by shooting at
-## it (see Structure for how it breaks), walked around in third person,
-## and another brute to fight.
+## The test ground, in greybox: a house that can be taken apart (see
+## Structure for how it breaks) and two brutes to do it, one of them yours,
+## seen in third person.
 ## Textures: Kenney's prototype textures (CC0).
 
 const TEXTURES := "res://addons/kenney_prototype_textures/"
@@ -45,7 +45,6 @@ func _ready() -> void:
 	player.pieces = structure.pieces
 	add_child(player)
 	player.global_position = house_at * Vector3(0, 0.05, 15)
-	player.fired.connect(shoot)
 	player.fighter.structure = structure
 	brute = Brute.new()
 	brute.watches = player
@@ -53,6 +52,8 @@ func _ready() -> void:
 	brute.position = house_at * brute_at
 	brute.fighter.structure = structure
 	add_child(brute)
+	if fight:
+		player.lock()  # the fight starts locked on; a button lets go
 	var ui := CanvasLayer.new()
 	add_child(ui)
 	hud = Hud.new()
@@ -87,25 +88,24 @@ func _unhandled_input(event: InputEvent) -> void:
 		rebuild()
 
 
-## A projectile from `from` along `direction`.
-func shoot(from: Vector3, direction: Vector3) -> Projectile:
-	var shot := Projectile.new()
-	shot.setup(structure, from, direction)
-	shot.landed.connect(_on_landed.bind(direction))
-	add_child(shot)
-	return shot
+## What a brute's fist does where the line from `from` along `direction`
+## first meets something that stands: scripted runs and tests take the
+## house apart with it, without a fight. Returns how many shards went.
+func blow(from: Vector3, direction: Vector3) -> int:
+	var along := direction.normalized()
+	var ray := PhysicsRayQueryParameters3D.create(
+		from, from + along * 80.0, Structure.LAYER_WORLD | Structure.LAYER_STRUCTURE
+	)
+	var hit := get_world_3d().direct_space_state.intersect_ray(ray)
+	if hit.is_empty():
+		return 0
+	return Fighter.smash(structure, hit["position"], Fighter.HOLE[2], along * 6.0)
 
 
 ## Puts the house back up (starts the scene again).
 func rebuild() -> void:
 	if get_tree().current_scene == self:
 		get_tree().reload_current_scene()
-
-
-## A projectile stopped: a little dust, and bits knocked back.
-func _on_landed(at: Vector3, normal: Vector3, _torn: int, direction: Vector3) -> void:
-	dust.puff(at + normal * 0.1, 0.8, normal * 0.5)
-	chips.burst(at + normal * 0.05, 4, direction.bounce(normal) * 3.0, 2.0)
 
 
 ## Something came off or broke up: dust, and bits thrown out.

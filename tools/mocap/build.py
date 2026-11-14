@@ -1,21 +1,23 @@
 #!/usr/bin/env python3
-"""Builds assets/boxing/boxing.tres: the boxing moves, cut out of CMU motion
-capture takes and put on the mannequin.
+"""Builds assets/fight/moves.tres: the fighting moves of the brutes, cut out
+of CMU motion capture takes and put on the mannequin.
 
     python3 tools/mocap/build.py <dir of the CMU BVH files> [out.tres]
 
 The takes come from the CMU Graphics Lab Motion Capture Database, in Bruce
-Hahne's BVH conversion (one mirror: github.com/una-dinosauria/cmu-mocap,
-files data/013/13_17.bvh and data/135/135_07.bvh). See
-assets/boxing/SOURCE.md.
+Hahne's BVH conversion (one mirror: github.com/una-dinosauria/cmu-mocap).
+Which takes and which seconds of them: CLIPS below, and
+assets/fight/SOURCE.md.
 
 Every clip starts with the pelvis over the origin, the opponent along +Z
 (where the mannequin looks). The steps of a move are given to the bone
 "root" (the game moves the body by it, so the feet stay where they are
-put); what is left is the pose. Each clip carries, as metadata, the
-moment its fist or foot gets there ("hit"), the moment the next move may
-start ("next"), how far from the body that fist or foot is then
-("reach"), and how hard it is ("power").
+put); what is left is the pose. A strike is made heavier than it was
+performed: its wind-up and its recovery are slowed, the blow itself is
+not. Each clip carries, as metadata, the moment its fist or foot gets
+there ("hit"), the moment the next move may start ("next"), how far from
+the body that fist or foot is then ("reach"), how high ("height") and how
+hard it is ("power").
 """
 import os
 import sys
@@ -36,25 +38,56 @@ STEPS = 0.12
 ANKLE = 0.10  # m: how high the ankle of a foot flat on the ground is
 FOOT = 0.15  # m: from the ankle to the ball of the foot
 
+# The last SNAP s before a blow lands are played as performed.
+SNAP = 0.1
+
 # name, take, from, to (s in the take), then:
 #   hit: when the fist or foot is there; limb: which one; next: when the
-#   next move may start; power: 1 a jab, 2 a hard punch, 3 a kick
-#   with: another strike of the same passage, to tell where the opponent is
+#   next move may start; power: 2 a blow, 3 one that throws
+#   slow: how much longer the wind-up and the recovery take than performed
+#   above: the blow comes down from overhead (ducking does not avoid it)
 #   steps: the root takes the steps (else the clip stays where it is)
 #   loop: the end is made to run into the start
+#   turn: with no strike to tell where the opponent is, it is where the
+#   hips look, plus this (rad): for someone who stands side on
 CLIPS = [
-    dict(name="guard", take="13_17", t0=23.0, t1=27.5, loop=(0.9, 1.9)),
-    dict(name="jab", take="13_17", t0=2.87, t1=3.14, hit=3.03, limb="LeftHand", next=3.10, power=1,
-         with_=("RightHand", 3.25), steps=True),
-    dict(name="cross", take="13_17", t0=3.10, t1=3.62, hit=3.25, limb="RightHand", next=3.42, power=2,
-         with_=("LeftHand", 3.03), steps=True),
-    dict(name="hook_l", take="13_17", t0=20.24, t1=20.58, hit=20.45, limb="LeftHand", next=20.52, power=2,
-         with_=("RightHand", 20.72), steps=True),
-    dict(name="hook_r", take="13_17", t0=20.52, t1=21.00, hit=20.72, limb="RightHand", next=20.86, power=2,
-         with_=("LeftHand", 20.45), steps=True),
-    dict(name="duck", take="13_17", t0=11.62, t1=12.40, low=11.96),
-    dict(name="kick", take="135_07", t0=0.45, t1=1.30, hit=1.00, limb="RightFoot", next=1.25, power=3),
+    # A strong man waiting: the stance.
+    dict(name="stance", take="137_41", t0=8.0, t1=16.0, loop=(1.6, 3.2)),
+    # A boxer's long right, stepping in.
+    dict(name="haymaker", take="13_17", t0=1.70, t1=2.45, hit=1.98, limb="RightHand", next=2.20, power=2,
+         slow=(1.5, 1.3), steps=True),
+    # A baseball swing, without the bat: both fists across.
+    dict(name="swing", take="124_07", t0=2.55, t1=3.30, hit=2.93, limb="LeftHand", next=3.12, power=2,
+         slow=(1.3, 1.3), steps=True),
+    # Chopping wood, without the axe: both fists from overhead.
+    dict(name="smash", take="79_01", t0=2.26, t1=3.20, hit=2.86, limb="RightHand", next=3.10, power=3,
+         slow=(1.2, 1.4), above=True),
+    # A boxer ducking.
+    dict(name="duck", take="13_17", t0=11.62, t1=12.40, low=11.96, turn=0.61),
+    # A karateka's front kick, stepping in.
+    dict(name="kick", take="135_04", t0=2.62, t1=3.30, hit=3.11, limb="RightFoot", next=3.26, power=3,
+         slow=(1.2, 1.3), steps=True),
 ]
+
+
+def warp(count, hit, before, after):
+    """Slows a strike of `count` frames whose blow lands at frame `hit`:
+    returns, for every frame of the slowed clip, where it is in the
+    original (a fraction of a frame), and where `hit` ends up."""
+    snap = max(hit - SNAP * FPS, 0.0)
+    first, last = snap * before, (count - 1 - hit) * after
+    t = np.arange(0, int(round(first + (hit - snap) + last)) + 1, dtype=float)
+    src = np.where(t < first, t / before, np.where(t < first + hit - snap, snap + t - first,
+                                                   hit + (t - first - (hit - snap)) / after))
+    return np.clip(src, 0, count - 1), first + hit - snap
+
+
+def resample(values, src):
+    """`values` (F, ...) at the fractional frames `src`."""
+    lo = np.floor(src).astype(int)
+    hi = np.minimum(lo + 1, len(values) - 1)
+    w = (src - lo).reshape((-1,) + (1,) * (values.ndim - 1))
+    return values[lo] * (1 - w) + values[hi] * w
 
 
 def angle(v):
@@ -123,9 +156,8 @@ def best_loop(cap, a, b, shortest, longest):
     return best
 
 
-def build(cap, spec, offset):
-    """One clip: tracks and metadata. `offset`: what to add to the heading
-    of the hips to get where the opponent is, for clips with no strike."""
+def build(cap, spec):
+    """One clip: tracks and metadata."""
     s = cap.skel
     f0, f1 = cap.frame(spec["t0"]), cap.frame(spec["t1"])
     if "loop" in spec:
@@ -133,11 +165,9 @@ def build(cap, spec, offset):
     frames = np.arange(f0, f1 + 1)
     if "hit" in spec:
         headings = [cap.towards(spec["limb"], spec["hit"])]
-        if "with_" in spec:
-            headings.append(cap.towards(*spec["with_"]))
         heading = mean_angle(headings)
     else:
-        heading = cap.hips_yaw[f0] + offset
+        heading = cap.hips_yaw[f0] + spec.get("turn", 0.0)
     turn = rt.turn_y(-heading)
     root = s.index("root")
     world = turn @ cap.motion.world[frames]
@@ -171,6 +201,22 @@ def build(cap, spec, offset):
             quats[f] = mixed / np.linalg.norm(mixed, axis=-1, keepdims=True)
             hips[f] = hips[f] * (1 - t) + h_b[k] * t
         # and the heading at the end is the one at the start: the loop does not turn
+    hit_at = (cap.frame(spec["hit"]) - f0) if "hit" in spec else 0.0
+    slowed = lambda frame: float(frame)  # noqa: E731
+    if "slow" in spec:
+        src, new_hit = warp(len(frames), hit_at, *spec["slow"])
+        before, after = spec["slow"]
+        snap = max(hit_at - SNAP * FPS, 0.0)
+
+        def slowed(frame, snap=snap, before=before, after=after, hit=hit_at, new_hit=new_hit):
+            if frame <= snap:
+                return frame * before
+            return snap * before + frame - snap if frame <= hit else new_hit + (frame - hit) * after
+
+        quats = resample(quats, src)
+        quats /= np.linalg.norm(quats, axis=-1, keepdims=True)
+        hips = resample(hips, src)
+        walk = resample(walk, src)
     root0 = s.world_rot[s.index("root")]
     tracks = []
     if spec.get("steps"):
@@ -186,9 +232,9 @@ def build(cap, spec, offset):
         at = (cap.pos[fh, s.index(bone)] - cap.walk[fh]) @ turn.T
         # (to the wrist; for a kick, to the ball of the foot: FOOT past the ankle)
         reach = float(np.hypot(at[0], at[2])) + (FOOT if spec["limb"].endswith("Foot") else 0.0)
-        meta.update(hit=(fh - f0) / FPS, next=(cap.frame(spec["next"]) - f0) / FPS, power=spec["power"],
-                    reach=reach, height=float(at[1]), aside=float(at[0]))
-        meta["travel"] = float(walk[fh - f0, 2]) if spec.get("steps") else 0.0
+        meta.update(hit=slowed(fh - f0) / FPS, next=slowed(cap.frame(spec["next"]) - f0) / FPS,
+                    power=spec["power"], reach=reach, height=float(at[1]), aside=float(at[0]),
+                    above=1.0 if spec.get("above") else 0.0)
     if "low" in spec:
         meta["low"] = (cap.frame(spec["low"]) - f0) / FPS
     return {"name": spec["name"], "dt": 1.0 / FPS, "tracks": tracks, "meta": meta, "loop": "loop" in spec}, heading, (f0, f1), walk
@@ -196,7 +242,7 @@ def build(cap, spec, offset):
 
 def main():
     data = sys.argv[1]
-    out = sys.argv[2] if len(sys.argv) > 2 else os.path.join(os.path.dirname(__file__), "../../assets/boxing/boxing.tres")
+    out = sys.argv[2] if len(sys.argv) > 2 else os.path.join(os.path.dirname(__file__), "../../assets/fight/moves.tres")
     skel = Skeleton(MANNEQUIN)
     fist = {k: v for k, v in skel.clip_rotations("Punch_Jab", 0.0).items() if "f_" in k or "thumb" in k}
     captures = {}
@@ -204,22 +250,15 @@ def main():
         if spec["take"] not in captures:
             subject = spec["take"].split("_")[0]
             captures[spec["take"]] = Capture(os.path.join(data, "%03d" % int(subject), spec["take"] + ".bvh"), skel, fist)
-    # How the hips are turned away from the opponent at the start of the punches.
-    offsets = []
-    for spec in CLIPS:
-        if "hit" in spec and spec["limb"].endswith("Hand"):
-            cap = captures[spec["take"]]
-            heading = mean_angle([cap.towards(spec["limb"], spec["hit"]), cap.towards(*spec["with_"])])
-            offsets.append(heading - cap.hips_yaw[cap.frame(spec["t0"])])
-    offset = mean_angle(np.array(offsets))
     clips = []
     for spec in CLIPS:
         cap = captures[spec["take"]]
-        clip, heading, (f0, f1), walk = build(cap, spec, offset)
+        clip, heading, (f0, f1), walk = build(cap, spec)
         clips.append(clip)
         meta = clip["meta"]
-        print("%-7s %s %.2f-%.2f s (%.2f s)  opponent at %4.0f deg  walks %+.2f m ahead, %+.2f aside  %s" % (
-            spec["name"], spec["take"], cap.time[f0], cap.time[f1], (f1 - f0) / FPS, np.degrees(heading),
+        length = (max(len(v) for _, _, v in clip["tracks"]) - 1) / FPS
+        print("%-8s %s %.2f-%.2f s (plays %.2f s)  opponent at %4.0f deg  walks %+.2f m ahead, %+.2f aside  %s" % (
+            spec["name"], spec["take"], cap.time[f0], cap.time[f1], length, np.degrees(heading),
             walk[-1, 2], walk[-1, 0], "  ".join("%s %.2f" % kv for kv in meta.items())))
     os.makedirs(os.path.dirname(out), exist_ok=True)
     rt.write_library(out, clips)

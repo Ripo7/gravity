@@ -17,30 +17,7 @@ func test_the_player_stands_and_runs() -> void:
 	await _unload()
 
 
-func test_firing_sends_one_shot_then_waits() -> void:
-	await _load()
-	var p := main.player
-	await frames(5)
-	var target := p.aim_point()
-	check(p.fire(), "it goes off")
-	check(not p.fire(), "not twice in a row")
-	check_eq(get_tree().get_nodes_in_group("projectile").size(), 1, "one projectile")
-	var shot := get_tree().get_first_node_in_group("projectile") as Projectile
-	var ball := shot.get_child(0) as MeshInstance3D
-	var chest := p.global_position + Vector3.UP * Player.CHEST
-	check(shot.global_position.distance_to(chest) < 0.01, "from the character's chest")
-	check(shot.direction.dot((target - chest).normalized()) > 0.999, "towards what is under the crosshair")
-	check(not ball.visible, "not drawn while it is inside the character")
-	await frames(3)
-	var off := shot.global_position - chest
-	check(off.length() > 1.0 and off.cross(shot.direction).length() < 0.01, "it flies straight")
-	check(ball.visible, "and is drawn once it is out")
-	await frames(int(Player.COOLDOWN * 60) + 2)
-	check(p.fire(), "again after the wait")
-	await _unload()
-
-
-func test_touch_controls_move_look_and_fire() -> void:
+func test_touch_controls_move_look_and_strike() -> void:
 	await _load()
 	var p := main.player
 	var tc := TouchControls.new()
@@ -49,9 +26,9 @@ func test_touch_controls_move_look_and_fire() -> void:
 	await frames(3)
 	# The buttons do not sit on each other, nor on the rebuild button.
 	var gap := (
-		tc.fire_center().distance_to(tc.jump_center()) - tc.fire_radius() * 1.3 - tc.jump_radius() * 1.4
+		tc.punch_center().distance_to(tc.jump_center()) - tc.punch_radius() * 1.3 - tc.jump_radius() * 1.4
 	)
-	check(gap > 0.0, "fire and jump are apart")
+	check(gap > 0.0, "punch and jump are apart")
 	var rebuild := Hud.rebuild_rect(tc.size).grow(10)
 	check(
 		not rebuild.has_point(tc.jump_center() - Vector2(0, tc.jump_radius() * 1.4)), "jump clear of rebuild"
@@ -68,11 +45,12 @@ func test_touch_controls_move_look_and_fire() -> void:
 	tc._on_drag(_drag(1, right - Vector2(40, 0)))
 	check(p.yaw > yaw, "dragging left turns the camera left")
 	tc._on_touch(_touch(1, right - Vector2(40, 0), false))
-	# A third finger on the blue button.
-	tc._on_touch(_touch(2, tc.fire_center(), true))
+	# A third finger on the big button.
+	tc._on_touch(_touch(2, tc.punch_center(), true))
 	await frames(2)
-	check_eq(get_tree().get_nodes_in_group("projectile").size(), 1, "the button shoots")
-	tc._on_touch(_touch(2, tc.fire_center(), false))
+	check(p.character.striking(), "the big button strikes")
+	tc._on_touch(_touch(2, tc.punch_center(), false))
+	await frames(90)  # the blow runs its course: no jump in the middle of it
 	tc._on_touch(_touch(0, left - Vector2(0, tc.stick_radius()), false))
 	check_eq(p.touch_move, Vector2.ZERO, "lifting the thumb stops")
 	tc._on_touch(_touch(3, tc.jump_center(), true))

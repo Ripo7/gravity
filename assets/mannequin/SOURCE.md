@@ -19,8 +19,8 @@ day, unchanged:
 
 **The files here are those two cut down to the clips the game uses**, by
 `python3 tools/strip_clips.py assets/mannequin/AnimationLibrary_Godot_Standard.gltf`:
-12 clips out of 46, 1.3 MB instead of 4.0 MB. The mesh, the skeleton and
-the 12 clips are untouched. To get another clip, take the two original
+11 clips out of 46, 1.2 MB instead of 4.0 MB. The mesh, the skeleton and
+the 11 clips are untouched. To get another clip, take the two original
 files from the mirror, add its name to `KEEP` in the tool and run it
 again.
 
@@ -28,7 +28,7 @@ Godot drops the `_Loop` at the end of a clip's name when it imports it and
 makes the clip loop: `Jog_Fwd_Loop` in the file is `Jog_Fwd` in the game.
 
 Kept: Death01, Hit_Chest, Hit_Head, Idle, Jog_Fwd, Jump, Jump_Land,
-Jump_Start, Spell_Simple_Shoot, Sprint, Walk (played by
+Jump_Start, Sprint, Walk (played by
 `scripts/player/character.gd`) and Punch_Jab (`tools/mocap` takes the
 closed fist from it).
 
@@ -37,5 +37,6 @@ Fixing_Kneeling, Idle_Talking, Idle_Torch, Interact, PickUp_Table,
 Pistol_Aim_Down, Pistol_Aim_Neutral, Pistol_Aim_Up, Pistol_Idle,
 Pistol_Reload, Pistol_Shoot, Punch_Cross, Punch_Enter, Push, Roll, Roll_RM,
 Sitting_Enter, Sitting_Exit, Sitting_Idle, Sitting_Talking,
-Spell_Simple_Enter, Spell_Simple_Exit, Spell_Simple_Idle, Swim_Fwd,
+Spell_Simple_Enter, Spell_Simple_Exit, Spell_Simple_Idle,
+Spell_Simple_Shoot, Swim_Fwd,
 Swim_Idle, Sword_Attack, Sword_Attack_RM, Sword_Idle, Walk_Formal.

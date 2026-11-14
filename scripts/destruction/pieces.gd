@@ -49,7 +49,12 @@ const CLEAR_STEPS := 5
 const CONTACTS := 12
 const GRID := 2.0  ## m, the grid frozen pieces are found by
 const NOT_OURS := -1000000
-const MASK_CLEARING := Structure.LAYER_WORLD | Structure.LAYER_DEBRIS
+## What a piece is stopped by. The brutes too: a piece that only went
+## through one would carry it along (a body the game moves is pushed out of
+## whatever overlaps it).
+const MASK_CLEARING := (
+	Structure.LAYER_WORLD | Structure.LAYER_DEBRIS | Structure.LAYER_PLAYER | Structure.LAYER_ACTOR
+)
 const MASK := MASK_CLEARING | Structure.LAYER_STRUCTURE
 
 var structure: Structure

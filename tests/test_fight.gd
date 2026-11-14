@@ -1,119 +1,117 @@
 extends TestCase
-## Fighting: the punches, the kick and the duck, what they do to the other
-## brute and to the house, and the other brute hitting back.
+## The fight: the blows, the kick and the duck, what they do to the other
+## brute and to the house, the other brute hitting back, and locking on.
 
 var main: Main
 var p: Player
 var d: Brute
 
 
-func test_four_punches_in_a_row_then_the_guard() -> void:
+func test_three_blows_in_a_row_then_the_stance() -> void:
 	await _load()
 	# In the open, no one near.
 	_stand(Vector3(-30, 0.05, 30), Vector3(-30, 1.5, 0))
 	await frames(10)
 	var c := p.character
 	var from := p.global_position
-	check(p.punch(), "it punches")
-	check_eq(c.state, "jab", "a jab first")
-	check(not p.fire(), "no shot in the middle of a punch")
+	check(p.punch(), "it strikes")
+	check_eq(c.state, "haymaker", "a long right first")
 	# Pressed again and again: the combination, in order.
 	var seen: Array[String] = []
-	var out := {"jab": 0.0, "cross": 0.0, "hook_l": 0.0, "hook_r": 0.0}
-	for k in 150:
-		if k % 6 == 0 and k < 60:
+	var right := 0.0
+	var overhead := 0.0
+	for k in 320:
+		if k % 6 == 0 and k < 150:
 			p.punch()
 		await frames(1)
 		if seen.is_empty() or seen[-1] != c.state:
 			seen.append(c.state)
-		if out.has(c.state):
-			var hand := "hand.L" if c.state in ["jab", "hook_l"] else "hand.R"
-			out[c.state] = maxf(out[c.state], _ahead(hand))
-		if c.state == "guard" and k > 60:
+		if c.state == "haymaker":
+			right = maxf(right, _ahead("hand.R"))
+		elif c.state == "smash":
+			overhead = maxf(overhead, minf(_bone(c, "hand.R").y, _bone(c, "hand.L").y))
+		if c.state == "guard" and k > 150:
 			break
 	check_eq(
-		seen.slice(0, 5),
-		["jab", "cross", "hook_l", "hook_r", "jab"] as Array[String],
-		"jab, cross, left and right to the body, and round again"
+		seen.slice(0, 4),
+		["haymaker", "swing", "smash", "haymaker"] as Array[String],
+		"a long right, a swing of both fists, both from overhead, and round again"
 	)
-	for move: String in out:
-		check(out[move] > 0.5, "the fist of the %s goes out (%.2f m ahead)" % [move, out[move]])
-	check_eq(c.state, "guard", "then the fists stay up")
-	await frames(20)
-	check(_bone(c, "hand.L").y > 1.05 and _bone(c, "hand.R").y > 1.05, "both of them")
-	check(_bone(c, "head").y < 1.45, "in a crouch (head %.2f m up)" % _bone(c, "head").y)
+	check(right > 0.6, "the right fist goes out (%.2f m ahead)" % right)
+	check(overhead > 1.5, "both fists go up over the head for the last (%.2f m up)" % overhead)
+	check_eq(c.state, "guard", "then the stance")
 	await frames(int((Character.GUARD_TIME + 0.6) * 60.0))
 	check_eq(c.state, "ground", "for a while")
-	check(_bone(c, "hand.L").y < 1.0, "then they come down (%.2f m up)" % _bone(c, "hand.L").y)
-	# The moves take their own steps: the body has followed them, a little.
+	# The moves take their own steps: the body has followed them.
 	var moved := p.global_position.distance_to(from)
-	check(moved > 0.02 and moved < 0.6, "the body followed the steps of the punches (%.2f m)" % moved)
-	# Walking away drops the guard at once.
+	check(moved > 0.02 and moved < 1.5, "the body followed the steps of the blows (%.2f m)" % moved)
+	# Walking away drops the stance at once.
 	p.punch()
-	await frames(40)
-	check_eq(c.state, "guard", "fists up again after a jab")
+	await frames(80)
+	check_eq(c.state, "guard", "the stance again after a blow")
 	p.touch_move = Vector2(0, -1)
 	await frames(3)
-	check_eq(c.state, "ground", "walking away drops them")
+	check_eq(c.state, "ground", "walking away drops it")
 	p.touch_move = Vector2.ZERO
 	# Nothing of the kind in the air.
 	p.touch_jump = true
 	await frames(6)
-	check(not p.punch() and not p.kick() and not p.dodge(), "no punch, kick or duck in the air")
+	check(not p.punch() and not p.kick() and not p.dodge(), "no blow, kick or duck in the air")
 	await _unload()
 
 
-func test_a_punch_steps_in_and_the_other_takes_it() -> void:
+func test_a_blow_steps_in_and_the_other_takes_it() -> void:
 	await _load()
 	var at := d.global_position
 	# A little too far for the arm.
-	_stand(at + Vector3(0, 0, 1.6), at + Vector3.UP * 1.3)
+	_stand(at + Vector3(0, 0, 1.7), at + Vector3.UP * 1.3)
 	await frames(10)
 	check(absf(angle_difference(d.facing, PI)) < 0.1, "the other brute faces who comes near")
 	p.punch()
 	var waited := 0
-	while d.character.state == "ground" and waited < 40:
+	while d.character.state == "ground" and waited < 60:
 		await frames(1)
 		waited += 1
-	check_eq(d.character.state, "hit_head", "it flinches at the jab")
+	check_eq(d.character.state, "hit_chest", "its head goes back")
+	check(waited > 12, "the blow takes its time: it is heavy (%.2f s)" % (waited / 60.0))
 	var gap := p.global_position.distance_to(d.global_position)
-	check(gap > 0.8 and gap < 1.05, "the character stepped in to arm's length (%.2f m)" % gap)
-	# The fist is where the blow is: on the other, about its chest.
-	var fist := _bone(p.character, "hand.L") - d.global_position
+	check(gap > 0.8 and gap < 1.25, "the character stepped in to arm's length (%.2f m)" % gap)
+	# The fist is where the blow is: on the other.
+	var fist := _bone(p.character, "hand.R") - d.global_position
 	check(
-		Vector2(fist.x, fist.z).length() < 0.35 and fist.y > 1.1 and fist.y < 1.5,
+		Vector2(fist.x, fist.z).length() < 0.4 and fist.y > 1.2 and fist.y < 1.7,
 		"the fist is on it when it counts (%s from its feet)" % fist.snappedf(0.01)
 	)
 	await frames(20)
-	check(d.global_position.z < at.z - 0.03, "which is pushed back (%.2f m)" % (at.z - d.global_position.z))
+	check(d.global_position.z < at.z - 0.05, "which is pushed back (%.2f m)" % (at.z - d.global_position.z))
 	check(d.fighter.up(), "and still on its feet")
-	await frames(40)
-	check_eq(p.character.state, "guard", "one press, one punch")
+	await frames(60)
+	check_eq(p.character.state, "guard", "one press, one blow")
 	await _unload()
 
 
-func test_a_punch_at_nothing_hits_nothing() -> void:
+func test_a_blow_at_nothing_hits_nothing() -> void:
 	await _load()
 	var at := d.global_position
-	# Too far to go for it.
-	_stand(at + Vector3(0, 0, Player.SEEK + 0.5), at + Vector3.UP * 1.3)
+	# Too far to go for it, and not locked on.
+	_stand(at + Vector3(0, 0, Player.SEEK + 0.6), at + Vector3.UP * 1.3)
 	await frames(10)
 	var from := p.global_position
 	p.punch()
-	await frames(40)
+	await frames(60)
 	check_eq(d.character.state, "ground", "out of reach")
-	check(p.global_position.distance_to(from) < 0.25, "and it did not go for it")
+	check(p.global_position.distance_to(from) < 0.4, "and it did not go for it")
 	# Close, but its back to it.
 	_stand(at + Vector3(0, 0, 1.0), at + Vector3(0, 1.3, 20))
-	await frames(40)
+	await frames(60)
 	p.punch()
-	await frames(40)
-	check_eq(d.character.state, "ground", "a punch thrown the other way")
+	await frames(60)
+	check_eq(d.character.state, "ground", "a blow thrown the other way")
 	check(absf(angle_difference(p.facing, PI)) < 0.3, "the character did not turn round for it")
 	await _unload()
 
 
-func test_the_last_punch_throws_the_other_through_the_house() -> void:
+func test_the_blow_from_overhead_throws_the_other_through_the_house() -> void:
 	await _load()
 	# In front of the front wall, where it is solid: the other brute has its
 	# back to it.
@@ -123,13 +121,14 @@ func test_the_last_punch_throws_the_other_through_the_house() -> void:
 	await frames(10)
 	var standing := main.structure.held_count
 	var waited := 0
-	while d.fighter.up() and waited < 200:
+	while d.fighter.up() and waited < 300:
 		if waited % 6 == 0:
 			p.punch()
 		await frames(1)
 		waited += 1
-	check_eq(d.fighter.state, "flying", "the fourth punch takes it off its feet")
-	check(waited < 90, "a second or so after the first (%.1f s)" % (waited / 60.0))
+	check_eq(d.fighter.state, "flying", "the third blow takes it off its feet")
+	check_eq(p.character.state, "smash", "the one from overhead")
+	check(waited < 180, "two seconds or so after the first (%.1f s)" % (waited / 60.0))
 	check_eq(d.collision_layer, 0, "nothing to walk into while it is off its feet")
 	await frames(150)
 	var landed := house.affine_inverse() * d.global_position
@@ -153,15 +152,15 @@ func test_fists_break_what_stands() -> void:
 	await frames(10)
 	var standing := main.structure.held_count
 	p.punch()
-	await frames(30)
-	var jab := standing - main.structure.held_count
-	check(jab >= 1, "a jab knocks a bit of the wall out (%d shards)" % jab)
-	await frames(60)
+	await frames(50)
+	var fist := standing - main.structure.held_count
+	check(fist >= 3, "a blow knocks a hole in the wall (%d shards)" % fist)
+	await frames(90)
 	standing = main.structure.held_count
 	p.kick()
-	await frames(60)
+	await frames(80)
 	var kick := standing - main.structure.held_count
-	check(kick > jab, "a kick more (%d shards)" % kick)
+	check(kick >= 3, "a kick another (%d shards)" % kick)
 	await _unload()
 
 
@@ -178,7 +177,7 @@ func test_the_other_brute_comes_through_the_house_to_hit_back() -> void:
 	# player is thrown.
 	var took := false
 	var thrown := false
-	for k in 1800:
+	for k in 2400:
 		await frames(1)
 		took = took or p.character.state.begins_with("hit_") or not p.fighter.up()
 		if not p.fighter.up():
@@ -188,41 +187,42 @@ func test_the_other_brute_comes_through_the_house_to_hit_back() -> void:
 	check(thrown, "and ended up throwing the player")
 	var gone := standing - main.structure.held_count
 	check(gone > 10, "having come through the walls that were in its way (%d shards)" % gone)
-	check(not p.punch() and not p.fire(), "who can do nothing while off its feet")
+	check(not p.punch() and not p.kick(), "who can do nothing while off its feet")
 	d.ai = false
 	await frames(int((Fighter.LIES + 4.0) * 60.0))
 	check(p.fighter.up(), "the player gets back up")
-	# Ducking, what comes at the head goes over; a blow to the body does not.
+	# Ducking, what comes at the head goes over; what comes down from
+	# overhead, or at the body, does not.
 	await frames(120)
 	p.dodge()
 	await frames(8)
-	check(not p.fighter.take_hit(Vector3.FORWARD, 2, false, 1.38), "a cross goes over a duck")
+	check(not p.fighter.take_hit(Vector3.FORWARD, 2, false, 1.47), "a long right goes over a duck")
 	check(p.fighter.up() and p.character.state == "duck", "which goes on")
-	check(p.fighter.take_hit(Vector3.FORWARD, 2, false, 1.0), "a punch to the body does not")
+	check(p.fighter.take_hit(Vector3.FORWARD, 2, false, 0.0), "a blow from overhead does not")
 	await _unload()
 
 
 func test_a_kick_reaches_farther_and_throws_the_other() -> void:
 	await _load()
 	var at := d.global_position
-	_stand(at + Vector3(0, 0, 1.9), at + Vector3.UP * 1.3)
+	_stand(at + Vector3(0, 0, 2.0), at + Vector3.UP * 1.3)
 	await frames(10)
 	check(p.kick(), "it kicks")
 	check_eq(p.character.state, "kick", "a kick")
 	var waited := 0
-	while d.fighter.up() and waited < 60:
+	while d.fighter.up() and waited < 90:
 		await frames(1)
 		waited += 1
 	check_eq(d.fighter.state, "flying", "a kick takes the other off its feet")
 	var foot := _bone(p.character, "foot.R") - at
 	check(
-		Vector2(foot.x, foot.z).length() < 0.5 and foot.y > 1.0,
-		"the foot is on it when it counts, high (%s from its feet)" % foot.snappedf(0.01)
+		Vector2(foot.x, foot.z).length() < 0.5 and foot.y > 0.8,
+		"the foot is on it when it counts (%s from its feet)" % foot.snappedf(0.01)
 	)
 	var gap := p.global_position.distance_to(at)
-	check(gap > 1.0, "from farther than a punch (%.2f m)" % gap)
-	await frames(45)
-	check_eq(p.character.state, "guard", "then back to the guard")
+	check(gap > 1.0, "from farther than a blow of the fist (%.2f m)" % gap)
+	await frames(60)
+	check_eq(p.character.state, "guard", "then back to the stance")
 	check(_bone(p.character, "foot.R").y < 0.25, "both feet on the ground")
 	await frames(90)
 	var went := at.z - d.global_position.z
@@ -238,48 +238,102 @@ func test_ducking_brings_the_head_down() -> void:
 	var standing := _bone(c, "head").y
 	check(p.dodge(), "it ducks")
 	check_eq(c.state, "duck", "a duck")
-	check(not p.fire(), "no shot while ducking")
 	var lowest := standing
 	for k in 30:
 		await frames(1)
 		lowest = minf(lowest, _bone(c, "head").y)
 	check(lowest < standing - 0.4, "the head goes down (%.2f m, from %.2f)" % [lowest, standing])
 	await frames(20)
-	check_eq(c.state, "guard", "and comes back up into the guard")
-	# A punch asked for while ducking comes out of it.
+	check_eq(c.state, "guard", "and comes back up into the stance")
+	# A blow asked for while ducking comes out of it.
 	p.dodge()
 	await frames(5)
 	p.punch()
 	await frames(40)
-	check(c.state in Character.COMBO, "a punch out of the duck (%s)" % c.state)
+	check(c.state in Character.COMBO, "a blow out of the duck (%s)" % c.state)
 	await _unload()
 
 
-func test_a_shot_hits_the_other_brute() -> void:
+func test_locking_on_turns_the_camera_to_the_other() -> void:
 	await _load()
 	var at := d.global_position
-	_stand(at + Vector3(0, 0, 5.0), at + Vector3.UP * 1.2)
-	await frames(10)
-	var standing := main.structure.held_count
-	check(p.aim_point().distance_to(at + Vector3.UP * 1.2) < 0.4, "the crosshair is on it")
-	check(p.fire(), "a shot")
-	await frames(12)
-	check_eq(d.character.state, "hit_chest", "throws its head back")
-	check_eq(get_tree().get_nodes_in_group("projectile").size(), 0, "the ball stopped there")
-	check_eq(main.structure.held_count, standing, "the house behind is untouched")
-	# The player cannot walk through it.
-	_stand(at + Vector3(0, 0, 2.0), at + Vector3.UP * 1.2)
-	p.touch_move = Vector2(0, -1)
-	var nearest := INF
-	for k in 60:
-		await frames(1)
-		nearest = minf(nearest, p.global_position.distance_to(d.global_position))
-	p.touch_move = Vector2.ZERO
-	check(nearest > 0.65, "it is in the way of the player (%.2f m between them)" % nearest)
+	# The other brute behind and to the side: out of view.
+	_stand(at + Vector3(4, 0, -5), at + Vector3(4, 1.3, -30))
+	await frames(5)
+	check(p.locked == null, "not locked on to start with (the fight is off)")
+	p.lock()
+	check(p.locked == d, "locking picks the other brute")
+	await frames(60)
+	var to := (at + Vector3.UP * 1.0 - p.camera.global_position).normalized()
+	var off := to.angle_to(-p.camera.global_basis.z)
+	check(off < 0.35, "a second later the camera is on it (%.2f rad off)" % off)
+	var yaw := p.yaw
+	p.look(Vector2(0.6, 0.0))
+	check_eq(p.yaw, yaw, "and stays on it: dragging does not turn it")
+	p.lock()
+	check(p.locked == null, "locking again lets go")
+	p.look(Vector2(0.6, 0.0))
+	check(p.yaw != yaw, "and the camera is free again")
 	await _unload()
 
 
-func test_the_touch_buttons_punch_kick_and_duck() -> void:
+func test_locked_on_a_blow_from_afar_runs_at_the_other_and_lands() -> void:
+	await _load()
+	var at := d.global_position
+	# Seven metres away: far beyond a blow. Not locked: it is thrown in the air.
+	_stand(at + Vector3(0, 0, 7.0), at + Vector3.UP * 1.3)
+	await frames(10)
+	var from := p.global_position
+	check(p.punch(), "a blow, not locked on")
+	check(p.character.striking(), "is thrown where the character stands")
+	await frames(120)
+	check_eq(d.character.state, "ground", "and hits nothing")
+	check(p.global_position.distance_to(from) < 0.5, "seven metres short")
+	# Locked on: the character runs at the other first, and the blow lands.
+	await frames(60)
+	p.lock()
+	check(p.punch(), "the same blow, locked on")
+	check(not p.character.striking(), "is not thrown yet")
+	var waited := 0
+	while d.character.state == "ground" and waited < 240:
+		await frames(1)
+		waited += 1
+	check_eq(d.character.state, "hit_chest", "the character ran at the other and hit it")
+	check(waited < 180, "within a couple of seconds (%.1f s)" % (waited / 60.0))
+	check(p.global_position.distance_to(from) > 4.5, "having run most of the way")
+	# The other off its feet: nothing to run at, the blow is thrown on the spot.
+	d.fighter.launch(Vector3(0, 4, -10))
+	await frames(60)
+	from = p.global_position
+	check(p.kick(), "a kick while the other is down")
+	check_eq(p.character.state, "kick", "is thrown on the spot")
+	await _unload()
+
+
+func test_locked_on_the_character_goes_through_a_wall_to_land_its_blow() -> void:
+	await _load()
+	var house := main.house_at
+	# The other brute inside the house, behind the front wall where it is
+	# solid; the player outside.
+	d.global_position = house * Vector3(-2.9, 0.05, 1.2)
+	_stand(house * Vector3(-2.9, 0.05, 9.0), house * Vector3(-2.9, 1.3, 1.2))
+	await frames(10)
+	var standing := main.structure.held_count
+	p.lock()
+	check(p.punch(), "a blow asked for with a wall in between")
+	var waited := 0
+	while d.character.state == "ground" and waited < 300:
+		await frames(1)
+		waited += 1
+	check_eq(d.character.state, "hit_chest", "the character went through the wall and hit it")
+	var gone := standing - main.structure.held_count
+	check(gone >= 3, "leaving a hole (%d shards)" % gone)
+	var inside := house.affine_inverse() * p.global_position
+	check(inside.z < House.Z1 + 0.2, "it is in the house now (z %.1f)" % inside.z)
+	await _unload()
+
+
+func test_the_touch_buttons_strike_kick_duck_and_lock() -> void:
 	await _load()
 	var tc := TouchControls.new()
 	tc.player = p
@@ -287,11 +341,11 @@ func test_the_touch_buttons_punch_kick_and_duck() -> void:
 	await frames(3)
 	# No two buttons under the same thumb.
 	var buttons := {
-		"fire": [tc.fire_center(), tc.fire_radius()],
-		"jump": [tc.jump_center(), tc.jump_radius()],
 		"punch": [tc.punch_center(), tc.punch_radius()],
+		"jump": [tc.jump_center(), tc.jump_radius()],
 		"kick": [tc.kick_center(), tc.small_radius()],
 		"duck": [tc.dodge_center(), tc.small_radius()],
+		"lock": [tc.lock_center(), tc.small_radius()],
 	}
 	var rebuild := Hud.rebuild_rect(tc.size).grow(10)
 	for a: String in buttons:
@@ -303,18 +357,23 @@ func test_the_touch_buttons_punch_kick_and_duck() -> void:
 			check(a >= b or apart > 0.0, "%s and %s are apart (%.0f px)" % [a, b, apart])
 	tc._on_touch(_touch(0, tc.punch_center(), true))
 	await frames(2)
-	check_eq(p.character.state, "jab", "the red button throws a jab")
-	check_eq(get_tree().get_nodes_in_group("projectile").size(), 0, "and no shot")
+	check_eq(p.character.state, "haymaker", "the big button throws a blow")
 	tc._on_touch(_touch(0, tc.punch_center(), false))
-	await frames(int((Character.GUARD_TIME + 1.2) * 60.0))
+	await frames(int((Character.GUARD_TIME + 1.6) * 60.0))
 	tc._on_touch(_touch(1, tc.kick_center(), true))
 	await frames(2)
 	check_eq(p.character.state, "kick", "the orange button kicks")
 	tc._on_touch(_touch(1, tc.kick_center(), false))
-	await frames(int((Character.GUARD_TIME + 1.5) * 60.0))
+	await frames(int((Character.GUARD_TIME + 1.6) * 60.0))
 	tc._on_touch(_touch(2, tc.dodge_center(), true))
 	await frames(2)
 	check_eq(p.character.state, "duck", "the white button ducks")
+	tc._on_touch(_touch(2, tc.dodge_center(), false))
+	tc._on_touch(_touch(3, tc.lock_center(), true))
+	check(p.locked == d, "the sight locks on the other brute")
+	tc._on_touch(_touch(3, tc.lock_center(), false))
+	tc._on_touch(_touch(3, tc.lock_center(), true))
+	check(p.locked == null, "and lets go of it")
 	await _unload()
 
 

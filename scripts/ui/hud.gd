@@ -27,13 +27,13 @@ func _ready() -> void:
 	_hint = _label(22)
 	_hint.position = Vector2(20, 44)
 	_hint.text = (
-		"Clic ou F : tirer  ·  Espace : sauter  ·  Maj : sprinter  ·  R : reconstruire\n"
-		+ "Clic droit ou E : frapper  ·  Q : coup de pied  ·  C : esquiver"
+		"Clic ou F : frapper  ·  Clic droit ou E : coup de pied  ·  C : esquiver  ·  Tab : verrouiller\n"
+		+ "Espace : sauter  ·  Maj : sprinter  ·  R : reconstruire"
 	)
 	if TouchControls.should_show():
 		_hint.text = (
-			"Bleu : tirer  ·  Manette poussée à fond : sprint\n"
-			+ "Rouge : frapper  ·  Orange : coup de pied  ·  Blanc : esquiver"
+			"Rouge : frapper  ·  Orange : coup de pied  ·  Blanc : esquiver  ·  Viseur : verrouiller\n"
+			+ "Manette poussée à fond : sprint"
 		)
 	var button := Button.new()
 	button.text = "Reconstruire"
@@ -70,9 +70,3 @@ func _process(delta: float) -> void:
 		% [Engine.get_frames_per_second(), world.clock.avg_ms, p.live, p.awake, _build]
 	)
 	_hint.modulate.a = move_toward(_hint.modulate.a, 0.0 if p.live > 0 else 1.0, 0.25)
-
-
-func _draw() -> void:
-	var c := size * 0.5
-	draw_circle(c, 4.0, Color(0, 0, 0, 0.5))
-	draw_circle(c, 2.5, Color(1, 1, 1, 0.9))

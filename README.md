@@ -7,15 +7,18 @@ Seen in third person.
 - **Destruction.** Walls break into irregular shards where they are hit, and
   into smaller crumbs where they are hit hardest; what is no longer held up
   falls, and breaks again when it lands. Nothing disappears: the rubble
-  stays and you can climb on it. Fists, feet and flying bodies break it;
-  so does a plain ball you can shoot.
+  stays and you can climb on it. Fists, feet and flying bodies break it.
 - **Character animation.** A mannequin that stands, walks, jogs, sprints,
-  jumps, lands and puts its arm out to shoot, by blending ready-made
-  clips; and that boxes, with the motion of real boxers (motion capture):
-  a guard, a four-punch combination, a duck and a kick.
+  jumps and lands by blending ready-made clips; and that fights with the
+  motion of real people (motion capture), picked for weight rather than
+  for technique: a long right, both fists swung across, both fists brought
+  down from overhead, a kick straight ahead, a duck.
 - **The fight.** The other brute, in red, walks up to you and throws the
-  same moves. The last punch of the combination and the kick send whoever
-  takes them flying, through anything that stands in the way.
+  same moves. The blow from overhead and the kick send whoever takes them
+  flying, through anything that stands in the way.
+- **Locking on.** Locked on the other brute, the camera stays on it and a
+  blow asked for from too far runs at it first, through a wall if there is
+  one, so that it lands instead of being thrown at nothing.
 
 Godot 4.7, GDScript, Jolt physics, Compatibility renderer (WebGL2), so it
 can be played in Safari on an iPhone from each pull request's preview.
@@ -30,22 +33,29 @@ The previous project, Gravity, is kept as it was on the branch
 | Move | WASD (by position, so ZQSD on AZERTY) / arrows | left stick: pushed a little, a walk; fully, a run |
 | Sprint | shift | the stick held fully pushed for 0.8 s |
 | Look | mouse | drag on the right half |
-| Shoot | left click or F | blue button |
-| Punch | right click or E | red button |
-| Kick | Q (A on AZERTY) | orange button |
+| Strike | left click or F | big red button |
+| Kick | right click or E | orange button |
 | Duck | C or ctrl | white button |
+| Lock on / let go | middle click or tab | the sight |
 | Jump | space | small button |
 | Rebuild the house | R | "Reconstruire" |
 
 The camera sits behind the character's left shoulder and turns about its
 head; it comes closer when a wall is behind (and the character is not
 drawn when the camera is right against its back). The character goes where
-you push, seen from the camera, and turns to face where it goes. A shot
-goes to what is under the crosshair, and the character turns to it. A
-punch is a jab; pressed again before it is over, the next punch of the
-combination follows: a cross, then a left and a right to the body, then a
-jab again. The fourth punch and the kick throw the other brute; it throws
-you the same way. Ducking lets what comes at your head go over.
+you push, seen from the camera, and turns to face where it goes.
+
+The strike button throws a long right; pressed again before it is over,
+the next blow of the combination follows: both fists swung across, then
+both brought down from overhead, then round again. The blow from overhead
+and the kick throw the other brute; it throws you the same way. Ducking
+lets what comes at your head go over, but not what comes down from above.
+
+The fight starts locked on the other brute: an orange ring marks it, the
+camera follows it and looking around waits. A strike then always goes to
+it: from too far, the character sprints at it first and strikes on
+arrival, going through what stands in between. The sight lets go (and
+locks on again); dodging or jumping calls a run off.
 
 The line at the top left shows frames per second, the cost of one physics
 step and how many pieces there are (and how many are moving).
@@ -69,13 +79,15 @@ browser as `index.html?mode=...`:
 # A fixed tour that takes the house apart, with the cost of the physics.
 godot --headless --fixed-fps 60 --path . -- --mode=showcase --seed=1 --prof --quality=low \
   | python3 tools/perf_gate.py
-# Your own steps: aim, shoot, wait, run forward...
+# Your own steps: look there, a blow where you look, wait, run forward...
 godot --path . -- --mode=play --from=-2.5,0.05,4.2 --steps="a@-2.5,1.4,-0.6;o;w1;o@-2,2,-0.6;w2;f0.8"
-# The character on open ground: walk, run, sprint to the right, jump, shoot.
-godot --path . -- --mode=play --from=-25,0.05,30 --steps="p0.2,0,2;p1,0,2;p1,0,2,1;j;w1.5;o;w1"
-# The other brute put in front of the house, four punches: it goes through it.
-# (--fight: it attacks; without, it only stands there.)
-godot --path . -- --mode=play --fight --from=-2.9,0.05,4.3 --steps="d@-2.9,0.05,5.2;a@d;p0,-0.5,0.7;h;w0.12;h;w0.2;h;w0.3;h;w9"
+# The character on open ground: walk, run, sprint to the right, jump.
+godot --path . -- --mode=play --from=-25,0.05,30 --steps="p0.2,0,2;p1,0,2;p1,0,2,1;j;w1.5"
+# Lock on, the combination from afar (it runs in, the third blow sends the
+# other through the house), then a kick: it goes in after it.
+godot --path . -- --mode=play --from=4,0.05,15 --steps="l;w0.8;h;w1.5;h;w0.6;h;w0.6;h;w5;k;w4"
+# As played: the other brute attacks, the player is locked on it.
+godot --path . -- --mode=play --fight --from=4,0.05,15 --steps="w1;h;w0.5;h;w0.5;h;w4;k;w3"
 # How loaded the house is as built (1 = a bond breaks).
 godot --headless --path . -- --mode=check
 ```
@@ -86,16 +98,16 @@ Add `--write-movie out.avi --fixed-fps 30` before `--path` to record a run.
 
 - `tests/`: a small headless runner; files `tests/test_*.gd`, methods
   `test_*` (they may `await`). They cover the cut (volumes, shared faces),
-  what holds and what falls, shots at the house, the controls, and the
+  what holds and what falls, blows at the house, the controls, and the
   character: where the camera sits and how it comes in at walls, the
   character turning to where it goes, its planted foot not sliding from a
-  slow walk to a sprint, jumps and landings, the arm going out and the
-  shot landing under the crosshair, and the fight: the four punches in
-  order then the guard, the step in and the fist being on the other brute
-  when the blow counts, what is out of reach, the last punch throwing it
-  through the house, the kick, fists breaking a wall, the other brute
-  coming through the house to hit back and throwing the player, ducking
-  under a blow to the head.
+  slow walk to a sprint, jumps and landings, and the fight: the three
+  blows in order then the stance, the step in and the fist being on the
+  other brute when the blow counts, what is out of reach, the blow from
+  overhead throwing it through the house, the kick, fists breaking a
+  wall, the other brute coming through the house to hit back and throwing
+  the player, ducking; and locking on: the camera turning to the other,
+  a blow from afar running in and landing, through a wall too.
 - `tools/perf_gate.py`: reads a profiled showcase and fails when the
   physics gets too slow.
 - `tools/web_probe.mjs`: loads the web export in headless Chromium, breaks
