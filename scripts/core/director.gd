@@ -2,27 +2,30 @@ class_name Director
 extends Node
 ## Scripted runs, for clips and measurements:
 ##   --mode=play --steps="a@x,y,z;o;w1.5" [--from=x,y,z]
-##        steps separated by ";": "o" a shot ("o@x,y,z" aims first),
+##        steps separated by ";": "o" a blow where the player looks ("o@x,y,z" looks there first),
 ##        "a@x,y,z" look there ("a@d", "o@d": at the other brute), "m<x,y,z>" go
 ##        there, "w<seconds>" wait,
 ##        "f<seconds>" run forward, "r<seconds>" sprint forward,
 ##        "p<x>,<y>,<seconds>[,1]" push the stick (y -1 is forward; 1: sprint),
-##        "j" jump, "h" punch, "k" kick, "u" duck, "x1" / "x0" the other
-##        brute attacks or stands there,
+##        "j" jump, "h" punch, "k" kick, "u" duck, "l" lock on or let go,
+##        "x1" / "x0" the other brute attacks or stands there,
 ##        "t<degrees>,<seconds>" turn the camera to the
 ##        left, "d@x,y,z" put the other brute there (in the house's space),
 ##        "c@x0,y0,z0,x1,y1,z1" knock out what stands in that box.
 ##   --mode=showcase   a fixed tour that takes the house apart
 ##   --mode=still [--pos=x,y,z --at=x,y,z --wait=S]   just look
 ##   --mode=check      how loaded the building is as built
-## --fight lets the other brute attack (it only stands there otherwise).
+## --fight: as played, the other brute attacks and the player is locked on
+## it (otherwise it only stands there, and the camera is free).
 ## --seed=N makes a run repeatable; --prof prints the cost of the physics
 ## once a second (PROF lines, read by tools/perf_gate.py).
 
 ## ms: a physics step longer than this on a desktop is a hitch on a phone.
 const SLOW_STEP := 6.0
-## Shots at each stop of the showcase.
+## Blows at each stop of the showcase.
 const VOLLEY := 6
+## Seconds between two blows of a scripted run.
+const BETWEEN := 0.3
 
 var options := {}
 var world: Main
@@ -34,6 +37,8 @@ func _ready() -> void:
 	world = get_parent() as Main
 	player = world.player
 	world.brute.ai = options.has("fight")
+	if not options.has("fight") and player.locked != null:
+		player.lock()  # a scripted run looks where it is told
 	if options.has("seed"):
 		seed(int(options["seed"]))
 	if options.has("prof"):
@@ -64,10 +69,10 @@ func _aim(target: Vector3) -> void:
 	player.look_at_point(target)
 
 
-func _fire() -> void:
-	while player.cooldown_left > 0.0:
-		await get_tree().physics_frame
-	player.fire()
+## A blow where the player looks (see Main.blow), then a pause: BETWEEN s.
+func _blow() -> void:
+	world.blow(player.camera.global_position, -player.camera.global_basis.z)
+	await _wait(BETWEEN)
 
 
 func _profile() -> void:
@@ -95,7 +100,7 @@ func _play() -> void:
 	if options.has("from"):
 		player.global_position = _vec(options["from"])
 	await _wait(0.5)
-	var casts := 0
+	var blows := 0
 	for spec: String in String(options.get("steps", "")).split(";", false):
 		var kind := spec.substr(0, 1)
 		if kind == "w":
@@ -128,6 +133,8 @@ func _play() -> void:
 			player.touch_dodge = true
 		elif kind == "x":
 			world.brute.ai = spec.substr(1) == "1"
+		elif kind == "l":
+			player.lock()
 		elif kind == "d":
 			world.brute.global_position = world.house_at * _vec(spec.substr(2))
 		elif kind == "t":
@@ -149,13 +156,13 @@ func _play() -> void:
 		elif kind == "o":
 			if spec.contains("@"):
 				_aim(_point(spec.split("@")[1]))
-			await _fire()
-			casts += 1
+			await _blow()
+			blows += 1
 			await get_tree().physics_frame
 			print(
 				(
-					"CAST %d standing=%d pieces=%d"
-					% [casts, world.structure.held_count, world.structure.pieces.live]
+					"BLOW %d standing=%d pieces=%d"
+					% [blows, world.structure.held_count, world.structure.pieces.live]
 				)
 			)
 	_end("PLAY_DONE")
@@ -188,11 +195,11 @@ func _showcase() -> void:
 		var target := house * (stop[1] as Vector3)
 		_place(from, target)
 		await _wait(0.25)
-		# Six shots, in two rows of three across what is aimed at.
+		# Six blows, in two rows of three across what is looked at.
 		var across := (target - from).cross(Vector3.UP).normalized()
 		for k in VOLLEY:
 			_aim(target + across * (k % 3 - 1) * 0.8 + Vector3.UP * (k / 3 - 0.5) * 1.0)
-			await _fire()
+			await _blow()
 		await _wait(1.0)
 	await _wait(4.0)
 	_end("SHOWCASE_DONE")

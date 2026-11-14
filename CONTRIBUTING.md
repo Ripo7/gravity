@@ -40,5 +40,5 @@
   `CREDITS.md` and a `SOURCE.md` next to it.
 - A new clip of the mannequin's library: add its name to `KEEP` in
   `tools/strip_clips.py` and run it on the original file.
-- A new boxing move: add a line to `CLIPS` in `tools/mocap/build.py` and
-  run it (`assets/boxing/SOURCE.md`).
+- A new fighting move: add a line to `CLIPS` in `tools/mocap/build.py` and
+  run it (`assets/fight/SOURCE.md`).

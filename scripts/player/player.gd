@@ -1,20 +1,17 @@
 class_name Player
 extends CharacterBody3D
 ## Third-person controller (mouse + keyboard, gamepad, touch). You look
-## around with the camera, which sits behind the character's left shoulder
-## (the side of the arm it shoots with, so the arm is in view);
+## around with the camera, which sits behind the character's left shoulder;
 ## the character goes where you push, relative to the camera, and turns to
-## face where it goes. The fire button shoots a projectile at what is under
-## the crosshair, and the character turns to it. The punch button throws a
-## jab, then the next punch of the combination if it is pressed again, and
-## so on; there is a kick and a duck too. A strike goes for the opponent in
-## front, stepping in if it is a little too far. While such a move plays,
-## the body goes where the move steps (Character.root_motion).
+## face where it goes. The punch button throws a blow, then the next of the
+## combination if it is pressed again, and so on; there is a kick and a
+## duck too. A strike goes for the opponent in front, stepping in if it is
+## a little too far. While such a move plays, the body goes where the move
+## steps (Character.root_motion).
+##
+## Locked on the other brute (see lock), the camera stays on it and a
+## strike asked for from too far runs at it first, so that it lands.
 
-## A shot leaves from `from` (the character's chest) along `direction`.
-signal fired(from: Vector3, direction: Vector3)
-
-const COOLDOWN := 0.3  ## seconds between two shots
 const FOV := 70.0
 const KILL_Y := -25.0
 ## Loose pieces lighter than this (kg) are shoved aside when you walk into
@@ -40,17 +37,28 @@ const LOOK_UP := 1.0
 ## The camera comes back out at this speed (m/s) once the way is clear; it
 ## goes in at once.
 const EASE_OUT := 6.0
-const CHEST := 1.4  ## m above the feet: where a shot leaves from
-## The character turns to where it goes at this rate (rad/s), and stays
-## turned to where it shot for AIM_HOLD s.
+## The character turns to where it goes at this rate (rad/s).
 const TURN := 12.0
-const AIM_HOLD := 0.45
 ## In the air this long (s) without having jumped: it is a fall.
 const FALL_AFTER := 0.12
 ## A strike goes for the nearest other brute within SEEK m, if it is less
 ## than CONE rad off where it is thrown (see Fighter for what it does).
 const SEEK := 2.4
 const CONE := 1.2
+## Locked on (see `lock`), the camera closes LOCK_TURN of its angle to the
+## other brute every second and looks LOCK_TILT rad below the line to it;
+## a strike always goes to it. Asked for from farther than it reaches, the
+## character runs at the other first and strikes once the blow would land
+## with a step of STEP_IN m at most and nothing stands between them (looked
+## for CHEST m up); it gives up after CHARGE_MOST s. Held up HELD_UP s by
+## what stands on its way there, it goes through (Fighter.breach).
+const LOCK_RANGE := 60.0
+const LOCK_TURN := 7.0
+const LOCK_TILT := -0.2
+const STEP_IN := 0.5
+const CHEST := 1.1
+const CHARGE_MOST := 4.0
+const HELD_UP := 0.15
 
 ## Full tilt of the stick, or the keys: a jog. The clips' feet do not slide
 ## at these speeds (see Character).
@@ -63,16 +71,14 @@ const CONE := 1.2
 @export var stick_sensitivity := 3.2  ## radians per second at full tilt
 
 var input_enabled := true
-## Set by TouchControls: stick vector (x right, y back), jump and fire taps.
+## Set by TouchControls: stick vector (x right, y back), and taps.
 var touch_move := Vector2.ZERO
 var touch_jump := false
-var touch_fire := false
 var touch_punch := false
 var touch_kick := false
 var touch_dodge := false
 ## Set by TouchControls and scripted runs: sprint without the key.
 var touch_sprint := false
-var cooldown_left := 0.0
 ## Where the camera looks (rad): `yaw` about the vertical (0 is along -Z),
 ## `pitch` up (positive) or down.
 var yaw := 0.0
@@ -83,6 +89,8 @@ var camera: Camera3D
 var character: Character
 ## What its blows do, and what happens when it takes one (see Fighter).
 var fighter: Fighter
+## The other brute it is locked on, if any (see `lock`).
+var locked: Node3D
 ## Set by the world, to shove loose pieces aside.
 var pieces: Pieces
 
@@ -93,12 +101,15 @@ var _pivot: Node3D  # turns with `yaw`, at head height
 var _arm: Node3D  # tilts with `pitch`
 var _shoulder := SHOULDER
 var _back := BACK
-var _aim_left := 0.0
 var _airborne := 0.0  # s since the feet left the ground
 var _fell := 0.0  # m/s down, just before landing
 var _wish := Vector3.ZERO  # where the stick pushes, in the world
 var _opponent: Node3D  # who the strike under way goes for
 var _punch_to := 0.0  # where it is thrown (rad, like `facing`)
+var _charge := ""  # the strike to throw on reaching who it is locked on
+var _charge_for := 0.0  # s it has been running at it
+var _stopped := 0.0  # s it has been stopped by something on the way there
+var _mark: MeshInstance3D  # the ring at the feet of who it is locked on
 
 
 func _init() -> void:
@@ -127,6 +138,22 @@ func _init() -> void:
 	camera.far = 400.0
 	camera.current = true
 	_arm.add_child(camera)
+	# The ring at the feet of who it is locked on.
+	var ring := TorusMesh.new()
+	ring.inner_radius = 0.5
+	ring.outer_radius = 0.58
+	ring.rings = 32
+	ring.ring_segments = 6
+	var lit := StandardMaterial3D.new()
+	lit.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	lit.albedo_color = Color(1.0, 0.7, 0.15)
+	ring.material = lit
+	_mark = MeshInstance3D.new()
+	_mark.mesh = ring
+	_mark.top_level = true
+	_mark.visible = false
+	_mark.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(_mark)
 	fighter = Fighter.new(self, character)
 	character.swung.connect(_on_swung)
 	character.struck.connect(func(move: String) -> void: fighter.strike(move, facing))
@@ -146,23 +173,25 @@ func _unhandled_input(event: InputEvent) -> void:
 		var motion := event as InputEventMouseMotion
 		look(Vector2(-motion.relative.x, -motion.relative.y) * mouse_sensitivity)
 	elif event is InputEventMouseButton and event.pressed:
-		# A real mouse takes the pointer first, then its clicks fire; a tap
+		# A real mouse takes the pointer first, then its clicks strike; a tap
 		# turned into a click (emulation) does neither: touch has its button.
 		if event.device == InputEvent.DEVICE_ID_EMULATION:
 			return
 		if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 			get_viewport().set_input_as_handled()
-		elif event.is_action_pressed("fire"):
-			fire()
 		elif event.is_action_pressed("punch"):
 			punch()
-	elif event.is_action_pressed("fire"):
-		fire()
+		elif event.is_action_pressed("kick"):
+			kick()
+		elif event.is_action_pressed("lock"):
+			lock()
 	elif event.is_action_pressed("punch"):
 		punch()
 	elif event.is_action_pressed("kick"):
 		kick()
+	elif event.is_action_pressed("lock"):
+		lock()
 	elif event.is_action_pressed("dodge"):
 		dodge()
 	elif event.is_action_pressed("release_mouse"):
@@ -171,12 +200,14 @@ func _unhandled_input(event: InputEvent) -> void:
 
 ## Turns the camera: x to the left, y up (rad).
 func look(delta_angles: Vector2) -> void:
+	if locked != null:
+		return  # the camera is on the other brute
 	yaw = wrapf(yaw + delta_angles.x, -PI, PI)
 	pitch = clampf(pitch + delta_angles.y, LOOK_DOWN, LOOK_UP)
 	_pose_camera()
 
 
-## Turns the camera so that the crosshair is on `target`.
+## Turns the camera so that the middle of the view is on `target`.
 func look_at_point(target: Vector3) -> void:
 	# The camera is beside the point it turns about, so its line of sight
 	# does not go through that point: a few rounds get it onto the target.
@@ -187,67 +218,48 @@ func look_at_point(target: Vector3) -> void:
 		_pose_camera()
 
 
-## The first thing under the crosshair, beyond the character (or the end of
-## a shot's range).
-func aim_point() -> Vector3:
-	var along := -camera.global_basis.z
-	var eye := camera.global_position
-	# From where the line of sight passes the character, not from the camera:
-	# what stands between the two is not what is aimed at.
-	var from := eye + along * maxf((_pivot.global_position - eye).dot(along), 0.0)
-	var to := from + along * Projectile.RANGE
-	var mask := (
-		Structure.LAYER_WORLD | Structure.LAYER_STRUCTURE | Structure.LAYER_DEBRIS | Structure.LAYER_ACTOR
-	)
-	var hit := get_world_3d().direct_space_state.intersect_ray(
-		PhysicsRayQueryParameters3D.create(from, to, mask)
-	)
-	return to if hit.is_empty() else hit["position"]
-
-
-## Shoots at what is under the crosshair, if the last shot is far enough
-## behind. The character turns to it.
-func fire() -> bool:
-	if cooldown_left > 0.0 or character.busy() or not fighter.up():
-		return false
-	cooldown_left = COOLDOWN
-	var from := global_position + Vector3.UP * CHEST
-	var along := -camera.global_basis.z
-	var way := (aim_point() - from).normalized()
-	if way.dot(along) < 0.3:
-		way = along  # aimed at something beside or behind the chest
-	_aim_left = AIM_HOLD
-	character.shoot()
-	fired.emit(from, way)
-	return true
+## Locks on the nearest other brute, or lets go of the one it is locked
+## on. Locked, the camera stays on it and strikes go to it.
+func lock() -> void:
+	_charge = ""
+	if locked != null:
+		locked = null
+		return
+	var nearest := LOCK_RANGE
+	for node in get_tree().get_nodes_in_group(Fighter.GROUP):
+		var other := node as Node3D
+		var far := other.global_position.distance_to(global_position)
+		if other != self and far < nearest:
+			nearest = far
+			locked = other
 
 
 ## Throws a punch (see Character.punch), feet on the ground.
 func punch() -> bool:
-	return fighter.up() and is_on_floor() and character.punch()
+	return _strike("punch")
 
 
 ## A kick, feet on the ground.
 func kick() -> bool:
-	return fighter.up() and is_on_floor() and character.kick()
+	return _strike("kick")
 
 
 ## Ducks, feet on the ground.
 func dodge() -> bool:
+	_charge = ""
 	return fighter.up() and is_on_floor() and character.dodge()
 
 
 func _physics_process(delta: float) -> void:
-	cooldown_left = maxf(cooldown_left - delta, 0.0)
 	if fighter.step(delta):
 		# Knocked off its feet: nothing to steer until it is up again.
-		touch_fire = false
 		touch_punch = false
 		touch_kick = false
 		touch_dodge = false
 		touch_jump = false
 		_airborne = 0.0
 		character.rotation.y = facing
+		_track(delta)
 		_pose_camera(delta)
 		return
 	var stick := Vector2.ZERO
@@ -256,15 +268,12 @@ func _physics_process(delta: float) -> void:
 		stick = Input.get_vector("look_right", "look_left", "look_down", "look_up")
 		move = Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 		move = (move + touch_move).limit_length(1.0)
-		if touch_fire:
-			fire()
 		if touch_punch:
 			punch()
 		if touch_kick:
 			kick()
 		if touch_dodge:
 			dodge()
-	touch_fire = false
 	touch_punch = false
 	touch_kick = false
 	touch_dodge = false
@@ -275,8 +284,11 @@ func _physics_process(delta: float) -> void:
 	# Where you push, seen from the camera. How far you push sets the pace.
 	var wish := (Basis(Vector3.UP, yaw) * Vector3(move.x, 0, move.y)).limit_length(1.0)
 	_wish = wish
+	var charging := _charging(delta)
+	if charging != Vector3.ZERO:
+		wish = charging  # running at who it is locked on: the stick waits
 	var sprinting := touch_sprint or Input.is_action_pressed("sprint")
-	var speed := sprint_speed if input_enabled and sprinting else run_speed
+	var speed := sprint_speed if charging != Vector3.ZERO or (input_enabled and sprinting) else run_speed
 	var accel := acceleration if is_on_floor() else air_acceleration
 	var busy := character.busy()
 	var horizontal := Vector3(velocity.x, 0, velocity.z)
@@ -291,6 +303,7 @@ func _physics_process(delta: float) -> void:
 	var grounded := is_on_floor()
 	if grounded:
 		if input_enabled and not busy and (Input.is_action_just_pressed("jump") or touch_jump):
+			_charge = ""
 			velocity.y = jump_velocity
 			character.jump()
 	else:
@@ -298,26 +311,29 @@ func _physics_process(delta: float) -> void:
 		_fell = maxf(-velocity.y, 0.0)
 	touch_jump = false
 	move_and_slide()
-	_climb(wish, delta)
+	var pushing := charging
+	if busy and horizontal.length() > 1.0 and _target() != null:
+		pushing = horizontal.normalized()  # the step of a blow that goes to it
+	_go_through(pushing, delta)
+	# A blow that steps in steps onto rubble like any other step.
+	_climb(horizontal.limit_length(1.0) if busy else wish, delta)
 	_lift = move_toward(_lift, 0.0, delta * 3.0)
 	_shove()
 	if global_position.y < KILL_Y:
 		global_transform = _spawn
 		velocity = Vector3.ZERO
 	_animate(wish, delta)
+	_track(delta)
 	_pose_camera(delta)
 
 
 ## Turns the character and tells it what its legs are doing.
 func _animate(wish: Vector3, delta: float) -> void:
-	_aim_left = maxf(_aim_left - delta, 0.0)
 	if character.busy():
 		if is_instance_valid(_opponent):
 			var d := _opponent.global_position - global_position
 			_punch_to = atan2(-d.x, -d.z)
 		facing = rotate_toward(facing, _punch_to, TURN * delta)
-	elif _aim_left > 0.0:
-		facing = rotate_toward(facing, yaw, TURN * 3.0 * delta)
 	elif wish.length() > 0.1:
 		var to := atan2(-wish.x, -wish.z)
 		facing = rotate_toward(facing, to, TURN * delta)
@@ -339,10 +355,11 @@ func _animate(wish: Vector3, delta: float) -> void:
 ## A strike starts: it is thrown where the stick pushes (or where the
 ## character faces), at the other brute if it is there.
 func _on_swung(_move: String) -> void:
-	_aim_left = 0.0
+	_opponent = _target()
+	if _opponent != null:
+		return  # locked on: it goes to it, wherever the stick pushes
 	_punch_to = atan2(-_wish.x, -_wish.z) if _wish.length() > 0.1 else facing
 	var ahead := Basis(Vector3.UP, _punch_to) * Vector3.FORWARD
-	_opponent = null
 	var nearest := SEEK
 	for node in get_tree().get_nodes_in_group(Fighter.GROUP):
 		var other := node as Node3D
@@ -356,6 +373,100 @@ func _on_swung(_move: String) -> void:
 			continue
 		nearest = off.length()
 		_opponent = other
+
+
+## The brute it is locked on, if it is on its feet.
+func _target() -> Node3D:
+	if not is_instance_valid(locked):
+		locked = null
+		return null
+	return locked if (locked.get("fighter") as Fighter).up() else null
+
+
+## A punch or a kick is asked for. Locked on a brute too far for it, the
+## character runs at it first (see `_charging`).
+func _strike(kind: String) -> bool:
+	if not fighter.up() or not is_on_floor():
+		return false
+	if _target() != null and not character.busy() and not _within(kind):
+		_charge = kind
+		_charge_for = 0.0
+		return true
+	_charge = ""
+	return character.punch() if kind == "punch" else character.kick()
+
+
+## Would the strike `kind`, thrown from here, land on who it is locked on?
+## It is near enough, and nothing stands between them.
+func _within(kind: String) -> bool:
+	if _short_by(kind) > 0.0:
+		return false
+	var up := Vector3.UP * CHEST
+	var ray := PhysicsRayQueryParameters3D.create(
+		global_position + up, locked.global_position + up, Structure.LAYER_WORLD | Structure.LAYER_STRUCTURE
+	)
+	return get_world_3d().direct_space_state.intersect_ray(ray).is_empty()
+
+
+## How far short (m) of who it is locked on the strike `kind` would stop,
+## thrown from here: beyond its reach and the short step that goes with it.
+func _short_by(kind: String) -> float:
+	var first := Character.COMBO[0] if kind == "punch" else "kick"
+	var d := locked.global_position - global_position
+	d.y = 0.0
+	var closes := minf(Fighter.LUNGE * character.lands_after(first), STEP_IN)
+	return d.length() - character.about(first, "reach") - Fighter.CONTACT - closes
+
+
+## Running at who it is locked on, to throw the strike that was asked for:
+## returns where to (a unit vector), or nothing once it is thrown or given
+## up.
+func _charging(delta: float) -> Vector3:
+	if _charge == "":
+		return Vector3.ZERO
+	_charge_for += delta
+	if _target() == null or _charge_for > CHARGE_MOST or character.busy():
+		_charge = ""
+		return Vector3.ZERO
+	if _within(_charge):
+		# (Not while it is in the air off a heap of rubble: on landing.)
+		if character.punch() if _charge == "punch" else character.kick():
+			_charge = ""
+			return Vector3.ZERO
+	var d := locked.global_position - global_position
+	d.y = 0.0
+	return d.normalized()
+
+
+## Going at who it is locked on (`way`, nothing otherwise) and held up by
+## what stands: it goes through. (Up against the other brute itself, it
+## has arrived.)
+func _go_through(way: Vector3, delta: float) -> void:
+	var pace := Vector2(get_real_velocity().x, get_real_velocity().z).length()
+	var held := way != Vector3.ZERO and pace < 1.0
+	for k in get_slide_collision_count():
+		if get_slide_collision(k).get_collider() == locked:
+			held = false
+	_stopped = _stopped + delta if held else 0.0
+	if _stopped > HELD_UP:
+		_stopped = 0.0
+		fighter.breach(way)
+
+
+## Locked on, the camera turns to the other brute, and a ring marks it.
+func _track(delta: float) -> void:
+	if not is_instance_valid(locked):
+		locked = null
+	_mark.visible = locked != null
+	if locked == null:
+		return
+	_mark.global_position = locked.global_position + Vector3.UP * 0.06
+	var d := locked.global_position - global_position
+	var flat := Vector2(d.x, d.z).length()
+	var closes := 1.0 - exp(-LOCK_TURN * delta)
+	if flat > 0.5:
+		yaw = lerp_angle(yaw, atan2(-d.x, -d.z), closes)
+	pitch = lerpf(pitch, clampf(atan2(d.y, maxf(flat, 0.5)) + LOCK_TILT, LOOK_DOWN, LOOK_UP), closes)
 
 
 ## Puts the camera behind the shoulder, nearer when something is in

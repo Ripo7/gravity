@@ -13,14 +13,13 @@ func test_the_camera_sits_behind_the_left_shoulder_and_comes_in_at_walls() -> vo
 	check(absf(eye.z - Player.BACK * cos(p.pitch)) < 0.3, "behind (%.1f m)" % eye.z)
 	check(absf(eye.x + Player.SHOULDER) < 0.05, "to the left (%.2f m)" % -eye.x)
 	check(eye.y > 1.5 and eye.y < 2.6, "above the shoulders (%.1f m)" % eye.y)
-	# The crosshair goes where it is told, although the camera is off to the
+	# The view goes where it is told, although the camera is off to the
 	# side: here, on a pillar of the porch.
 	var target := main.house_at * Vector3(1.5, 1.4, 6.9)
 	p.look_at_point(target)
 	var along := -p.camera.global_basis.z
 	var miss := (target - p.camera.global_position).cross(along).length()
-	check(miss < 0.02, "look_at_point puts the crosshair on its target (%.3f m off)" % miss)
-	check(p.aim_point().distance_to(target) < 0.1, "which is what is aimed at")
+	check(miss < 0.02, "look_at_point puts the middle of the view on its target (%.3f m off)" % miss)
 	# Back to the front wall of the house (where it is solid), 0.9 m from it,
 	# looking away: the camera must stay on this side of the wall.
 	_stand(main.house_at * Vector3(-2.5, 0.05, 4.4), main.house_at * Vector3(-2.5, 1.5, 20))
@@ -121,37 +120,6 @@ func test_jumping_falling_and_landing_show() -> void:
 	await frames(2)
 	check_eq(c.state, "ground", "runs on when it lands")
 	p.touch_move = Vector2.ZERO
-	await _unload()
-
-
-func test_shooting_turns_the_character_and_puts_its_arm_out() -> void:
-	await _load()
-	var sk := p.character.skeleton
-	var hand := sk.find_bone("DEF-hand.L")
-	# Running to the right, the crosshair on a pillar of the porch.
-	var target := main.house_at * Vector3(1.5, 1.6, 6.9)
-	p.look_at_point(target)
-	p.touch_move = Vector2(1, 0)
-	await frames(30)
-	p.look_at_point(target)
-	check(p.fire(), "it shoots")
-	var landed := [Vector3.INF]
-	var shot := get_tree().get_first_node_in_group("projectile") as Projectile
-	shot.landed.connect(func(at: Vector3, _n: Vector3, _torn: int) -> void: landed[0] = at)
-	p.touch_move = Vector2.ZERO
-	await frames(8)
-	check(absf(angle_difference(p.facing, p.yaw)) < 0.15, "the character has turned to where it shot")
-	var out := sk.global_transform * sk.get_bone_global_pose(hand).origin - p.global_position
-	var ahead := -out.dot(Vector3(sin(p.yaw), 0, cos(p.yaw)))
-	check(out.y > 1.2 and ahead > 0.4, "its hand is out in front (%.2f m ahead, %.2f m up)" % [ahead, out.y])
-	await frames(30)
-	check(
-		landed[0].distance_to(target) < 0.15,
-		"the shot landed where the crosshair was (%.2f m off)" % landed[0].distance_to(target)
-	)
-	await frames(60)
-	out = sk.global_transform * sk.get_bone_global_pose(hand).origin - p.global_position
-	check(out.y < 1.1, "then the arm comes back down (%.2f m up)" % out.y)
 	await _unload()
 
 

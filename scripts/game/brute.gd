@@ -6,7 +6,7 @@ extends CharacterBody3D
 const BODY := Color(0.8, 0.36, 0.26)
 const JOINTS := Color(0.22, 0.2, 0.2)
 ## It walks up at PACE m/s until it is RANGE m away, then strikes: a kick
-## (KICKS of the time) or one to four punches of the combination, with a
+## (KICKS of the time) or one to three blows of the combination, with a
 ## wait between two attacks (WAITS: from, to, in s).
 const PACE := 3.2
 const RANGE := 1.15
@@ -16,12 +16,9 @@ const WAITS := Vector2(0.5, 1.3)
 const TURN := 6.0
 const NOTICE := 60.0
 const QUICKENS := 20.0  ## m/s2
-## Rubble up to STEP m high is stepped onto. Stopped STUCK s by something
-## on its way, it goes through: what stands within BREACH m in front of
-## it is knocked out, with a kick for show.
+## Rubble up to STEP m high is stepped onto. Stopped by something on its
+## way, it goes through (Fighter.breach), with a kick for show.
 const STEP := 0.6
-const STUCK := 0.35
-const BREACH := 0.9
 
 var character: Character
 var fighter: Fighter
@@ -92,6 +89,8 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 	character.rotation.y = facing
 	if busy:
+		if to.length() > 1.0:
+			Fighter.climb(self, to.normalized(), 0.15, STEP)  # a blow steps onto rubble too
 		return
 	var pace := Vector2(get_real_velocity().x, get_real_velocity().z).length()
 	character.move(pace)
@@ -102,14 +101,11 @@ func _physics_process(delta: float) -> void:
 	var ahead := to.normalized()
 	Fighter.climb(self, ahead, 0.15, STEP)
 	_stuck = _stuck + delta if pace < 0.6 else 0.0
-	if _stuck > STUCK and fighter.structure != null:
+	if _stuck > Fighter.STUCK:
 		_stuck = 0.0
 		_more = 0
 		character.kick()
-		Fighter.smash(
-			fighter.structure, global_position + ahead * 0.8 + Vector3.UP * 0.6, BREACH, ahead * 5.0
-		)
-		fighter.clear(ahead, Fighter.RUBBLE * 3.0)
+		fighter.breach(ahead)
 
 
 ## Up to who it fights, then an attack now and then. Returns the speed
@@ -128,7 +124,7 @@ func _fight(delta: float) -> Vector3:
 			_more = 0
 			character.kick()
 		else:
-			_more = randi_range(0, 3)
+			_more = randi_range(0, Character.COMBO.size() - 1)
 			character.punch()
 	return Vector3.ZERO
 
