@@ -9,10 +9,10 @@ matter (what breaks, what moves) work. Numbers are in
 
 | Where | What |
 | --- | --- |
-| `scripts/main.gd` | builds the scene: sky, ground, house, the two brutes, HUD |
+| `scripts/main.gd` | builds the scene: sky, ground, the level (city or house), the two brutes, HUD |
 | `scripts/core/` | launch options, input map, quality tiers, the physics clock, scripted runs (`director.gd`) |
 | `scripts/destruction/` | what stands and how it breaks: `Fracture`, `Structure`, `Support`, `Pieces`, `ShardMesh` |
-| `scripts/game/` | the level (`House`), what the brutes have in common (`Fighter`), the other brute (`Brute`) |
+| `scripts/game/` | the levels (`City`, `House`), what the brutes have in common (`Fighter`), the other brute (`Brute`) |
 | `scripts/player/` | `Player` (controls, camera) and `Character` (the animated body, shared by both brutes) |
 | `scripts/fx/`, `scripts/ui/` | dust and chips; HUD and touch controls |
 | `shaders/` | the one shader that draws every shard |
@@ -212,6 +212,10 @@ hits taken in the air and walking in eight directions.
    same corners, so an intact wall has no gaps. The house is 1516 shards and
    is cut in about 0.25 s (0.6 s in a browser); rebuilding it reuses the
    cut.
+   The city is 1893 shards (cut in about 0.55 s headless): what is low or
+   small is cut plain (a house in four to six shards, a car, a roof or a
+   tree's crown in one), offices and towers at 0.75 m. It is light (300
+   kg/m3, `Structure.density`): a toy city is hollow.
 2. **Bonds** (`structure.gd`). Shards that touch are bonded, with the area
    they share; so are the shards of two boxes that touch. Shards on the
    ground are anchors.
@@ -261,3 +265,30 @@ within 0.7 m are knocked out, the nearest half in crumbs, and those up to
 Quality tiers (`scripts/core/quality.gd`: phone, browser, desktop) change
 the dust, the decorative bits and how many crumbs there can be. The house,
 its shards and what holds are the same everywhere.
+
+## The city: giants in a toy town
+
+- **Wading** (`Fighter.wade`, `trample`). After each step a brute takes,
+  whatever stands in front of its knees and reaches no higher than
+  `Fighter.WADE` (1.2 m) above its feet is knocked out and kicked ahead,
+  faster than it walks; what it lands on that is that low is shattered.
+  It keeps its speed: a block of houses is crossed at a jog. Higher
+  things (offices, towers) stop it as walls do, and the old rules apply
+  (`breach`, blows, being thrown).
+- **Litter** (`Pieces.LITTER`, `Structure.LAYER_LITTER`). A loose piece
+  of 500 kg or less is on a layer of its own that the brutes neither
+  collide with nor are pushed by; heavier pieces still block and can be
+  climbed. (The rubble of the house, at 2400 kg/m3, is mostly litter too.)
+- **Columns** (`Structure.SLENDER`, `FOOT`, `TOPPLE`). A box more than
+  twice as high as it is wide is told in storeys one grain high. When less
+  than half of a storey still stands, everything above it, and what stands
+  on it, comes off together, turning at 2 rad/s about the edge that still
+  holds: the tower tips over away from the blows instead of settling into
+  its own hole, and breaks up where it lands. The load rule (`Support`)
+  could not do this on its own: as built, a tower's foot is far below what
+  breaks a bond, and making the city brittle enough to fall that way made
+  the railway fall down by itself.
+- **Showcase and tests.** The tour comes from the level (`City.tour`,
+  `House.tour`); every older test runs on the house (`main.level =
+  "house"`), the city has its own (`tests/test_city.gd`).
+

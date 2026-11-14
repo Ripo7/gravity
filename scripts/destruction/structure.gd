@@ -19,6 +19,10 @@ const LAYER_PLAYER := 8
 ## Other bodies that stand and move (the Brute): in the way of the player,
 ## not of the camera.
 const LAYER_ACTOR := 16
+## Loose pieces that weigh little (see Pieces.LITTER): in the way of each
+## other and of the heavy ones, not of the brutes, which walk through them
+## and push them out of their way.
+const LAYER_LITTER := 32
 ## Shards are about this big (m).
 const GRAIN := 0.6
 const DENSITY := 2400.0  ## kg/m3
@@ -52,6 +56,14 @@ const BLOCK := 2.5
 ## When a lot lets go at once it comes off over a few steps, about this many
 ## shards per step: making all the bodies in one step is a visible hitch.
 const FALL_PER_STEP := 28
+## A box more than SLENDER times as high as it is wide is a column (a
+## pillar, a tower), told in storeys one grain high. Once less than FOOT of
+## a storey still stands, what is above it comes down: it starts off
+## turning at TOPPLE rad/s about the edge of that storey on the side that
+## holds, so it tips over away from the side that gave way.
+const SLENDER := 2.0
+const FOOT := 0.5
+const TOPPLE := 2.0
 
 # The cuts already made, by size and seed: rebuilding does not cut again.
 static var _cuts := {}
@@ -94,6 +106,8 @@ var pieces: Pieces
 var support := Support.new()
 var solve_usec := 0  ## the longest step of the last look at what holds
 var cut_seed := 1
+## kg/m3 of what is added from now on (set it before the boxes).
+var density := DENSITY
 
 var _lo := PackedVector3Array()
 var _hi := PackedVector3Array()
@@ -120,9 +134,20 @@ var _warm := 0
 var _kicked := PackedInt32Array()
 var _falling: Array[PackedInt32Array] = []  # chunks nothing holds any more, the lowest last
 var _falling_push := PackedVector3Array()
+var _falling_spin := PackedVector3Array()
 var _falling_low := PackedFloat32Array()
 var _leaving := PackedByteArray()  # 1 for a shard in _falling
 var _built := false
+# The storeys of the columns, all in a row. Per box: its first, and how many
+# (none if it is no column). Per shard: its storey, or -1.
+var _box_storey := PackedInt32Array()
+var _box_storeys := PackedInt32Array()
+var _storey := PackedInt32Array()
+var _storey_box := PackedInt32Array()
+var _storey_full := PackedFloat32Array()  # m3 it was made of
+var _storey_left := PackedFloat32Array()  # m3 of it that still stands
+var _storey_gave := PackedByteArray()  # 1 once it has given way, or what is under it has
+var _gave := PackedInt32Array()  # storeys that have just given way
 # Only while building: every shard's corners and faces in the world.
 var _points: Array[PackedVector3Array] = []
 var _planes: Array = []
@@ -155,13 +180,15 @@ func _exit_tree() -> void:
 		PhysicsServer3D.free_rid(rid)
 
 
-## Adds a box of `size` at `xf` and cuts it into shards. Call build() once
+## Adds a box of `size` at `xf` and cuts it into shards about `grain`
+## across (`plain`: one to a cell of the cut, never several small ones; a
+## box smaller than `grain` is then a single shard). Call build() once
 ## every box is in.
-func add_box(xf: Transform3D, size: Vector3, tint := Color.WHITE, grain := GRAIN) -> int:
+func add_box(xf: Transform3D, size: Vector3, tint := Color.WHITE, grain := GRAIN, plain := false) -> int:
 	var box := _box_shards.size()
-	var cut_key := [size, grain, cut_seed * 7919 + box * 104729]
+	var cut_key := [size, grain, cut_seed * 7919 + box * 104729, plain]
 	if not _cuts.has(cut_key):
-		_cuts[cut_key] = Fracture.cut(size, grain, cut_key[2])
+		_cuts[cut_key] = Fracture.cut(size, grain, cut_key[2], 0.0 if plain else 0.25)
 	var cut: Array[Fracture.Shard] = _cuts[cut_key]
 	_box_xf.append(xf)
 	_box_tint.append(tint)
@@ -169,11 +196,28 @@ func add_box(xf: Transform3D, size: Vector3, tint := Color.WHITE, grain := GRAIN
 	var mine := PackedInt32Array()
 	var box_lo := Vector3.INF
 	var box_hi := -Vector3.INF
+	var storeys := 0
+	if size.y > SLENDER * maxf(size.x, size.z):
+		storeys = maxi(1, roundi(size.y / grain))
+	_box_storey.append(_storey_box.size())
+	_box_storeys.append(storeys)
+	for k in storeys:
+		_storey_box.append(box)
+		_storey_full.append(0.0)
+		_storey_left.append(0.0)
+		_storey_gave.append(0)
 	for sh in cut:
 		var i := count
 		count += 1
 		mine.append(i)
 		_cut_of.append(sh)
+		var storey := -1
+		if storeys > 0:
+			storey = clampi(int((sh.centroid.y / size.y + 0.5) * storeys), 0, storeys - 1)
+			storey += _box_storey[box]
+			_storey_full[storey] += sh.volume
+			_storey_left[storey] += sh.volume
+		_storey.append(storey)
 		var c := xf * sh.centroid
 		var world := PackedVector3Array()
 		var around := PackedVector3Array()
@@ -198,7 +242,7 @@ func add_box(xf: Transform3D, size: Vector3, tint := Color.WHITE, grain := GRAIN
 				_add_bond(i, base + other, sh.areas[f], mid / sh.faces[f].size())
 		centroid.append(c)
 		volume.append(sh.volume)
-		mass.append(sh.volume * DENSITY)
+		mass.append(sh.volume * density)
 		radius.append(reach)
 		element.append(box)
 		held.append(1)
@@ -263,6 +307,8 @@ func _physics_process(_delta: float) -> void:
 			break
 		shape_of(_warm)
 		_warm += 1
+	if not _gave.is_empty():
+		_topple()
 	if not _falling.is_empty():
 		# The look waits until all that it found unheld has come off.
 		_drop_some()
@@ -393,7 +439,30 @@ func owner_of(rid: RID) -> int:
 		return _rid_shard[rid]
 	if _rid_block.has(rid):
 		return -1 - int(_rid_block[rid])
-	return -1000000
+	return Pieces.NOT_OURS
+
+
+## How high (m) shard `i` reaches where it stands.
+func top(i: int) -> float:
+	return _hi[i].y
+
+
+## What still stands, within `reach` m over the ground of `at`, of the box
+## that the body `rid` is part of (a standing shard's own body, or a whole
+## block): its shards. None if `rid` is nothing of this structure.
+func standing_by(rid: RID, at: Vector3, reach: float) -> PackedInt32Array:
+	var who := owner_of(rid)
+	var out := PackedInt32Array()
+	if who < 0:
+		if who == Pieces.NOT_OURS or _block_shards[-1 - who].is_empty():
+			return out
+		who = _block_shards[-1 - who][0]
+	for i in _box_shards[element[who]]:
+		# (How far its bounds are: a big shard is near wherever it is touched.)
+		var off := at - at.clamp(_lo[i], _hi[i])
+		if held[i] == 1 and off.x * off.x + off.z * off.z < reach * reach:
+			out.append(i)
+	return out
 
 
 ## The collision shape of shard `i` (made the first time it is needed).
@@ -452,7 +521,7 @@ func make_crumbs(i: int) -> PackedInt32Array:
 			reach = maxf(reach, w.distance_to(c))
 		centroid.append(c)
 		volume.append(bit.volume)
-		mass.append(bit.volume * DENSITY)
+		mass.append(bit.volume * density)
 		radius.append(reach)
 		piece_of.append(-1)
 		corners.append(around)
@@ -565,14 +634,17 @@ func _index_bonds() -> void:
 
 ## A set of shards that no longer holds is about to come off: in one piece
 ## if it is small, cut in chunks if it is big. It will leave with the push
-## its shards got from the hit that freed it.
-func _let_go(group: PackedInt32Array) -> void:
+## its shards got from the hit that freed it; and, toppling, as if it all
+## turned at `turn` rad/s about `pivot`.
+func _let_go(group: PackedInt32Array, pivot := Vector3.ZERO, turn := Vector3.ZERO) -> void:
 	for chunk in _chunks(group):
 		var push := Vector3.ZERO
+		var middle := Vector3.ZERO
 		var weight := 0.0
 		var low := INF
 		for i in chunk:
 			push += _kick[i] * mass[i]
+			middle += centroid[i] * mass[i]
 			weight += mass[i]
 			low = minf(low, _lo[i].y)
 			_leaving[i] = 1
@@ -582,7 +654,55 @@ func _let_go(group: PackedInt32Array) -> void:
 			at -= 1
 		_falling.insert(at, chunk)
 		_falling_low.insert(at, low)
-		_falling_push.insert(at, push / weight * 0.5)
+		_falling_push.insert(at, push / weight * 0.5 + turn.cross(middle / weight - pivot))
+		_falling_spin.insert(at, turn)
+
+
+## The storeys that have just given way (see SLENDER): what stands above
+## each, of its column and on top of it, comes down, away from the side
+## that went.
+func _topple() -> void:
+	for storey in _gave:
+		var box := _storey_box[storey]
+		var middle := (_box_lo[box] + _box_hi[box]) * 0.5
+		var left := Vector3.ZERO
+		var above := PackedInt32Array()
+		_stamp += 1
+		for i in _box_shards[box]:
+			if held[i] == 0 or _leaving[i] == 1:
+				continue
+			if _storey[i] > storey:
+				_mark[i] = _stamp
+				above.append(i)
+			elif _storey[i] == storey:
+				left += (centroid[i] - middle) * volume[i]
+		for k in range(storey + 1, _box_storey[box] + _box_storeys[box]):
+			_storey_gave[k] = 1
+		if above.is_empty():
+			continue
+		# And what stands on it (another box: the top of a tower, its mast).
+		var head := 0
+		while head < above.size():
+			var i := above[head]
+			head += 1
+			for k in range(adj_first[i], adj_first[i + 1]):
+				var j := adj_other[k]
+				if _mark[j] == _stamp or held[j] == 0 or _leaving[j] == 1 or element[j] == box:
+					continue
+				if bond_health[adj_bond[k]] > 0.0 and centroid[j].y > centroid[i].y:
+					_mark[j] = _stamp
+					above.append(j)
+		left.y = 0.0
+		var way := left.normalized() if left.length() > 0.02 * _storey_full[storey] else Vector3.ZERO
+		var high := (
+			_box_lo[box].y
+			+ (_box_hi[box].y - _box_lo[box].y) * ((storey - _box_storey[box] + 0.5) / _box_storeys[box])
+		)
+		# (About the edge of the side that holds, as what tips over does.)
+		var edge := way * 0.5 * minf(_box_hi[box].x - _box_lo[box].x, _box_hi[box].z - _box_lo[box].z)
+		_let_go(above, Vector3(middle.x, high, middle.z) + edge, Vector3.UP.cross(way) * TOPPLE)
+	_gave.clear()
+	_dirty = true
 
 
 ## Some of what waits in _falling comes off, the lowest first.
@@ -591,7 +711,9 @@ func _drop_some() -> void:
 	while left > 0 and not _falling.is_empty():
 		var chunk: PackedInt32Array = _falling.pop_back()
 		var push := _falling_push[_falling_push.size() - 1]
+		var spin := _falling_spin[_falling_spin.size() - 1]
 		_falling_push.remove_at(_falling_push.size() - 1)
+		_falling_spin.remove_at(_falling_spin.size() - 1)
 		_falling_low.remove_at(_falling_low.size() - 1)
 		# A hit may have torn some of it out while it waited.
 		var still := PackedInt32Array()
@@ -603,10 +725,10 @@ func _drop_some() -> void:
 			continue
 		left -= still.size()
 		if still.size() == chunk.size():
-			_release(still, push)
+			_release(still, push, spin)
 		else:
 			for part in _chunks(still, true):
-				_release(part, push)
+				_release(part, push, spin)
 
 
 ## `group` cut in connected chunks of MAX_CHUNK shards at most (see there). A small
@@ -656,6 +778,12 @@ func _release(
 		hi = hi.max(_hi[i])
 		at += centroid[i] * volume[i]
 		size += volume[i]
+		var storey := _storey[i]
+		if storey >= 0:
+			_storey_left[storey] -= volume[i]
+			if _storey_gave[storey] == 0 and _storey_left[storey] < FOOT * _storey_full[storey]:
+				_storey_gave[storey] = 1
+				_gave.append(storey)
 	held_count -= group.size()
 	var reuse := RID()
 	for i in group:

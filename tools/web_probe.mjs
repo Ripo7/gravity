@@ -36,7 +36,7 @@ page.on("console", (m) => {
 });
 page.on("pageerror", (e) => console.log("PAGE ERROR " + e.message));
 const steps = "a@-2.5,1.4,-0.6;w0.3;o;w0.8;o@-1.9,2.0,-0.6;w0.8;o@-1.5,1.4,2.7;w2.5";
-await page.goto(`http://localhost:8061/index.html?mode=play&from=-2.5,0.05,4.5&steps=${encodeURIComponent(steps)}`);
+await page.goto(`http://localhost:8061/index.html?level=house&mode=play&from=-2.5,0.05,4.5&steps=${encodeURIComponent(steps)}`);
 // Software WebGL is slow: a few seconds of game time can take a minute.
 let done;
 for (let i = 0; i < 600 && !done; i++) {
