@@ -1,7 +1,8 @@
 class_name Main
 extends Node3D
 ## The test ground, in greybox: a house you can take apart by shooting at
-## it (see Structure for how it breaks), walked around in first person.
+## it (see Structure for how it breaks), walked around in third person,
+## and another brute to fight.
 ## Textures: Kenney's prototype textures (CC0).
 
 const TEXTURES := "res://addons/kenney_prototype_textures/"
@@ -14,6 +15,12 @@ var clock: PhysicsClock
 var hud: Hud
 ## Where the house stands.
 var house_at := Transform3D(Basis(), Vector3(0, 0, -4))
+## The other brute, and where it starts (in the house's space): near where
+## you start, off to the right. `fight`: it attacks (off for tests and
+## scripted runs: it only stands there).
+var brute: Brute
+var brute_at := Vector3(4.0, 0.05, 11.5)
+var fight := true
 ## Milliseconds it took to cut and bond the house.
 var build_ms := 0.0
 
@@ -39,6 +46,13 @@ func _ready() -> void:
 	add_child(player)
 	player.global_position = house_at * Vector3(0, 0.05, 15)
 	player.fired.connect(shoot)
+	player.fighter.structure = structure
+	brute = Brute.new()
+	brute.watches = player
+	brute.ai = fight
+	brute.position = house_at * brute_at
+	brute.fighter.structure = structure
+	add_child(brute)
 	var ui := CanvasLayer.new()
 	add_child(ui)
 	hud = Hud.new()

@@ -4,7 +4,7 @@ extends TestCase
 var main: Main
 
 
-func test_the_player_stands_and_walks() -> void:
+func test_the_player_stands_and_runs() -> void:
 	await _load()
 	var p := main.player
 	await frames(30)
@@ -13,7 +13,7 @@ func test_the_player_stands_and_walks() -> void:
 	p.touch_move = Vector2(0, -1)  # the stick pushed forward
 	await frames(60)
 	p.touch_move = Vector2.ZERO
-	check(p.global_position.z < z - 4.0, "walks forward (%.1f m)" % (z - p.global_position.z))
+	check(p.global_position.z < z - 4.0, "runs forward (%.1f m)" % (z - p.global_position.z))
 	await _unload()
 
 
@@ -21,18 +21,20 @@ func test_firing_sends_one_shot_then_waits() -> void:
 	await _load()
 	var p := main.player
 	await frames(5)
+	var target := p.aim_point()
 	check(p.fire(), "it goes off")
 	check(not p.fire(), "not twice in a row")
 	check_eq(get_tree().get_nodes_in_group("projectile").size(), 1, "one projectile")
 	var shot := get_tree().get_first_node_in_group("projectile") as Projectile
 	var ball := shot.get_child(0) as MeshInstance3D
-	check(shot.direction.dot(-p.camera.global_basis.z) > 0.99, "along where you look")
-	check(shot.global_position.distance_to(p.camera.global_position) < 0.01, "from your eye")
-	check(not ball.visible, "not drawn while it is in your face")
-	await frames(6)
-	var off := shot.global_position - p.camera.global_position
-	check(off.length() > 2.0 and off.cross(shot.direction).length() < 0.01, "it flies straight")
-	check(ball.visible, "and is drawn once it is away")
+	var chest := p.global_position + Vector3.UP * Player.CHEST
+	check(shot.global_position.distance_to(chest) < 0.01, "from the character's chest")
+	check(shot.direction.dot((target - chest).normalized()) > 0.999, "towards what is under the crosshair")
+	check(not ball.visible, "not drawn while it is inside the character")
+	await frames(3)
+	var off := shot.global_position - chest
+	check(off.length() > 1.0 and off.cross(shot.direction).length() < 0.01, "it flies straight")
+	check(ball.visible, "and is drawn once it is out")
 	await frames(int(Player.COOLDOWN * 60) + 2)
 	check(p.fire(), "again after the wait")
 	await _unload()
@@ -60,11 +62,11 @@ func test_touch_controls_move_look_and_fire() -> void:
 	tc._on_drag(_drag(0, left - Vector2(0, tc.stick_radius())))
 	check(p.touch_move.y < -0.5, "stick forward")
 	# Right thumb: look.
-	var yaw := p.rotation.y
+	var yaw := p.yaw
 	var right := Vector2(tc.size.x * 0.7, tc.size.y * 0.3)
 	tc._on_touch(_touch(1, right, true))
 	tc._on_drag(_drag(1, right - Vector2(40, 0)))
-	check(p.rotation.y > yaw, "dragging left turns left")
+	check(p.yaw > yaw, "dragging left turns the camera left")
 	tc._on_touch(_touch(1, right - Vector2(40, 0), false))
 	# A third finger on the blue button.
 	tc._on_touch(_touch(2, tc.fire_center(), true))
@@ -97,6 +99,7 @@ func _drag(index: int, at: Vector2) -> InputEventScreenDrag:
 func _load() -> void:
 	seed(5)
 	main = (load("res://scenes/main.tscn") as PackedScene).instantiate() as Main
+	main.fight = false  # the other brute only stands there
 	get_tree().root.add_child.call_deferred(main)
 	await get_tree().process_frame
 	await frames(20)
