@@ -47,18 +47,10 @@ const TURN := 12.0
 const AIM_HOLD := 0.45
 ## In the air this long (s) without having jumped: it is a fall.
 const FALL_AFTER := 0.12
-## A strike goes for the nearest opponent within SEEK m, if it is less than
-## CONE rad off where it is thrown. If the fist or foot would stop short of
-## it, the character steps in while it goes out, at LUNGE m/s at most, to
-## where the fist is CONTACT m from the opponent's axis: on its chest. When
-## it gets there, the opponent takes it if the fist is no more than SLACK m
-## short and the opponent no more than WIDE m to either side.
+## A strike goes for the nearest other brute within SEEK m, if it is less
+## than CONE rad off where it is thrown (see Fighter for what it does).
 const SEEK := 2.4
 const CONE := 1.2
-const LUNGE := 5.0
-const CONTACT := 0.22
-const SLACK := 0.25
-const WIDE := 0.5
 
 ## Full tilt of the stick, or the keys: a jog. The clips' feet do not slide
 ## at these speeds (see Character).
@@ -89,6 +81,8 @@ var pitch := -0.15
 var facing := 0.0
 var camera: Camera3D
 var character: Character
+## What its blows do, and what happens when it takes one (see Fighter).
+var fighter: Fighter
 ## Set by the world, to shove loose pieces aside.
 var pieces: Pieces
 
@@ -103,7 +97,7 @@ var _aim_left := 0.0
 var _airborne := 0.0  # s since the feet left the ground
 var _fell := 0.0  # m/s down, just before landing
 var _wish := Vector3.ZERO  # where the stick pushes, in the world
-var _opponent: Dummy  # who the punch under way goes for
+var _opponent: Node3D  # who the strike under way goes for
 var _punch_to := 0.0  # where it is thrown (rad, like `facing`)
 
 
@@ -133,13 +127,15 @@ func _init() -> void:
 	camera.far = 400.0
 	camera.current = true
 	_arm.add_child(camera)
+	fighter = Fighter.new(self, character)
 	character.swung.connect(_on_swung)
-	character.struck.connect(_on_struck)
+	character.struck.connect(func(move: String) -> void: fighter.strike(move, facing))
 	_pose_camera()
 
 
 func _ready() -> void:
 	add_to_group("player")
+	add_to_group(Fighter.GROUP)
 	_spawn = global_transform
 
 
@@ -212,7 +208,7 @@ func aim_point() -> Vector3:
 ## Shoots at what is under the crosshair, if the last shot is far enough
 ## behind. The character turns to it.
 func fire() -> bool:
-	if cooldown_left > 0.0 or character.busy():
+	if cooldown_left > 0.0 or character.busy() or not fighter.up():
 		return false
 	cooldown_left = COOLDOWN
 	var from := global_position + Vector3.UP * CHEST
@@ -228,21 +224,32 @@ func fire() -> bool:
 
 ## Throws a punch (see Character.punch), feet on the ground.
 func punch() -> bool:
-	return is_on_floor() and character.punch()
+	return fighter.up() and is_on_floor() and character.punch()
 
 
 ## A kick, feet on the ground.
 func kick() -> bool:
-	return is_on_floor() and character.kick()
+	return fighter.up() and is_on_floor() and character.kick()
 
 
 ## Ducks, feet on the ground.
 func dodge() -> bool:
-	return is_on_floor() and character.dodge()
+	return fighter.up() and is_on_floor() and character.dodge()
 
 
 func _physics_process(delta: float) -> void:
 	cooldown_left = maxf(cooldown_left - delta, 0.0)
+	if fighter.step(delta):
+		# Knocked off its feet: nothing to steer until it is up again.
+		touch_fire = false
+		touch_punch = false
+		touch_kick = false
+		touch_dodge = false
+		touch_jump = false
+		_airborne = 0.0
+		character.rotation.y = facing
+		_pose_camera(delta)
+		return
 	var stick := Vector2.ZERO
 	var move := Vector2.ZERO
 	if input_enabled:
@@ -274,7 +281,7 @@ func _physics_process(delta: float) -> void:
 	var busy := character.busy()
 	var horizontal := Vector3(velocity.x, 0, velocity.z)
 	if busy:
-		horizontal = _move_speed(delta)
+		horizontal = Fighter.move_speed(self, character, _opponent, delta)
 	else:
 		horizontal = horizontal.move_toward(wish * speed, accel * delta)
 		if wish.length() > 0.1:
@@ -330,55 +337,25 @@ func _animate(wish: Vector3, delta: float) -> void:
 
 
 ## A strike starts: it is thrown where the stick pushes (or where the
-## character faces), at the opponent that is there if there is one.
+## character faces), at the other brute if it is there.
 func _on_swung(_move: String) -> void:
 	_aim_left = 0.0
 	_punch_to = atan2(-_wish.x, -_wish.z) if _wish.length() > 0.1 else facing
 	var ahead := Basis(Vector3.UP, _punch_to) * Vector3.FORWARD
 	_opponent = null
 	var nearest := SEEK
-	for node in get_tree().get_nodes_in_group(Dummy.GROUP):
-		var other := node as Dummy
+	for node in get_tree().get_nodes_in_group(Fighter.GROUP):
+		var other := node as Node3D
 		var d := other.global_position - global_position
 		var off := Vector3(d.x, 0, d.z)
-		if other.state != "up" or absf(d.y) > 1.0 or off.length() >= nearest:
+		if other == self or absf(d.y) > 1.0 or off.length() >= nearest:
+			continue
+		if not (other.get("fighter") as Fighter).up():
 			continue
 		if off.length() > 0.01 and ahead.angle_to(off) > CONE:
 			continue
 		nearest = off.length()
 		_opponent = other
-
-
-## The speed over the ground (m/s) during a boxing move: where the move
-## itself steps, and for a strike that would stop short of the opponent,
-## what brings its fist or foot onto it by the time it gets there.
-func _move_speed(delta: float) -> Vector3:
-	var steps := character.root_motion() / delta
-	steps.y = 0.0
-	var lands_in := character.lands_in()
-	if not is_instance_valid(_opponent) or lands_in <= 0.0:
-		return steps
-	var d := _opponent.global_position - global_position
-	d.y = 0.0
-	var gap := d.length() - character.reach() - CONTACT
-	if gap <= 0.0:
-		return steps
-	var towards := d.normalized()
-	var needed := minf(gap / maxf(lands_in, delta), LUNGE)
-	return steps + towards * maxf(needed - steps.dot(towards), 0.0)
-
-
-## The fist or foot is there: the opponent in the way takes it.
-func _on_struck(_move: String) -> void:
-	var ahead := Basis(Vector3.UP, facing) * Vector3.FORWARD
-	var far := character.reach() + CONTACT + SLACK
-	for node in get_tree().get_nodes_in_group(Dummy.GROUP):
-		var other := node as Dummy
-		var d := other.global_position - global_position
-		var along := d.dot(ahead)
-		var aside := absf(d.cross(ahead).y)
-		if absf(d.y) < 1.0 and along > 0.0 and along < far and aside < WIDE:
-			other.take_hit(ahead, character.power())
 
 
 ## Puts the camera behind the shoulder, nearer when something is in
@@ -418,31 +395,9 @@ func _pose_camera(delta := 0.0) -> void:
 
 ## Stopped by something low while walking: step up onto it.
 func _climb(wish: Vector3, delta: float) -> void:
-	if not is_on_floor() or wish.length() < 0.2:
+	if wish.length() < 0.2:
 		return
-	var blocked := false
-	for k in get_slide_collision_count():
-		var n := get_slide_collision(k).get_normal()
-		if absf(n.y) < 0.5 and n.dot(wish) < -0.3:
-			blocked = true
-	if not blocked:
-		return
-	var ahead := wish.normalized() * maxf(run_speed * delta, 0.15)
-	var xf := global_transform
-	if test_move(xf, Vector3.UP * STEP):
-		return  # no headroom
-	xf.origin.y += STEP
-	if test_move(xf, ahead):
-		return  # too high to step onto
-	xf.origin += ahead
-	var landing := KinematicCollision3D.new()
-	if not test_move(xf, Vector3.DOWN * STEP, landing) or landing.get_normal().y < 0.6:
-		return  # nothing flat enough up there
-	var to := xf.origin + landing.get_travel()
-	var rise := to.y - global_position.y
-	if rise < 0.03:
-		return
-	global_position = to
+	var rise := Fighter.climb(self, wish.normalized(), maxf(run_speed * delta, 0.15), STEP)
 	_lift = minf(_lift + rise, STEP)
 
 

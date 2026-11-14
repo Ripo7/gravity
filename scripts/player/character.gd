@@ -1,7 +1,7 @@
 class_name Character
 extends Node3D
 ## A body you see: a mannequin and the tree that blends its clips. It
-## decides nothing. Whoever owns it (the Player, a Dummy) tells it how fast
+## decides nothing. Whoever owns it (the Player, a Brute) tells it how fast
 ## it goes, whether it is in the air, and when it jumps, lands, shoots,
 ## punches, kicks, ducks, is hit or goes down; it turns that into a pose.
 ##
@@ -68,7 +68,10 @@ const GUARD_TIME := 1.6
 ## The bone the steps of the boxing moves are given to.
 const ROOT := "Rig/Skeleton3D:root"
 ## Getting up is the fall played backwards, faster.
-const UP_PACE := 1.6
+const UP_PACE := 2.0
+## Thrown off its feet, the fall starts where the body goes over: this far
+## (s) into the clip, past the stagger.
+const BLOWN_FROM := 0.6
 ## A blow taken shows as a flash of white (if it has its own colours, see
 ## `paint`) that fades over FLASH s.
 const FLASH := 0.2
@@ -90,6 +93,7 @@ const STATES: Array[String] = [
 	"hit_chest",
 	"hit_head",
 	"down",
+	"blown",
 	"up"
 ]
 ## Shooting: the left arm (the one the clip raises) goes out over CAST_IN s,
@@ -191,7 +195,7 @@ func jump() -> void:
 ## In the air without having jumped (off an edge), or still there after the
 ## start of a jump.
 func fall() -> void:
-	if state != "jump" and state != "air" and state != "down" and state != "up":
+	if state != "jump" and state != "air" and state != "down" and state != "blown" and state != "up":
 		_go("air", 0.2)
 
 
@@ -232,6 +236,11 @@ func reach() -> float:
 
 func power() -> int:
 	return int(_about("power")) if striking() else 0
+
+
+## How high (m) that fist or foot is.
+func height() -> float:
+	return _about("height") if striking() else 0.0
 
 
 ## How far the clips carried the body in the last physics step (m, in the
@@ -275,6 +284,12 @@ func hit(hard: bool) -> void:
 func down() -> void:
 	_flash = 1.0
 	_go("down", 0.1)
+
+
+## Thrown off its feet: it goes over backwards at once and stays down.
+func blown() -> void:
+	_flash = 1.0
+	_go("blown", 0.08)
 
 
 ## It gets back on its feet. Returns how long that takes (s).
@@ -417,6 +432,12 @@ func _build() -> AnimationNodeBlendTree:
 	t.add_node("hit_chest", _clip("Hit_Chest"))
 	t.add_node("hit_head", _clip("Hit_Head"))
 	t.add_node("down", _clip("Death01"))
+	var over := _clip("Death01")
+	over.use_custom_timeline = true
+	over.start_offset = BLOWN_FROM
+	over.timeline_length = _clips.get_animation("Death01").length - BLOWN_FROM
+	over.stretch_time_scale = false
+	t.add_node("blown", over)
 	var rise := _clip("Death01")
 	rise.play_mode = AnimationNodeAnimation.PLAY_MODE_BACKWARD
 	_paced(t, "up", rise)
@@ -443,6 +464,7 @@ func _build() -> AnimationNodeBlendTree:
 		"hit_chest",
 		"hit_head",
 		"down",
+		"blown",
 		"up_pace"
 	]
 	for k in inputs.size():

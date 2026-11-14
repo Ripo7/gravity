@@ -1,18 +1,21 @@
-# Concept: breaking a house
+# Concept: two brutes in a house that breaks
 
-Two tests in one greybox scene, seen in third person: a house that breaks,
-and a character that is animated.
+Two fighters, stronger than people are, in a greybox scene where what
+stands can be broken: a hard blow sends the other one through the walls.
+Seen in third person.
 
 - **Destruction.** Walls break into irregular shards where they are hit, and
   into smaller crumbs where they are hit hardest; what is no longer held up
   falls, and breaks again when it lands. Nothing disappears: the rubble
-  stays and you can climb on it. What is shot at it is a plain ball, a
-  stand-in.
+  stays and you can climb on it. Fists, feet and flying bodies break it;
+  so does a plain ball you can shoot.
 - **Character animation.** A mannequin that stands, walks, jogs, sprints,
   jumps, lands and puts its arm out to shoot, by blending ready-made
   clips; and that boxes, with the motion of real boxers (motion capture):
-  a guard, a four-punch combination, a duck and a kick. A second mannequin
-  is there to take it: it flinches, goes down and gets back up.
+  a guard, a four-punch combination, a duck and a kick.
+- **The fight.** The other brute, in red, walks up to you and throws the
+  same moves. The last punch of the combination and the kick send whoever
+  takes them flying, through anything that stands in the way.
 
 Godot 4.7, GDScript, Jolt physics, Compatibility renderer (WebGL2), so it
 can be played in Safari on an iPhone from each pull request's preview.
@@ -41,8 +44,8 @@ you push, seen from the camera, and turns to face where it goes. A shot
 goes to what is under the crosshair, and the character turns to it. A
 punch is a jab; pressed again before it is over, the next punch of the
 combination follows: a cross, then a left and a right to the body, then a
-jab again. The red mannequin near where you start is there to take them:
-the four punches put it down.
+jab again. The fourth punch and the kick throw the other brute; it throws
+you the same way. Ducking lets what comes at your head go over.
 
 The line at the top left shows frames per second, the cost of one physics
 step and how many pieces there are (and how many are moving).
@@ -56,8 +59,9 @@ that library: they are motion capture (see below).
 `scripts/player/character.gd` builds the tree that blends all of them;
 `scripts/player/player.gd` moves the capsule and tells the character how
 fast it goes, whether it is in the air, and when it jumps, lands, shoots,
-punches, kicks or ducks. The dummy (`scripts/game/dummy.gd`) is the same
-character in other colours, told when it is hit and when it goes down.
+punches, kicks or ducks. The other brute (`scripts/game/brute.gd`) is the
+same character in other colours; what the two have in common (what a
+blow does, being thrown) is in `scripts/game/fighter.gd`.
 
 - **Legs that keep pace.** Each clip has one ground speed at which its feet
   do not slide: 1.05 m/s for the walk, 5.2 for the jog, 7.8 for the sprint
@@ -95,21 +99,39 @@ character in other colours, told when it is hit and when it goes down.
   front: the character turns to it, and if the fist would stop short it
   is carried the rest of the way while the arm goes out (that part
   slides).
-- **Taking a blow.** The dummy flinches (a small clip for a jab, a bigger
-  one for a harder blow), flashes white and is pushed back. A jab counts
-  for 1, the other punches and a shot for 2, a kick for 3; at 7 it falls
-  on its back, away from the blow, lies there 2 s and gets up: the fall
-  played backwards, since the library has no clip for getting up.
+- **Blows.** When a fist or a foot gets there, the other brute takes it
+  if it is in front and within reach. A jab, a cross and the left to the
+  body make it flinch (a small clip or a bigger one), flash white and
+  step back. The right to the body, which ends the combination, and the
+  kick throw it: 12 m/s along the ground, 4 up.
+- **Thrown.** A brute off its feet goes over backwards and flies, back
+  first. Nothing that stands stops it: every step of its flight, the
+  shards within 0.95 m of its middle are knocked out (the nearest in
+  crumbs), each one taking a little of its speed, so it goes through a
+  wall, across a room and out through the next. It lands, slides, lies
+  0.7 s and gets up (the fall played backwards, the library having no
+  clip for getting up).
+- **Fists break what stands.** A strike that reaches a wall or a pillar
+  knocks out what is within 0.45 m of a jab, 0.7 m of a punch, 1 m of a
+  kick, and sends off the loose pieces that lie there.
+- **The other brute** has no plan: it walks straight at you, stops at
+  arm's length, and after a wait of 0.5 to 1.3 s kicks (3 times in 10) or
+  throws one to four punches of the combination. It steps onto rubble;
+  stopped by a wall for a third of a second, it kicks it in and goes
+  through. From behind the house it reaches you in front of it in about
+  12 s, 38 shards knocked out on the way.
 
 Not there: strafing and walking backwards (the free clips only go
 forward, so the character always turns to where it goes, and slides for
 half a second when it shoots while running sideways), feet placed on
 uneven ground, the head or the arm following the aim up and down. For
-fighting: moving around in the guard (the stance is dropped to walk), an
-opponent that hits back or blocks, so the duck avoids nothing yet; hooks
-and uppercuts to the head; punches that break the house. The dummy stands
-upright, so the boxer, who crouches, hits it in the chest. After the kick
-the leg comes back by a blend, not by the karateka's own step.
+the fight: no health and no end (it goes on until the house is gone),
+moving around in the guard (the stance is dropped to walk), blocking,
+hooks and uppercuts to the head, a real tumble in the air (the thrown
+body holds one pose), the brutes being any bigger than people. The
+brutes stand upright when hit and the boxer crouches, so punches land on
+the chest. After the kick the leg comes back by a blend, not by the
+karateka's own step. A thrown body passes through loose rubble.
 
 ## How the destruction works
 
@@ -196,8 +218,9 @@ godot --headless --fixed-fps 60 --path . -- --mode=showcase --seed=1 --prof --qu
 godot --path . -- --mode=play --from=-2.5,0.05,4.2 --steps="a@-2.5,1.4,-0.6;o;w1;o@-2,2,-0.6;w2;f0.8"
 # The character on open ground: walk, run, sprint to the right, jump, shoot.
 godot --path . -- --mode=play --from=-25,0.05,30 --steps="p0.2,0,2;p1,0,2;p1,0,2,1;j;w1.5;o;w1"
-# A fight: walk up to the dummy, four punches, it goes down; then a duck and a kick.
-godot --path . -- --mode=play --from=4,0.05,10.5 --steps="a@d;p0,-0.4,0.8;h;w0.12;h;w0.2;h;w0.3;h;w6;u;w1;k;w3"
+# The other brute put in front of the house, four punches: it goes through it.
+# (--fight: it attacks; without, it only stands there.)
+godot --path . -- --mode=play --fight --from=-2.9,0.05,4.3 --steps="d@-2.9,0.05,5.2;a@d;p0,-0.5,0.7;h;w0.12;h;w0.2;h;w0.3;h;w9"
 # How loaded the house is as built (1 = a bond breaks).
 godot --headless --path . -- --mode=check
 ```
@@ -213,10 +236,11 @@ Add `--write-movie out.avi --fixed-fps 30` before `--path` to record a run.
   character turning to where it goes, its planted foot not sliding from a
   slow walk to a sprint, jumps and landings, the arm going out and the
   shot landing under the crosshair, and the fight: the four punches in
-  order then the guard, the step in and the fist being on the dummy when
-  the blow counts, what is out of reach, the kick and its foot on the
-  dummy, the duck, the dummy going down and getting up, a shot hitting
-  it.
+  order then the guard, the step in and the fist being on the other brute
+  when the blow counts, what is out of reach, the last punch throwing it
+  through the house, the kick, fists breaking a wall, the other brute
+  coming through the house to hit back and throwing the player, ducking
+  under a blow to the head.
 - `tools/perf_gate.py`: reads a profiled showcase and fails when the
   physics gets too slow.
 - `tools/web_probe.mjs`: loads the web export in headless Chromium, breaks
@@ -246,18 +270,21 @@ house standing, nothing drawn) takes 0.10 to 0.13 ms while it runs, and
 0.09 ms with its animation tree switched off: blending the clips costs
 about 0.02 to 0.04 ms a frame here. The planted foot slides 0.05 to
 0.2 m/s between a slow walk and a run, 0.5 to 1 m/s at a sprint
-(7.8 m/s). The dummy, a second body with its own tree, adds 0.03 to
-0.05 ms to that frame.
+(7.8 m/s). The other brute, a second body with its own tree, adds 0.03
+to 0.05 ms to that frame.
 
 The fight: the four punches of the combination land 0.13, 0.37, 0.78 and
-1.05 s after the first press, and the last one puts the dummy down; it is
-back on its feet 4.5 s after the last blow. The kick lands 0.42 s after
-the press. When a punch counts, the wrist is 0.59 to 0.76 m ahead of the
-body and within 0.11 m of the line to the opponent. The boxing library is
-0.33 MB of text (0.2 MB more in the web export, 2.8 MB in all). With the
-boxing moves in, three seeds of the showcase tour give 1.3 to 1.6 ms a
-step on average while things move, 99% of the steps under 4.7 to 5.1 ms,
-the slowest 7.0 to 8.4 ms: as before.
+1.05 s after the first press; the kick lands 0.42 s after the press. When
+a punch counts, the wrist is 0.59 to 0.76 m ahead of the body and within
+0.11 m of the line to the other brute. Thrown by the fourth punch from in
+front of the house, the other brute goes through the front wall, the room
+and the back wall and lands 10.4 m away, 53 shards knocked out on the
+way; it is back on its feet 3.3 s after the blow. In the open a kick
+sends it 14 m. A scripted fight of 30 s in which each brute goes
+through the house once (69 shards down, 80 pieces moving at once) costs
+0.2 ms a physics step at the median, 99% of the steps under 2.4 ms, the
+slowest 3.7 to 7.5 ms (two seeds). The boxing library is
+0.33 MB of text (0.2 MB more in the web export, 2.8 MB in all).
 
 Not measured: a real phone. The line at the top left is there for that.
 

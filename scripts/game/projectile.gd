@@ -5,7 +5,7 @@ extends Node3D
 ## touches.
 ## In a standing wall it knocks out what is around the point of impact and
 ## cracks what is a little farther; a loose piece is shoved; whoever can
-## take a blow (the Dummy) takes one; the ground only stops it.
+## take a blow (the Brute) takes one; the ground only stops it.
 
 ## It stopped at `at`, on something facing `normal`, and knocked `torn`
 ## standing shards out.
@@ -95,8 +95,8 @@ func _physics_process(delta: float) -> void:
 func _land(at: Vector3, normal: Vector3, rid: RID, what: Object) -> void:
 	var s := structure
 	var torn := 0
-	if what is Dummy:
-		(what as Dummy).take_hit(direction, 2)
+	if what is Brute:
+		(what as Brute).fighter.take_hit(direction, 2, false)
 	elif s != null:
 		var piece := s.pieces.index_of(rid)
 		if piece >= 0:

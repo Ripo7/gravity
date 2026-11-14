@@ -16,7 +16,7 @@ const LAYER_WORLD := 1
 const LAYER_STRUCTURE := 2
 const LAYER_DEBRIS := 4
 const LAYER_PLAYER := 8
-## Other bodies that stand and move (the Dummy): in the way of the player and
+## Other bodies that stand and move (the Brute): in the way of the player and
 ## of what is shot, not of the camera.
 const LAYER_ACTOR := 16
 ## Shards are about this big (m).
