@@ -61,6 +61,19 @@ const SLOWED := 0.012
 const STUCK := 0.35
 const BREACH := 0.9
 const BREACH_AT: Array[float] = [0.6, 1.5]
+## What is lower than WADE m above its feet is no wall to a brute: it
+## walks through it. Of each low thing in front of its legs, what stands
+## within TRAMPLE m of them is knocked out and kicked ahead, KICK m/s
+## faster than it goes and up to KICK_UP m/s up. What it comes down on is
+## flattened.
+const WADE := 1.2
+const TRAMPLE := 0.75
+const KICK := 2.0
+const KICK_UP := 3.0
+## Its legs reach what stands within LEGS m of a point REACH_AHEAD m in
+## front of it, at its knees.
+const LEGS := 0.5
+const REACH_AHEAD := 0.45
 ## On the ground it slides to a stop (m/s2), lies LIES s, then gets up.
 const SLIDES := 14.0
 const LIES := 0.7
@@ -77,6 +90,7 @@ var _layer := 0
 var _mask := 0
 var _for := 0.0  # s in the current state
 var _rises := 0.0  # s it takes to get up
+var _legs := PhysicsShapeQueryParameters3D.new()  # what its legs reach (see trample)
 
 
 func _init(of: CharacterBody3D, with: Character) -> void:
@@ -87,6 +101,10 @@ func _init(of: CharacterBody3D, with: Character) -> void:
 	of.platform_floor_layers = 0
 	_layer = of.collision_layer
 	_mask = of.collision_mask
+	var ball := SphereShape3D.new()
+	ball.radius = LEGS
+	_legs.shape = ball
+	_legs.collision_mask = Structure.LAYER_STRUCTURE
 
 
 func up() -> bool:
@@ -237,6 +255,69 @@ func breach(ahead: Vector3) -> void:
 	clear(ahead, RUBBLE * 3.0)
 
 
+## After a step of its body, which went at `had` (m/s) and means to go at
+## `going`: what is low gives way (see trample) without stopping it, and
+## the rubble that lies at rest around its legs wakes up, to be pushed out
+## of its way (litter does not stop a brute, see Pieces.LITTER). Returns
+## true if something gave way (it has nothing to step onto).
+func wade(going: Vector3, had: Vector3) -> bool:
+	if structure != null and Vector2(going.x, going.z).length() > 0.3:
+		var at := body.global_position
+		structure.pieces.thaw_box(at - Vector3(0.6, 0.1, 0.6), at + Vector3(0.6, 1.8, 0.6))
+	if not trample(going):
+		return false
+	body.velocity.x = had.x
+	body.velocity.z = had.z
+	return true
+
+
+## After a step of its body, which means to go at `going` (m/s): the low
+## things in front of its legs give way, and so does a low thing it stands
+## on (see WADE). Returns true if something did.
+func trample(going: Vector3) -> bool:
+	if structure == null:
+		return false
+	var flat := Vector3(going.x, 0, going.z)
+	var pace := flat.length()
+	var gone := false
+	# What it has come down on is flattened.
+	for k in body.get_slide_collision_count():
+		var touched := body.get_slide_collision(k)
+		if touched.get_normal().y > 0.7:
+			var at := touched.get_position()
+			var under := structure.standing_by(touched.get_collider_rid(), at, TRAMPLE)
+			if _low(under, WADE):
+				for i in under:
+					var off := structure.centroid[i] - at
+					structure.shatter(i, Vector3(off.x, 0.5, off.z).normalized() * 2.0)
+				gone = true
+	if pace < 0.5:
+		return gone
+	# What stands in front of its knees is kicked ahead.
+	var way := flat / pace
+	var knees := body.global_position + way * REACH_AHEAD + Vector3.UP * 0.4
+	_legs.transform = Transform3D(Basis(), knees)
+	for found in body.get_world_3d().direct_space_state.intersect_shape(_legs, 8):
+		var ahead := structure.standing_by(found["rid"], knees, TRAMPLE)
+		if not _low(ahead, body.global_position.y + WADE):
+			continue
+		for i in ahead:
+			var off := structure.centroid[i] - knees
+			var aside := Vector3(off.x, 0, off.z).normalized() * 1.5
+			var lift := Vector3.UP * randf_range(0.3, 1.0) * KICK_UP
+			structure.blow(i, aside + lift + way * (pace + KICK) * randf_range(0.6, 1.0))
+		gone = true
+	return gone
+
+
+## Is there something in `shards`, and none of it higher than `height` m?
+func _low(shards: PackedInt32Array, height: float) -> bool:
+	for i in shards:
+		if structure.top(i) >= height:
+			return false
+	return not shards.is_empty()
+
+
 ## Sends off the rubble that lies at its feet, on the side of `ahead`.
 func clear(ahead: Vector3, impulse: float) -> void:
 	_scatter(body.global_position + ahead * 0.6 + Vector3.UP * 0.4, 0.7, ahead, impulse)
@@ -249,7 +330,7 @@ func _scatter(at: Vector3, radius: float, way: Vector3, impulse: float) -> void:
 	var query := PhysicsShapeQueryParameters3D.new()
 	query.shape = ball
 	query.transform = Transform3D(Basis(), at)
-	query.collision_mask = Structure.LAYER_DEBRIS
+	query.collision_mask = Structure.LAYER_DEBRIS | Structure.LAYER_LITTER
 	var pieces := structure.pieces
 	for found in body.get_world_3d().direct_space_state.intersect_shape(query, 12):
 		var i := pieces.index_of(found["rid"])

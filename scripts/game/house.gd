@@ -21,6 +21,27 @@ const TOP := 6.0  ## top of the upper walls
 
 
 ## Adds the house to `s`, placed by `xf`.
+## A tour of the house for the showcase: where to stand and what to look
+## at, in the house's own space.
+static func tour() -> Array[Array]:
+	return [
+		[Vector3(-2.5, 0, 9.5), Vector3(-2.5, 1.4, 3.3)],
+		[Vector3(2.7, 0, 9.5), Vector3(2.7, 1.5, 3.3)],
+		[Vector3(-7.5, 0, 9.0), Vector3(-4.3, 1.4, 6.7)],
+		[Vector3(7.5, 0, 9.0), Vector3(4.3, 1.4, 6.7)],
+		[Vector3(-8.5, 0, 0.5), Vector3(-4.3, 1.4, 0.5)],
+		[Vector3(-8.5, 0, -2.0), Vector3(-4.3, 1.6, -2.0)],
+		[Vector3(8.5, 0, 0.5), Vector3(4.3, 1.4, 0.5)],
+		[Vector3(8.5, 0, 2.0), Vector3(4.3, 1.6, 2.0)],
+		[Vector3(0, 0, -8.5), Vector3(0, 1.4, -3.3)],
+		[Vector3(-3.0, 0, -8.5), Vector3(-3.0, 1.4, -3.3)],
+		[Vector3(3.0, 0, -8.5), Vector3(3.0, 1.4, -3.3)],
+		[Vector3(0, 0, 10.0), Vector3(0, 1.2, 0.0)],
+		[Vector3(-3.0, 0, 10.0), Vector3(-2.5, 1.4, 0.0)],
+		[Vector3(3.0, 0, 10.0), Vector3(2.5, 1.4, 0.0)],
+	]
+
+
 static func build(s: Structure, xf: Transform3D) -> void:
 	var walls: Array[Array] = []
 	var slabs: Array[Array] = []

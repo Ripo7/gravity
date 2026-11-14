@@ -6,7 +6,9 @@ extends MultiMeshInstance3D
 ## use, the oldest is taken again.
 
 const GRAVITY := 9.8
-const MASK := Structure.LAYER_WORLD | Structure.LAYER_STRUCTURE | Structure.LAYER_DEBRIS
+const MASK := (
+	Structure.LAYER_WORLD | Structure.LAYER_STRUCTURE | Structure.LAYER_DEBRIS | Structure.LAYER_LITTER
+)
 const COLORS: Array[Color] = [Color(0.6, 0.6, 0.63), Color(0.42, 0.42, 0.45), Color(0.32, 0.32, 0.35)]
 
 var capacity := 0

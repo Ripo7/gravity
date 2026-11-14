@@ -11,11 +11,12 @@ extends Node
 ##        "l" lock on or let go,
 ##        "x1" / "x0" the other brute attacks or stands there,
 ##        "t<degrees>,<seconds>" turn the camera to the
-##        left, "d@x,y,z" put the other brute there (in the house's space),
+##        left, "d@x,y,z" put the other brute there (in the level's space),
 ##        "c@x0,y0,z0,x1,y1,z1" knock out what stands in that box.
-##   --mode=showcase   a fixed tour that takes the house apart
+##   --mode=showcase   a fixed tour that takes the level apart
 ##   --mode=still [--pos=x,y,z --at=x,y,z --wait=S]   just look
 ##   --mode=check      how loaded the building is as built
+## --level=city|house: which ground (the city unless told).
 ## --fight: as played, the other brute attacks and the player is locked on
 ## it (otherwise it only stands there, and the camera is free).
 ## --seed=N makes a run repeatable; --prof prints the cost of the physics
@@ -139,7 +140,7 @@ func _play() -> void:
 		elif kind == "l":
 			player.lock()
 		elif kind == "d":
-			world.brute.global_position = world.house_at * _vec(spec.substr(2))
+			world.brute.global_position = world.level_at * _vec(spec.substr(2))
 		elif kind == "t":
 			var turn := spec.substr(1).split_floats(",")
 			var left := turn[1]
@@ -175,27 +176,10 @@ func _play() -> void:
 ## pillars, the sides, the back, then the pillars inside through the holes,
 ## until the upper floor comes down.
 func _showcase() -> void:
-	var house := world.house_at
-	var stops: Array[Array] = [
-		[Vector3(-2.5, 0, 9.5), Vector3(-2.5, 1.4, 3.3)],
-		[Vector3(2.7, 0, 9.5), Vector3(2.7, 1.5, 3.3)],
-		[Vector3(-7.5, 0, 9.0), Vector3(-4.3, 1.4, 6.7)],
-		[Vector3(7.5, 0, 9.0), Vector3(4.3, 1.4, 6.7)],
-		[Vector3(-8.5, 0, 0.5), Vector3(-4.3, 1.4, 0.5)],
-		[Vector3(-8.5, 0, -2.0), Vector3(-4.3, 1.6, -2.0)],
-		[Vector3(8.5, 0, 0.5), Vector3(4.3, 1.4, 0.5)],
-		[Vector3(8.5, 0, 2.0), Vector3(4.3, 1.6, 2.0)],
-		[Vector3(0, 0, -8.5), Vector3(0, 1.4, -3.3)],
-		[Vector3(-3.0, 0, -8.5), Vector3(-3.0, 1.4, -3.3)],
-		[Vector3(3.0, 0, -8.5), Vector3(3.0, 1.4, -3.3)],
-		[Vector3(0, 0, 10.0), Vector3(0, 1.2, 0.0)],
-		[Vector3(-3.0, 0, 10.0), Vector3(-2.5, 1.4, 0.0)],
-		[Vector3(3.0, 0, 10.0), Vector3(2.5, 1.4, 0.0)],
-	]
 	await _wait(0.5)
-	for stop in stops:
-		var from := house * (stop[0] as Vector3) + Vector3.UP * 0.05
-		var target := house * (stop[1] as Vector3)
+	for stop in world.tour():
+		var from := (stop[0] as Vector3) + Vector3.UP * 0.05
+		var target: Vector3 = stop[1]
 		_place(from, target)
 		await _wait(0.25)
 		# Six blows, in two rows of three across what is looked at.

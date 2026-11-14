@@ -559,6 +559,7 @@ func _stand(at: Vector3, target: Vector3) -> void:
 func _load() -> void:
 	seed(5)
 	main = (load("res://scenes/main.tscn") as PackedScene).instantiate() as Main
+	main.level = "house"
 	main.fight = false  # the other brute only stands there
 	get_tree().root.add_child.call_deferred(main)
 	await get_tree().process_frame

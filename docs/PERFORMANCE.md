@@ -5,7 +5,8 @@ on a real phone: the line at the top left of the game (frames per second,
 cost of a physics step, pieces) is there for that.
 
 ```sh
-# The physics of a fixed tour that takes the house apart, at phone settings.
+# The physics of a fixed tour that takes the city apart, at phone settings
+# (add --level=house for the house).
 godot --headless --fixed-fps 60 --path . -- --mode=showcase --seed=1 --prof --quality=low \
   | python3 tools/perf_gate.py
 ```
@@ -17,6 +18,19 @@ every pull request and fails above 8 ms a step on average
 regression, not 10%.
 
 ## Measured
+
+### The city (default level)
+
+Same machine and settings. The showcase tour of the city (84 blows from
+14 places: each tower and the lots beside it, two corners), seeds 1 to 3: 1.1 to 1.3
+ms a step on average while things move (the house: 1.8 to 2.0 on the same
+run), the worst second 2.0 to 2.5 ms, the slowest step 7.1 to 10.3 ms, at
+most 673 pieces. A 40 s fight on the square (seed 1, the other brute
+attacking): 0.2 to 1.3 ms a second on average. The city is 1893 shards,
+86 618 vertices, cut and bonded in 0.52 to 0.65 s headless (0.29 s
+for the house).
+
+### The house
 
 Headless on a 2-core cloud machine, one physics step per frame
 (`--fixed-fps 60`), phone settings.
