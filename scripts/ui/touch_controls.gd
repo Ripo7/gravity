@@ -5,7 +5,7 @@ extends Control
 ##   how far it is pushed sets the pace, from a walk to a run, and held at
 ##   full tilt it breaks into a sprint.
 ##   Right half: drag to look.
-##   Bottom-right: the fire button. Above it: jump.
+##   Bottom-right: the fire button. Above it: jump. Left of it: punch.
 ## Multi-touch is tracked per finger so you can move, look and fire at once.
 
 @export var player: Player
@@ -24,6 +24,7 @@ var _stick_pos := Vector2.ZERO
 var _look_finger := -1
 var _fire_finger := -1
 var _jump_finger := -1
+var _punch_finger := -1
 ## Last position per finger. Deltas are computed from these instead of the
 ## event's `relative`: on the web, Godot pairs multi-touch moves with the
 ## wrong previous finger, which made the camera jump and spin on iOS.
@@ -52,6 +53,14 @@ func fire_radius() -> float:
 	return size.y * 0.11
 
 
+func punch_center() -> Vector2:
+	return Vector2(size.x - size.y * 0.47, size.y * 0.82)
+
+
+func punch_radius() -> float:
+	return size.y * 0.085
+
+
 func jump_center() -> Vector2:
 	return Vector2(size.x - size.y * 0.2, size.y * 0.5)
 
@@ -73,8 +82,10 @@ func _input(event: InputEvent) -> void:
 
 
 func _release_all() -> void:
-	if _stick_finger < 0 and _look_finger < 0 and _fire_finger < 0 and _jump_finger < 0:
+	var fingers: Array[int] = [_stick_finger, _look_finger, _fire_finger, _jump_finger, _punch_finger]
+	if fingers.max() < 0:
 		return
+	_punch_finger = -1
 	_stick_finger = -1
 	_look_finger = -1
 	_fire_finger = -1
@@ -107,6 +118,9 @@ func _on_touch(e: InputEventScreenTouch) -> void:
 		elif e.position.distance_to(jump_center()) < jump_radius() * 1.4 and _jump_finger < 0:
 			_jump_finger = e.index
 			player.touch_jump = true
+		elif e.position.distance_to(punch_center()) < punch_radius() * 1.3 and _punch_finger < 0:
+			_punch_finger = e.index
+			player.touch_punch = true
 		elif e.position.x < size.x * 0.5 and _stick_finger < 0:
 			_stick_finger = e.index
 			_stick_origin = e.position
@@ -119,6 +133,8 @@ func _on_touch(e: InputEventScreenTouch) -> void:
 			_fire_finger = -1
 		elif e.index == _jump_finger:
 			_jump_finger = -1
+		elif e.index == _punch_finger:
+			_punch_finger = -1
 		elif e.index == _stick_finger:
 			_stick_finger = -1
 			player.touch_move = Vector2.ZERO
@@ -163,6 +179,16 @@ func _draw() -> void:
 	draw_circle(c, r * (1.08 if _fire_finger >= 0 else 1.0), Color(0.3, 0.55, 1.0, 0.6))
 	draw_arc(c, r * 1.12, 0, TAU, 48, Color(1, 1, 1, 0.6), 3.0, true)
 	draw_circle(c, r * 0.3, Color(1, 1, 1, 0.9))
+	# The punch button: a fist seen from the front (four knuckles, a thumb).
+	c = punch_center()
+	r = punch_radius()
+	draw_circle(c, r * (1.08 if _punch_finger >= 0 else 1.0), Color(0.95, 0.35, 0.25, 0.6))
+	draw_arc(c, r * 1.12, 0, TAU, 48, Color(1, 1, 1, 0.6), 3.0, true)
+	for k in 4:
+		draw_circle(c + Vector2((k - 1.5) * r * 0.26, -r * 0.1), r * 0.14, Color(1, 1, 1, 0.9))
+	draw_line(
+		c + Vector2(-r * 0.45, r * 0.22), c + Vector2(r * 0.3, r * 0.22), Color(1, 1, 1, 0.9), r * 0.16, true
+	)
 	draw_circle(jump_center(), jump_radius(), ink_strong if _jump_finger >= 0 else ink)
 	var a := jump_center() + Vector2(0, -jump_radius() * 0.35)
 	var w := jump_radius() * 0.4

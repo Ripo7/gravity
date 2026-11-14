@@ -4,8 +4,8 @@ extends Node3D
 ## the real thing will be. It flies straight and stops at the first thing it
 ## touches.
 ## In a standing wall it knocks out what is around the point of impact and
-## cracks what is a little farther; a loose piece is shoved; the ground only
-## stops it.
+## cracks what is a little farther; a loose piece is shoved; whoever can
+## take a blow (the Dummy) takes one; the ground only stops it.
 
 ## It stopped at `at`, on something facing `normal`, and knocked `torn`
 ## standing shards out.
@@ -79,11 +79,11 @@ func _physics_process(delta: float) -> void:
 	var ray := PhysicsRayQueryParameters3D.create(
 		from,
 		from + direction * (step + RADIUS),
-		Structure.LAYER_WORLD | Structure.LAYER_STRUCTURE | Structure.LAYER_DEBRIS
+		Structure.LAYER_WORLD | Structure.LAYER_STRUCTURE | Structure.LAYER_DEBRIS | Structure.LAYER_ACTOR
 	)
 	var hit := get_world_3d().direct_space_state.intersect_ray(ray)
 	if not hit.is_empty():
-		_land(hit["position"], hit["normal"], hit["rid"])
+		_land(hit["position"], hit["normal"], hit["rid"], hit["collider"])
 		return
 	global_position = from + direction * step
 	flown += step
@@ -92,10 +92,12 @@ func _physics_process(delta: float) -> void:
 		queue_free()
 
 
-func _land(at: Vector3, normal: Vector3, rid: RID) -> void:
+func _land(at: Vector3, normal: Vector3, rid: RID, what: Object) -> void:
 	var s := structure
 	var torn := 0
-	if s != null:
+	if what is Dummy:
+		(what as Dummy).take_hit(direction, true)
+	elif s != null:
 		var piece := s.pieces.index_of(rid)
 		if piece >= 0:
 			var push := minf(PUNCH / s.pieces.mass[piece], PUSH_MOST)

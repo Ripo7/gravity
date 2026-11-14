@@ -3,10 +3,12 @@ extends Node
 ## Scripted runs, for clips and measurements:
 ##   --mode=play --steps="a@x,y,z;o;w1.5" [--from=x,y,z]
 ##        steps separated by ";": "o" a shot ("o@x,y,z" aims first),
-##        "a@x,y,z" look there, "m<x,y,z>" go there, "w<seconds>" wait,
+##        "a@x,y,z" look there ("a@d", "o@d": at the dummy), "m<x,y,z>" go
+##        there, "w<seconds>" wait,
 ##        "f<seconds>" run forward, "r<seconds>" sprint forward,
 ##        "p<x>,<y>,<seconds>[,1]" push the stick (y -1 is forward; 1: sprint),
-##        "j" jump, "t<degrees>,<seconds>" turn the camera to the left,
+##        "j" jump, "h" punch, "t<degrees>,<seconds>" turn the camera to the
+##        left, "d@x,y,z" put the dummy there (in the house's space),
 ##        "c@x0,y0,z0,x1,y1,z1" knock out what stands in that box.
 ##   --mode=showcase   a fixed tour that takes the house apart
 ##   --mode=still [--pos=x,y,z --at=x,y,z --wait=S]   just look
@@ -97,7 +99,7 @@ func _play() -> void:
 		elif kind == "m":
 			player.global_position = _vec(spec.substr(1))
 		elif kind == "a":
-			_aim(_vec(spec.substr(2)))
+			_aim(_point(spec.substr(2)))
 		elif kind == "f" or kind == "r":
 			player.touch_move = Vector2(0, -1)
 			player.touch_sprint = kind == "r"
@@ -114,6 +116,10 @@ func _play() -> void:
 			player.touch_sprint = false
 		elif kind == "j":
 			player.touch_jump = true
+		elif kind == "h":
+			player.touch_punch = true
+		elif kind == "d":
+			world.dummy.global_position = world.house_at * _vec(spec.substr(2))
 		elif kind == "t":
 			var turn := spec.substr(1).split_floats(",")
 			var left := turn[1]
@@ -132,7 +138,7 @@ func _play() -> void:
 			)
 		elif kind == "o":
 			if spec.contains("@"):
-				_aim(_vec(spec.split("@")[1]))
+				_aim(_point(spec.split("@")[1]))
 			await _fire()
 			casts += 1
 			await get_tree().physics_frame
@@ -242,6 +248,11 @@ func _end(tag: String) -> void:
 			)
 		)
 	get_tree().quit()
+
+
+## The point `text` stands for: "x,y,z", or "d" for the dummy's chest.
+func _point(text: String) -> Vector3:
+	return world.dummy.global_position + Vector3.UP * 1.2 if text == "d" else _vec(text)
 
 
 static func _vec(text: String) -> Vector3:

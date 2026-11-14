@@ -9,7 +9,9 @@ and a character that is animated.
   stays and you can climb on it. What is shot at it is a plain ball, a
   stand-in.
 - **Character animation.** A mannequin that stands, walks, jogs, sprints,
-  jumps, lands and puts its arm out to shoot, by blending ready-made clips.
+  jumps, lands, puts its arm out to shoot and throws punches, by blending
+  ready-made clips; and a second one to punch, which flinches, goes down
+  and gets back up.
 
 Godot 4.7, GDScript, Jolt physics, Compatibility renderer (WebGL2), so it
 can be played in Safari on an iPhone from each pull request's preview.
@@ -25,6 +27,7 @@ The previous project, Gravity, is kept as it was on the branch
 | Sprint | shift | the stick held fully pushed for 0.8 s |
 | Look | mouse | drag on the right half |
 | Shoot | left click or F | blue button |
+| Punch | right click or E | red button |
 | Jump | space | small button |
 | Rebuild the house | R | "Reconstruire" |
 
@@ -32,7 +35,10 @@ The camera sits behind the character's left shoulder and turns about its
 head; it comes closer when a wall is behind (and the character is not
 drawn when the camera is right against its back). The character goes where
 you push, seen from the camera, and turns to face where it goes. A shot
-goes to what is under the crosshair, and the character turns to it.
+goes to what is under the crosshair, and the character turns to it. A
+punch is a jab; pressed again before it is over, a cross follows, then a
+jab, and so on. The red mannequin near where you start is there to take
+them.
 
 The line at the top left shows frames per second, the cost of one physics
 step and how many pieces there are (and how many are moving).
@@ -41,10 +47,12 @@ step and how many pieces there are (and how many are moving).
 
 The mannequin and its clips are the free part of Quaternius's Universal
 Animation Library (CC0, see `assets/mannequin/SOURCE.md`): one rigged
-figure, 46 clips, of which nine are used. `scripts/player/character.gd`
+figure, 46 clips, of which 14 are used. `scripts/player/character.gd`
 builds the tree that blends them; `scripts/player/player.gd` moves the
 capsule and tells the character how fast it goes, whether it is in the
-air, and when it jumps, lands or shoots.
+air, and when it jumps, lands, shoots or punches. The dummy
+(`scripts/game/dummy.gd`) is the same character in other colours, told
+when it is hit and when it goes down.
 
 - **Legs that keep pace.** Each clip has one ground speed at which its feet
   do not slide: 1.05 m/s for the walk, 5.2 for the jog, 7.8 for the sprint
@@ -61,10 +69,27 @@ air, and when it jumps, lands or shoots.
   do, on the left arm and the chest only; the body turns a little so that
   the arm points at what is aimed at.
 
+- **Punches.** Two clips, a jab (left) and a cross (right), played a
+  little faster than they were made. Three moments were read on each: the
+  fist is out (that is when the blow counts), the fist is on its way back
+  (from then on the other punch may start, if it was asked for), and the
+  fists are back up. After the last punch the guard is held for a second,
+  unless you walk away. A punch is thrown where the stick pushes; if an
+  opponent is there, within 2.2 m, the character turns to it and steps in
+  while the arm goes out, so that the fist arrives on it.
+- **Taking a blow.** The dummy flinches (a small clip for a jab, a bigger
+  one for a cross or a shot), flashes white and is pushed back a little.
+  A jab counts for 1, a cross or a shot for 2; at 6 it falls on its back,
+  away from the blow, lies there 2 s and gets up: the fall played
+  backwards, since the library has no clip for getting up.
+
 Not there: strafing and walking backwards (the free clips only go
 forward, so the character always turns to where it goes, and slides for
 half a second when it shoots while running sideways), feet placed on
-uneven ground, the head or the arm following the aim up and down.
+uneven ground, the head or the arm following the aim up and down. For
+fighting: an opponent that hits back, blocking, kicks (no clip), the
+dodge roll (there is a clip), punches that break the house. The feet
+slide during the step into a punch and when the dummy is pushed back.
 
 ## How the destruction works
 
@@ -151,6 +176,8 @@ godot --headless --fixed-fps 60 --path . -- --mode=showcase --seed=1 --prof --qu
 godot --path . -- --mode=play --from=-2.5,0.05,4.2 --steps="a@-2.5,1.4,-0.6;o;w1;o@-2,2,-0.6;w2;f0.8"
 # The character on open ground: walk, run, sprint to the right, jump, shoot.
 godot --path . -- --mode=play --from=-25,0.05,30 --steps="p0.2,0,2;p1,0,2;p1,0,2,1;j;w1.5;o;w1"
+# A fight: walk up to the dummy, jab, cross, jab, cross, and it goes down.
+godot --path . -- --mode=play --from=4,0.05,10.5 --steps="a@4,1.3,7.5;p0,-0.4,0.8;h;w0.25;h;w0.4;h;w0.4;h;w6"
 # How loaded the house is as built (1 = a bond breaks).
 godot --headless --path . -- --mode=check
 ```
@@ -165,7 +192,10 @@ Add `--write-movie out.avi --fixed-fps 30` before `--path` to record a run.
   character: where the camera sits and how it comes in at walls, the
   character turning to where it goes, its planted foot not sliding from a
   slow walk to a sprint, jumps and landings, the arm going out and the
-  shot landing under the crosshair.
+  shot landing under the crosshair, and the fight: jab then cross then
+  guard, the step in and the fist being on the dummy when the blow
+  counts, what is out of reach, the dummy going down and getting up, a
+  shot hitting it.
 - `tools/perf_gate.py`: reads a profiled showcase and fails when the
   physics gets too slow.
 - `tools/web_probe.mjs`: loads the web export in headless Chromium, breaks
@@ -195,7 +225,9 @@ house standing, nothing drawn) takes 0.10 to 0.13 ms while it runs, and
 0.09 ms with its animation tree switched off: blending the clips costs
 about 0.02 to 0.04 ms a frame here. The planted foot slides 0.05 to
 0.2 m/s between a slow walk and a run, 0.5 to 1 m/s at a sprint
-(7.8 m/s).
+(7.8 m/s). The dummy, a second body with its own tree, adds 0.03 to
+0.05 ms to that frame. Jab, cross, jab, cross puts it down in 1.4 s; it
+is back on its feet 4.5 s after the last blow.
 
 Not measured: a real phone. The line at the top left is there for that.
 

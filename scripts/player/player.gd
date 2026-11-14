@@ -5,7 +5,9 @@ extends CharacterBody3D
 ## (the side of the arm it shoots with, so the arm is in view);
 ## the character goes where you push, relative to the camera, and turns to
 ## face where it goes. The fire button shoots a projectile at what is under
-## the crosshair, and the character turns to it.
+## the crosshair, and the character turns to it. The punch button throws a
+## jab, then a cross if it is pressed again, and so on; a punch goes for
+## the opponent in front, stepping in if it is a little too far.
 
 ## A shot leaves from `from` (the character's chest) along `direction`.
 signal fired(from: Vector3, direction: Vector3)
@@ -43,6 +45,18 @@ const TURN := 12.0
 const AIM_HOLD := 0.45
 ## In the air this long (s) without having jumped: it is a fall.
 const FALL_AFTER := 0.12
+## A punch goes for the nearest opponent within PUNCH_SEEK m, if it is less
+## than PUNCH_CONE rad off where the punch is thrown. Farther than PUNCH_FROM
+## m (where the fist reaches it), the character steps in while the fist goes
+## out, at LUNGE m/s at most. When the fist is out, the opponent takes it if
+## it is within PUNCH_REACH m ahead (the fist a hand's width short of it at
+## most) and PUNCH_WIDE m to either side.
+const PUNCH_SEEK := 2.2
+const PUNCH_CONE := 1.2
+const PUNCH_FROM := 0.85
+const LUNGE := 5.0
+const PUNCH_REACH := 1.1
+const PUNCH_WIDE := 0.5
 
 ## Full tilt of the stick, or the keys: a jog. The clips' feet do not slide
 ## at these speeds (see Character).
@@ -59,6 +73,7 @@ var input_enabled := true
 var touch_move := Vector2.ZERO
 var touch_jump := false
 var touch_fire := false
+var touch_punch := false
 ## Set by TouchControls and scripted runs: sprint without the key.
 var touch_sprint := false
 var cooldown_left := 0.0
@@ -83,11 +98,16 @@ var _back := BACK
 var _aim_left := 0.0
 var _airborne := 0.0  # s since the feet left the ground
 var _fell := 0.0  # m/s down, just before landing
+var _wish := Vector3.ZERO  # where the stick pushes, in the world
+var _opponent: Dummy  # who the punch under way goes for
+var _punch_to := 0.0  # where it is thrown (rad, like `facing`)
 
 
 func _init() -> void:
 	collision_layer = Structure.LAYER_PLAYER
-	collision_mask = Structure.LAYER_WORLD | Structure.LAYER_STRUCTURE | Structure.LAYER_DEBRIS
+	collision_mask = (
+		Structure.LAYER_WORLD | Structure.LAYER_STRUCTURE | Structure.LAYER_DEBRIS | Structure.LAYER_ACTOR
+	)
 	floor_snap_length = 0.3
 	var capsule := CapsuleShape3D.new()
 	capsule.radius = 0.35
@@ -109,6 +129,8 @@ func _init() -> void:
 	camera.far = 400.0
 	camera.current = true
 	_arm.add_child(camera)
+	character.swung.connect(_on_swung)
+	character.struck.connect(_on_struck)
 	_pose_camera()
 
 
@@ -133,8 +155,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 		elif event.is_action_pressed("fire"):
 			fire()
+		elif event.is_action_pressed("punch"):
+			punch()
 	elif event.is_action_pressed("fire"):
 		fire()
+	elif event.is_action_pressed("punch"):
+		punch()
 	elif event.is_action_pressed("release_mouse"):
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
@@ -166,7 +192,9 @@ func aim_point() -> Vector3:
 	# what stands between the two is not what is aimed at.
 	var from := eye + along * maxf((_pivot.global_position - eye).dot(along), 0.0)
 	var to := from + along * Projectile.RANGE
-	var mask := Structure.LAYER_WORLD | Structure.LAYER_STRUCTURE | Structure.LAYER_DEBRIS
+	var mask := (
+		Structure.LAYER_WORLD | Structure.LAYER_STRUCTURE | Structure.LAYER_DEBRIS | Structure.LAYER_ACTOR
+	)
 	var hit := get_world_3d().direct_space_state.intersect_ray(
 		PhysicsRayQueryParameters3D.create(from, to, mask)
 	)
@@ -176,7 +204,7 @@ func aim_point() -> Vector3:
 ## Shoots at what is under the crosshair, if the last shot is far enough
 ## behind. The character turns to it.
 func fire() -> bool:
-	if cooldown_left > 0.0:
+	if cooldown_left > 0.0 or character.punching():
 		return false
 	cooldown_left = COOLDOWN
 	var from := global_position + Vector3.UP * CHEST
@@ -190,6 +218,11 @@ func fire() -> bool:
 	return true
 
 
+## Throws a punch (see Character.punch), feet on the ground.
+func punch() -> bool:
+	return is_on_floor() and character.punch()
+
+
 func _physics_process(delta: float) -> void:
 	cooldown_left = maxf(cooldown_left - delta, 0.0)
 	var stick := Vector2.ZERO
@@ -200,22 +233,33 @@ func _physics_process(delta: float) -> void:
 		move = (move + touch_move).limit_length(1.0)
 		if touch_fire:
 			fire()
+		if touch_punch:
+			punch()
 	touch_fire = false
+	touch_punch = false
 	if stick != Vector2.ZERO:
 		# Squared response curve gives fine aim near the centre.
 		look(stick * stick.length() * stick_sensitivity * delta)
 
 	# Where you push, seen from the camera. How far you push sets the pace.
 	var wish := (Basis(Vector3.UP, yaw) * Vector3(move.x, 0, move.y)).limit_length(1.0)
+	_wish = wish
 	var sprinting := touch_sprint or Input.is_action_pressed("sprint")
 	var speed := sprint_speed if input_enabled and sprinting else run_speed
 	var accel := acceleration if is_on_floor() else air_acceleration
-	var horizontal := Vector3(velocity.x, 0, velocity.z).move_toward(wish * speed, accel * delta)
+	var punching := character.punching()
+	var horizontal := Vector3(velocity.x, 0, velocity.z)
+	if punching:
+		horizontal = _punch_speed(horizontal, delta)
+	else:
+		horizontal = horizontal.move_toward(wish * speed, accel * delta)
+		if wish.length() > 0.1:
+			character.relax()  # walking away from the guard
 	velocity.x = horizontal.x
 	velocity.z = horizontal.z
 	var grounded := is_on_floor()
 	if grounded:
-		if input_enabled and (Input.is_action_just_pressed("jump") or touch_jump):
+		if input_enabled and not punching and (Input.is_action_just_pressed("jump") or touch_jump):
 			velocity.y = jump_velocity
 			character.jump()
 	else:
@@ -236,7 +280,12 @@ func _physics_process(delta: float) -> void:
 ## Turns the character and tells it what its legs are doing.
 func _animate(wish: Vector3, delta: float) -> void:
 	_aim_left = maxf(_aim_left - delta, 0.0)
-	if _aim_left > 0.0:
+	if character.punching():
+		if is_instance_valid(_opponent):
+			var d := _opponent.global_position - global_position
+			_punch_to = atan2(-d.x, -d.z)
+		facing = rotate_toward(facing, _punch_to, TURN * delta)
+	elif _aim_left > 0.0:
 		facing = rotate_toward(facing, yaw, TURN * 3.0 * delta)
 	elif wish.length() > 0.1:
 		var to := atan2(-wish.x, -wish.z)
@@ -254,6 +303,54 @@ func _animate(wish: Vector3, delta: float) -> void:
 		_airborne += delta
 		if _airborne > FALL_AFTER:
 			character.fall()
+
+
+## A punch starts: it is thrown where the stick pushes (or where the
+## character faces), at the opponent that is there if there is one.
+func _on_swung(_strong: bool) -> void:
+	_aim_left = 0.0
+	_punch_to = atan2(-_wish.x, -_wish.z) if _wish.length() > 0.1 else facing
+	var ahead := Basis(Vector3.UP, _punch_to) * Vector3.FORWARD
+	_opponent = null
+	var nearest := PUNCH_SEEK
+	for node in get_tree().get_nodes_in_group(Dummy.GROUP):
+		var other := node as Dummy
+		var d := other.global_position - global_position
+		var off := Vector3(d.x, 0, d.z)
+		if other.state != "up" or absf(d.y) > 1.0 or off.length() >= nearest:
+			continue
+		if off.length() > 0.01 and ahead.angle_to(off) > PUNCH_CONE:
+			continue
+		nearest = off.length()
+		_opponent = other
+
+
+## The speed over the ground (m/s) during a punch, having been going at
+## `now`: what brings the character to where its fist reaches the opponent
+## by the time it is out, then none: feet planted. With no one to go for,
+## it only comes to a stop.
+func _punch_speed(now: Vector3, delta: float) -> Vector3:
+	if not is_instance_valid(_opponent):
+		return now.move_toward(Vector3.ZERO, acceleration * 2.0 * delta)
+	var lands_in := character.lands_in()
+	var d := _opponent.global_position - global_position
+	d.y = 0.0
+	var gap := d.length() - PUNCH_FROM
+	if lands_in <= 0.0 or gap <= 0.0:
+		return Vector3.ZERO
+	return d.normalized() * minf(gap / maxf(lands_in, delta), LUNGE)
+
+
+## The fist is out: the opponent that is there takes it.
+func _on_struck(strong: bool) -> void:
+	var ahead := Basis(Vector3.UP, facing) * Vector3.FORWARD
+	for node in get_tree().get_nodes_in_group(Dummy.GROUP):
+		var other := node as Dummy
+		var d := other.global_position - global_position
+		var along := d.dot(ahead)
+		var aside := absf(d.cross(ahead).y)
+		if absf(d.y) < 1.0 and along > 0.0 and along < PUNCH_REACH and aside < PUNCH_WIDE:
+			other.take_hit(ahead, strong)
 
 
 ## Puts the camera behind the shoulder, nearer when something is in
