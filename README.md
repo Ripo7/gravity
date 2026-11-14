@@ -1,11 +1,15 @@
 # Concept: breaking a house
 
-A first-person destruction test, and nothing else yet: a small greybox
-house and something to shoot at it with (a plain ball, a stand-in). Walls
-break into irregular shards where they are hit, and into
-smaller crumbs where they are hit hardest; what is no longer held up falls,
-and breaks again when it lands. Nothing disappears: the rubble stays and you
-can climb on it.
+Two tests in one greybox scene, seen in third person: a house that breaks,
+and a character that is animated.
+
+- **Destruction.** Walls break into irregular shards where they are hit, and
+  into smaller crumbs where they are hit hardest; what is no longer held up
+  falls, and breaks again when it lands. Nothing disappears: the rubble
+  stays and you can climb on it. What is shot at it is a plain ball, a
+  stand-in.
+- **Character animation.** A mannequin that stands, walks, jogs, sprints,
+  jumps, lands and puts its arm out to shoot, by blending ready-made clips.
 
 Godot 4.7, GDScript, Jolt physics, Compatibility renderer (WebGL2), so it
 can be played in Safari on an iPhone from each pull request's preview.
@@ -17,14 +21,50 @@ The previous project, Gravity, is kept as it was on the branch
 
 | | Keyboard and mouse | Phone |
 | --- | --- | --- |
-| Move | WASD (by position, so ZQSD on AZERTY) / arrows | left stick |
+| Move | WASD (by position, so ZQSD on AZERTY) / arrows | left stick: pushed a little, a walk; fully, a run |
+| Sprint | shift | the stick held fully pushed for 0.8 s |
 | Look | mouse | drag on the right half |
 | Shoot | left click or F | blue button |
 | Jump | space | small button |
 | Rebuild the house | R | "Reconstruire" |
 
+The camera sits behind the character's left shoulder and turns about its
+head; it comes closer when a wall is behind (and the character is not
+drawn when the camera is right against its back). The character goes where
+you push, seen from the camera, and turns to face where it goes. A shot
+goes to what is under the crosshair, and the character turns to it.
+
 The line at the top left shows frames per second, the cost of one physics
 step and how many pieces there are (and how many are moving).
+
+## The character
+
+The mannequin and its clips are the free part of Quaternius's Universal
+Animation Library (CC0, see `assets/mannequin/SOURCE.md`): one rigged
+figure, 46 clips, of which nine are used. `scripts/player/character.gd`
+builds the tree that blends them; `scripts/player/player.gd` moves the
+capsule and tells the character how fast it goes, whether it is in the
+air, and when it jumps, lands or shoots.
+
+- **Legs that keep pace.** Each clip has one ground speed at which its feet
+  do not slide: 1.05 m/s for the walk, 5.2 for the jog, 7.8 for the sprint
+  (measured on the clips: the speed of the ankle while the foot is flat on
+  the ground). The run and sprint speeds of the game are those. In
+  between, two clips are mixed: both are stretched to one common cycle, so
+  the same foot is forward in both, and that cycle is the one at which the
+  mixed stride covers the ground actually covered. Below a walk, the walk
+  is slowed down, then its steps shortened into standing.
+- **The air.** A jump leaves at once (the clip's crouch is skipped), runs
+  into the pose held in the air, and ends in a landing only when you come
+  down hard or on the spot: running, the legs run on.
+- **The arm that shoots.** The casting clip is laid over whatever the legs
+  do, on the left arm and the chest only; the body turns a little so that
+  the arm points at what is aimed at.
+
+Not there: strafing and walking backwards (the free clips only go
+forward, so the character always turns to where it goes, and slides for
+half a second when it shoots while running sideways), feet placed on
+uneven ground, the head or the arm following the aim up and down.
 
 ## How the destruction works
 
@@ -107,8 +147,10 @@ browser as `index.html?mode=...`:
 # A fixed tour that takes the house apart, with the cost of the physics.
 godot --headless --fixed-fps 60 --path . -- --mode=showcase --seed=1 --prof --quality=low \
   | python3 tools/perf_gate.py
-# Your own steps: aim, shoot, wait, walk forward...
+# Your own steps: aim, shoot, wait, run forward...
 godot --path . -- --mode=play --from=-2.5,0.05,4.2 --steps="a@-2.5,1.4,-0.6;o;w1;o@-2,2,-0.6;w2;f0.8"
+# The character on open ground: walk, run, sprint to the right, jump, shoot.
+godot --path . -- --mode=play --from=-25,0.05,30 --steps="p0.2,0,2;p1,0,2;p1,0,2,1;j;w1.5;o;w1"
 # How loaded the house is as built (1 = a bond breaks).
 godot --headless --path . -- --mode=check
 ```
@@ -119,7 +161,11 @@ Add `--write-movie out.avi --fixed-fps 30` before `--path` to record a run.
 
 - `tests/`: a small headless runner; files `tests/test_*.gd`, methods
   `test_*` (they may `await`). They cover the cut (volumes, shared faces),
-  what holds and what falls, shots at the house, and the controls.
+  what holds and what falls, shots at the house, the controls, and the
+  character: where the camera sits and how it comes in at walls, the
+  character turning to where it goes, its planted foot not sliding from a
+  slow walk to a sprint, jumps and landings, the arm going out and the
+  shot landing under the crosshair.
 - `tools/perf_gate.py`: reads a profiled showcase and fails when the
   physics gets too slow.
 - `tools/web_probe.mjs`: loads the web export in headless Chromium, breaks
@@ -133,21 +179,33 @@ Add `--write-movie out.avi --fixed-fps 30` before `--path` to record a run.
 ## Measured
 
 Headless on a 2-core cloud machine, one physics step per frame
-(`--fixed-fps 60`), phone settings, the showcase tour (84 shots from 14
-places, about 1300 of the 1516 shards down, 900 to 1300 pieces and 190 to
-310 moving at once), 8 seeds:
+(`--fixed-fps 60`), phone settings.
 
-- a physics step costs 0.7 to 1.0 ms at the median, and 1.3 to 1.6 ms on
+The showcase tour of the house (84 shots from 14 places, 1100 to 1250 of
+the 1516 shards down, 900 to 1200 pieces and 150 to 560 moving at once),
+8 seeds:
+
+- a physics step costs 0.4 to 1.1 ms at the median, and 1.2 to 1.6 ms on
   average while things move;
-- 99% of the steps are under 3.8 to 4.6 ms, the slowest takes 5.5 to
-  7.5 ms.
+- 99% of the steps are under 3.6 to 6.8 ms, the slowest takes 5.5 to
+  10.7 ms.
 
-The tour is not the one of earlier versions (14 shock waves, which brought
-down more at once), so these figures do not compare with theirs.
+The character: a whole frame (one physics step and one idle step, the
+house standing, nothing drawn) takes 0.10 to 0.13 ms while it runs, and
+0.09 ms with its animation tree switched off: blending the clips costs
+about 0.02 to 0.04 ms a frame here. The planted foot slides 0.05 to
+0.2 m/s between a slow walk and a run, 0.5 to 1 m/s at a sprint
+(7.8 m/s).
 
 Not measured: a real phone. The line at the top left is there for that.
 
-## Textures
+## Assets
+
+`assets/mannequin/`: the mannequin and its animation clips, from
+[Quaternius's Universal Animation
+Library](https://quaternius.com/packs/universalanimationlibrary.html)
+(CC0). Where the files come from, their checksums and the list of clips are
+in `assets/mannequin/SOURCE.md`.
 
 `addons/kenney_prototype_textures/`: [Kenney's prototype
 textures](https://kenney.nl/assets/prototype-textures) (CC0), as packaged

@@ -1,7 +1,9 @@
 class_name TouchControls
 extends Control
 ## On-screen controls for phones and tablets.
-##   Left half: a floating stick (appears where the thumb lands) to move.
+##   Left half: a floating stick (appears where the thumb lands) to move:
+##   how far it is pushed sets the pace, from a walk to a run, and held at
+##   full tilt it breaks into a sprint.
 ##   Right half: drag to look.
 ##   Bottom-right: the fire button. Above it: jump.
 ## Multi-touch is tracked per finger so you can move, look and fire at once.
@@ -13,6 +15,8 @@ extends Control
 ## Drags longer than this fraction of screen height in one event are
 ## treated as glitches and ignored.
 @export var max_step := 0.2
+## The stick held at full tilt this long (s) breaks into a sprint.
+@export var sprint_after := 0.8
 
 var _stick_finger := -1
 var _stick_origin := Vector2.ZERO
@@ -24,6 +28,7 @@ var _jump_finger := -1
 ## event's `relative`: on the web, Godot pairs multi-touch moves with the
 ## wrong previous finger, which made the camera jump and spin on iOS.
 var _last := {}
+var _tilted := 0.0  # s the stick has been at full tilt
 
 
 static func should_show() -> bool:
@@ -78,6 +83,19 @@ func _release_all() -> void:
 	if player:
 		player.touch_move = Vector2.ZERO
 	queue_redraw()
+
+
+func _physics_process(delta: float) -> void:
+	if player == null:
+		return
+	var full := _stick_finger >= 0 and player.touch_move.length() > 0.95
+	if full:
+		_tilted += delta
+		if _tilted > sprint_after:
+			player.touch_sprint = true
+	elif _tilted > 0.0:
+		_tilted = 0.0
+		player.touch_sprint = false
 
 
 func _on_touch(e: InputEventScreenTouch) -> void:

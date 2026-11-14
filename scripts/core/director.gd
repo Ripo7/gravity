@@ -4,7 +4,9 @@ extends Node
 ##   --mode=play --steps="a@x,y,z;o;w1.5" [--from=x,y,z]
 ##        steps separated by ";": "o" a shot ("o@x,y,z" aims first),
 ##        "a@x,y,z" look there, "m<x,y,z>" go there, "w<seconds>" wait,
-##        "f<seconds>" walk forward,
+##        "f<seconds>" run forward, "r<seconds>" sprint forward,
+##        "p<x>,<y>,<seconds>[,1]" push the stick (y -1 is forward; 1: sprint),
+##        "j" jump, "t<degrees>,<seconds>" turn the camera to the left,
 ##        "c@x0,y0,z0,x1,y1,z1" knock out what stands in that box.
 ##   --mode=showcase   a fixed tour that takes the house apart
 ##   --mode=still [--pos=x,y,z --at=x,y,z --wait=S]   just look
@@ -49,12 +51,11 @@ func _place(at: Vector3, target: Vector3) -> void:
 	player.global_position = at
 	player.velocity = Vector3.ZERO
 	_aim(target)
+	player.facing = player.yaw
 
 
 func _aim(target: Vector3) -> void:
-	var d := target - (player.global_position + Vector3(0, 1.6, 0))
-	player.rotation.y = atan2(-d.x, -d.z)
-	player.head.rotation.x = atan2(d.y, Vector2(d.x, d.z).length())
+	player.look_at_point(target)
 
 
 func _fire() -> void:
@@ -97,11 +98,30 @@ func _play() -> void:
 			player.global_position = _vec(spec.substr(1))
 		elif kind == "a":
 			_aim(_vec(spec.substr(2)))
-		elif kind == "f":
+		elif kind == "f" or kind == "r":
 			player.touch_move = Vector2(0, -1)
+			player.touch_sprint = kind == "r"
 			await _wait(float(spec.substr(1)))
 			player.touch_move = Vector2.ZERO
+			player.touch_sprint = false
 			print("WALKED to %s (on floor: %s)" % [player.global_position, player.is_on_floor()])
+		elif kind == "p":
+			var push := spec.substr(1).split_floats(",")
+			player.touch_move = Vector2(push[0], push[1])
+			player.touch_sprint = push.size() > 3
+			await _wait(push[2])
+			player.touch_move = Vector2.ZERO
+			player.touch_sprint = false
+		elif kind == "j":
+			player.touch_jump = true
+		elif kind == "t":
+			var turn := spec.substr(1).split_floats(",")
+			var left := turn[1]
+			while left > 0.0:
+				await get_tree().physics_frame
+				var dt := get_physics_process_delta_time()
+				player.look(Vector2(deg_to_rad(turn[0]) * dt / turn[1], 0))
+				left -= dt
 		elif kind == "c":
 			var box := spec.substr(2).split_floats(",")
 			_cut(

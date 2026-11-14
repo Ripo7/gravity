@@ -1,7 +1,8 @@
 class_name Projectile
 extends Node3D
-## A plain ball shot along where you look: a stand-in for whatever the real
-## thing will be. It flies straight and stops at the first thing it touches.
+## A plain ball shot at what is under the crosshair: a stand-in for whatever
+## the real thing will be. It flies straight and stops at the first thing it
+## touches.
 ## In a standing wall it knocks out what is around the point of impact and
 ## cracks what is a little farther; a loose piece is shoved; the ground only
 ## stops it.
@@ -25,9 +26,9 @@ const THROW := 9.0
 ## Push given to a loose piece it hits (kg.m/s), and the most speed that is.
 const PUNCH := 1200.0
 const PUSH_MOST := 10.0
-## Not drawn until it is this far from your eye, which it leaves from: up
-## close it would hide what you aim at.
-const SHOWN_FROM := 2.0
+## Not drawn until it is this far from where it leaves (the middle of the
+## character's chest): about where the hand that shoots is.
+const SHOWN_FROM := 0.7
 const TINT := Color(1.0, 0.55, 0.15)
 
 static var _round: SphereMesh
@@ -39,7 +40,7 @@ var flown := 0.0  ## m so far
 var _ball: MeshInstance3D
 
 
-## `at`: your eye; `dir`: where you look.
+## `at`: where it leaves from; `dir`: where to.
 func setup(s: Structure, at: Vector3, dir: Vector3) -> void:
 	structure = s
 	position = at
