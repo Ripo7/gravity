@@ -14,7 +14,7 @@ extends Node3D
 ##   Idle ────────────────────────────┐
 ##   Walk ──pace──┐                   ├─ ground ─┐
 ##   Jog ───pace──┴─ walk_jog ─┐      │          │
-##   Sprint ─pace──────────────┴ run ─┘          ├─ state ─ pose
+##   Sprint ─pace──────────────┴ run ─┘          ├─ state ─ hold ─ pose
 ##   Jump_Start ─────────────────────────────────┤
 ##   Jump (in the air) ──────────────────────────┤
 ##   Jump_Land ──pace────────────────────────────┤
@@ -76,6 +76,14 @@ const BLOWN_FROM := 0.6
 ## `paint`) that fades over FLASH s.
 const FLASH := 0.2
 const FLASH_MOST := 0.7
+## It also leans the body the way the blow goes, LEAN rad for a hard one,
+## about its feet: it goes over at LEAN_IN of what is left to go a second
+## (once the blow lets go of it, see `hold`) and comes back up at LEAN_BACK.
+const LEAN := 0.32
+const LEAN_IN := 30.0
+const LEAN_BACK := 7.0
+## Held still by a blow it takes (see `hold`), it trembles this much (m).
+const TREMBLE := 0.025
 ## What the legs can be doing (see `state`), in the order of the tree's
 ## inputs.
 const STATES: Array[String] = [
@@ -112,6 +120,10 @@ var _move_out := false  # its fist or foot has been there
 var _then := ""  # the move asked for next: "punch", "kick" or "duck"
 var _tints: Array[BaseMaterial3D] = []  # its own colours, if it was painted
 var _flash := 0.0  # how white it is (1 to 0)
+var _held := 0.0  # s it stays frozen where it is
+var _trembles := false  # while it does, it trembles
+var _lean := Vector3.ZERO  # how it leans: the axis, as long as the angle (rad)
+var _lean_more := Vector3.ZERO  # how much farther the blow it took still sends it
 
 
 func _ready() -> void:
@@ -253,17 +265,44 @@ func relax() -> void:
 		_go("ground", 0.2)
 
 
+## Which way the fist or foot of the strike under way goes when it gets
+## there (a unit vector, in this node's space: -Z is ahead).
+func way() -> Vector3:
+	if not striking():
+		return Vector3.FORWARD
+	# (The clips say it in the model's space, which looks along +Z.)
+	return Vector3(-_about("way_x"), _about("way_y"), -_about("way_z"))
+
+
 ## It takes a blow: a `hard` one throws the head and chest back, another
-## only shakes it.
-func hit(hard: bool) -> void:
+## only shakes it. `going`: which way the blow goes (in the world); the
+## body leans that way.
+func hit(hard: bool, going := Vector3.ZERO) -> void:
 	_flash = 1.0
 	var clip := "Hit_Chest" if hard else "Hit_Head"
 	_go(clip.to_lower(), 0.05, _clips.get_animation(clip).length, 0.2)
+	var along := global_basis.inverse() * going
+	along.y = 0.0
+	if along.length() > 0.1:
+		_lean_more = Vector3.UP.cross(along.normalized()) * (LEAN if hard else LEAN * 0.5)
+
+
+## Frozen where it is for `seconds`: the instant a blow lands, on who
+## throws it and on who takes it (`trembles`). From its next step: the
+## pose of this one, in which the fist gets there, is still to come.
+func hold(seconds: float, trembles := false) -> void:
+	_held = maxf(_held, seconds)
+	_trembles = trembles
+
+
+func held() -> bool:
+	return _held > 0.0
 
 
 ## Thrown off its feet: it goes over backwards at once and stays down.
 func blown() -> void:
 	_flash = 1.0
+	_lean_more = Vector3.ZERO
 	_go("blown", 0.08)
 
 
@@ -289,12 +328,26 @@ func paint(body: Color, joints: Color) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if _held > 0.0:
+		_held -= delta
+		var out := Vector3(sin(_held * 190.0), 0.0, cos(_held * 230.0)) * TREMBLE
+		_model.position = out if _trembles and _held > 0.0 else Vector3.ZERO
+		_show_flash()
+		tree.set("parameters/hold/scale", 0.0 if _held > 0.0 else 1.0)
+		return
+	if _lean != Vector3.ZERO or _lean_more != Vector3.ZERO:
+		var goes := _lean_more * minf(LEAN_IN * delta, 1.0)
+		_lean_more -= goes
+		_lean = (_lean + goes) * exp(-LEAN_BACK * delta)
+		if _lean.length() < 0.005 and _lean_more.length() < 0.005:
+			_lean = Vector3.ZERO
+			_lean_more = Vector3.ZERO
+		_pose_lean()
 	if busy():
 		_move(delta)
 	if _flash > 0.0:
 		_flash = maxf(_flash - delta / FLASH, 0.0)
-		for mat in _tints:
-			mat.emission_energy_multiplier = _flash * FLASH_MOST
+		_show_flash()
 	if _left > 0.0:
 		_left -= delta
 		if _left <= 0.0:
@@ -372,6 +425,18 @@ func _go(to: String, fade: float, lasts := 0.0, fade_back := 0.3) -> void:
 	tree.set("parameters/state/transition_request", to)
 
 
+func _show_flash() -> void:
+	for mat in _tints:
+		mat.emission_energy_multiplier = _flash * FLASH_MOST
+
+
+## The model, turned to look ahead and leaning as much as `_lean` says.
+func _pose_lean() -> void:
+	var angle := _lean.length()
+	var tilt := Basis(_lean / angle, angle) if angle > 0.0 else Basis()
+	_model.basis = tilt * Basis(Vector3.UP, TURNED)
+
+
 func _node(named: String) -> AnimationNode:
 	return (tree.tree_root as AnimationNodeBlendTree).get_node(named)
 
@@ -442,7 +507,10 @@ func _build() -> AnimationNodeBlendTree:
 	]
 	for k in inputs.size():
 		t.connect_node("state", k, inputs[k])
-	t.connect_node("output", 0, "state")
+	# Everything behind one pace: 0 freezes the body where it is (`hold`).
+	t.add_node("hold", AnimationNodeTimeScale.new())
+	t.connect_node("hold", 0, "state")
+	t.connect_node("output", 0, "hold")
 	return t
 
 

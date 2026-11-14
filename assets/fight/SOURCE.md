@@ -31,9 +31,11 @@ mirrored at <https://github.com/una-dinosauria/cmu-mocap> (commit
 
 What the tool does to a take besides putting it on the skeleton: it turns
 it so that the blow goes straight ahead, gives the steps to the root bone
-(the game moves the body by them), and slows the wind-up and the recovery
-(1.2 to 1.5 times; the last tenth of a second before the blow lands is as
-performed), so that a blow reads as heavy. The three blows come from three
+(the game moves the body by them), and retimes it so that a blow reads as
+heavy: slow to come, sudden when it does. The wind-up and the recovery
+take 1.2 to 1.5 times as long as performed, the last 0.12 s before the
+blow lands take 0.65 of their time, and the 0.06 s after it 2.5 times
+theirs (the pose is all but held). The three blows come from three
 people: chained, one runs into the next by a blend.
 
 ## Making it again
@@ -47,5 +49,6 @@ python3 tools/mocap/build.py /tmp/cmu/data        # needs numpy
 
 It prints, for each clip, when its fist or foot gets there, how far it
 reaches and how far the body walks; the same numbers are stored in the
-clip (`metadata/hit`, `next`, `reach`, `power`, `height`, `above`) and
-read by `scripts/player/character.gd`.
+clip (`metadata/hit`, `next`, `reach`, `power`, `height`, `above`, and
+`way_x`, `way_y`, `way_z`: which way the fist or foot is going when it
+gets there) and read by `scripts/player/character.gd`.
