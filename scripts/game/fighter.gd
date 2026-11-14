@@ -192,9 +192,9 @@ static func move_speed(of: Node3D, with: Character, opponent: Node3D, delta: flo
 
 
 ## Stopped by something low while going along `wish` (a unit vector, on
-## the ground): `of` steps up onto it, if it is no higher than `step` m and
+## the ground): `of` steps up onto it, if it is no higher than `height` m and
 ## there is room. Returns how much it rose (m).
-static func climb(of: CharacterBody3D, wish: Vector3, stride: float, step: float) -> float:
+static func climb(of: CharacterBody3D, wish: Vector3, stride: float, height: float) -> float:
 	if not of.is_on_floor():
 		return 0.0
 	var blocked := false
@@ -205,14 +205,14 @@ static func climb(of: CharacterBody3D, wish: Vector3, stride: float, step: float
 	if not blocked:
 		return 0.0
 	var xf := of.global_transform
-	if of.test_move(xf, Vector3.UP * step):
+	if of.test_move(xf, Vector3.UP * height):
 		return 0.0  # no headroom
-	xf.origin.y += step
+	xf.origin.y += height
 	if of.test_move(xf, wish * stride):
-		return 0.0  # too high to step onto
+		return 0.0  # too high to height onto
 	xf.origin += wish * stride
 	var landing := KinematicCollision3D.new()
-	if not of.test_move(xf, Vector3.DOWN * step, landing) or landing.get_normal().y < 0.6:
+	if not of.test_move(xf, Vector3.DOWN * height, landing) or landing.get_normal().y < 0.6:
 		return 0.0  # nothing flat enough up there
 	var to := xf.origin + landing.get_travel()
 	var rise := to.y - of.global_position.y

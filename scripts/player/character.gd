@@ -22,7 +22,7 @@ extends Node3D
 ##   box/kick, box/duck ──pace───────────────────┤         │
 ##   box/guard (a loop) ─────────────────────────┤         │
 ##   Hit_Chest, Hit_Head ────────────────────────┤         │
-##   Death01, and the same backwards ──pace──────┘         │
+##   Death01 (thrown), the same backwards ──pace─┘         │
 ##   Spell_Simple_Shoot (left arm only) ───────────────────┘
 ##
 ## Walk, jog and sprint are stretched to one common cycle so that the same
@@ -92,7 +92,6 @@ const STATES: Array[String] = [
 	"guard",
 	"hit_chest",
 	"hit_head",
-	"down",
 	"blown",
 	"up"
 ]
@@ -155,8 +154,8 @@ func _ready() -> void:
 	tree.root_motion_track = NodePath(ROOT)
 	tree.active = true
 	tree.set("parameters/land_pace/scale", LAND_PACE)
-	for move: String in PACE:
-		tree.set("parameters/%s_pace/scale" % move, PACE[move])
+	for named: String in PACE:
+		tree.set("parameters/%s_pace/scale" % named, PACE[named])
 	tree.set("parameters/up_pace/scale", UP_PACE)
 	move(0.0)
 
@@ -195,7 +194,7 @@ func jump() -> void:
 ## In the air without having jumped (off an edge), or still there after the
 ## start of a jump.
 func fall() -> void:
-	if state != "jump" and state != "air" and state != "down" and state != "blown" and state != "up":
+	if state != "jump" and state != "air" and state != "blown" and state != "up":
 		_go("air", 0.2)
 
 
@@ -280,12 +279,6 @@ func hit(hard: bool) -> void:
 	_go(clip.to_lower(), 0.05, _clips.get_animation(clip).length, 0.2)
 
 
-## It falls on its back and stays there.
-func down() -> void:
-	_flash = 1.0
-	_go("down", 0.1)
-
-
 ## Thrown off its feet: it goes over backwards at once and stays down.
 func blown() -> void:
 	_flash = 1.0
@@ -349,13 +342,13 @@ func _ask(then: String, first: String) -> bool:
 	return true
 
 
-func _start(move: String, fade: float) -> void:
+func _start(named: String, fade: float) -> void:
 	_move_for = 0.0
 	_move_out = false
 	_then = ""
-	_go(move, fade)
+	_go(named, fade)
 	if striking():
-		swung.emit(move)
+		swung.emit(named)
 
 
 ## What the clip of the move under way says about itself (see BOXING).
@@ -425,13 +418,12 @@ func _build() -> AnimationNodeBlendTree:
 	t.add_node("land_pace", land_pace)
 	t.connect_node("land_pace", 0, "land")
 	# Fighting: the boxing moves, and the guard they end in.
-	for move: String in ["jab", "cross", "hook_l", "hook_r", "guard"]:
-		t.add_node(move, _clip("box/" + move))
-	for move: String in PACE:
-		_paced(t, move, _clip("box/" + move))
+	for named: String in ["jab", "cross", "hook_l", "hook_r", "guard"]:
+		t.add_node(named, _clip("box/" + named))
+	for named: String in PACE:
+		_paced(t, named, _clip("box/" + named))
 	t.add_node("hit_chest", _clip("Hit_Chest"))
 	t.add_node("hit_head", _clip("Hit_Head"))
-	t.add_node("down", _clip("Death01"))
 	var over := _clip("Death01")
 	over.use_custom_timeline = true
 	over.start_offset = BLOWN_FROM
@@ -463,7 +455,6 @@ func _build() -> AnimationNodeBlendTree:
 		"guard",
 		"hit_chest",
 		"hit_head",
-		"down",
 		"blown",
 		"up_pace"
 	]

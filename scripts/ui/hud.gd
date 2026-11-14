@@ -9,6 +9,7 @@ signal rebuild_pressed
 var world: Main
 
 var _stats: Label
+var _build: String = ProjectSettings.get_setting("application/config/version", "")
 var _hint: Label
 var _since := 0.0
 
@@ -65,8 +66,8 @@ func _process(delta: float) -> void:
 	_since = 0.0
 	var p := world.structure.pieces
 	_stats.text = (
-		"%d i/s   physique %.1f ms   %d morceaux (%d en mouvement)"
-		% [Engine.get_frames_per_second(), world.clock.avg_ms, p.live, p.awake]
+		"%d i/s   physique %.1f ms   %d morceaux (%d en mouvement)   v%s"
+		% [Engine.get_frames_per_second(), world.clock.avg_ms, p.live, p.awake, _build]
 	)
 	_hint.modulate.a = move_toward(_hint.modulate.a, 0.0 if p.live > 0 else 1.0, 0.25)
 

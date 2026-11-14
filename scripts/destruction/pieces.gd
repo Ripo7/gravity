@@ -449,7 +449,7 @@ func _shatter(hit: Array) -> void:
 		if owners[k] != NOT_OURS:
 			s.crush(points[k], share * 0.5, was)
 		var at := to_rest * points[k]
-		var reach := CRACK_REACH * pow(share, 0.333)
+		var crack_reach := CRACK_REACH * pow(share, 0.333)
 		var near: Array[Vector2] = []  # (distance to its surface, shard)
 		for m in members[i]:
 			if _mark[m] != gone:
@@ -469,9 +469,9 @@ func _shatter(hit: Array) -> void:
 					crushed.append(m)
 				share -= s.volume[m]
 				_mark[m] = gone
-			elif entry.x < reach:
+			elif entry.x < crack_reach:
 				# Too little left to free this one: its bonds crack.
-				cracked = _crack(m, 1.0 - entry.x / reach) or cracked
+				cracked = _crack(m, 1.0 - entry.x / crack_reach) or cracked
 			else:
 				break
 	var loose := crushed.size() + powder.size()
