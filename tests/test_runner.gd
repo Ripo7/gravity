@@ -51,18 +51,18 @@ func _ready() -> void:
 			print("  FAIL ", f, " (script failed to load or does not extend TestCase)")
 			continue
 		add_child(suite)
-		for m in suite.get_method_list():
-			var name: String = m["name"]
-			if not name.begins_with("test_"):
+		for m: Dictionary in suite.get_method_list():
+			var method: String = m["name"]
+			if not method.begins_with("test_"):
 				continue
-			suite.current = "%s::%s" % [f.get_basename(), name]
+			suite.current = "%s::%s" % [f.get_basename(), method]
 			if not (m["args"] as Array).is_empty():
 				failed += 1
 				print("  FAIL ", suite.current, " (test methods take no arguments)")
 				continue
 			var before := suite.failures.size()
 			var errors_before := errors.count
-			await suite.call(name)
+			await suite.call(method)
 			if errors.count > errors_before:
 				suite.failures.append(
 					"%s: %d error(s) logged while it ran" % [suite.current, errors.count - errors_before]
@@ -73,7 +73,7 @@ func _ready() -> void:
 			else:
 				failed += 1
 				print("  FAIL ", suite.current)
-				for msg in suite.failures.slice(before):
+				for msg: String in suite.failures.slice(before):
 					print("       ", msg)
 		suite.queue_free()
 		await get_tree().process_frame

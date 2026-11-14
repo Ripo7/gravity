@@ -6,8 +6,8 @@ config_version=5
 [application]
 
 config/name="Concept"
-config/description="A destruction sandbox in greybox: a house to take apart."
-config/version="0.1.0"
+config/description="Two brutes fight in a greybox house that breaks."
+config/version="0.2.0"
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 config/icon="res://icon.svg"
@@ -19,8 +19,34 @@ Launch="*res://scripts/core/launch.gd"
 
 [debug]
 
-gdscript/warnings/untyped_declaration=1
+; Mistakes a reviewer would send back are errors: the scripts do not load
+; with one, so the tests fail in CI.
+gdscript/warnings/untyped_declaration=2
 gdscript/warnings/inferred_declaration=0
+gdscript/warnings/unused_variable=2
+gdscript/warnings/unused_local_constant=2
+gdscript/warnings/unused_private_class_variable=2
+gdscript/warnings/unused_parameter=2
+gdscript/warnings/unused_signal=2
+gdscript/warnings/shadowed_variable=2
+gdscript/warnings/shadowed_variable_base_class=2
+gdscript/warnings/unreachable_code=2
+gdscript/warnings/unreachable_pattern=2
+gdscript/warnings/standalone_expression=2
+gdscript/warnings/standalone_ternary=2
+gdscript/warnings/unassigned_variable=2
+gdscript/warnings/unassigned_variable_op_assign=2
+gdscript/warnings/incompatible_ternary=2
+gdscript/warnings/narrowing_conversion=2
+gdscript/warnings/integer_division=0
+gdscript/warnings/static_called_on_instance=2
+gdscript/warnings/redundant_await=2
+gdscript/warnings/assert_always_true=2
+gdscript/warnings/assert_always_false=2
+gdscript/warnings/confusable_identifier=2
+gdscript/warnings/confusable_local_declaration=2
+gdscript/warnings/confusable_local_usage=2
+gdscript/warnings/empty_file=2
 
 [display]
 
@@ -41,6 +67,7 @@ pointing/emulate_mouse_from_touch=true
 3d_physics/layer_2="structure"
 3d_physics/layer_3="debris"
 3d_physics/layer_4="player"
+3d_physics/layer_5="actor"
 
 [physics]
 

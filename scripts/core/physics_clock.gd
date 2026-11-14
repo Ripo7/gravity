@@ -57,14 +57,3 @@ func _process(delta: float) -> void:
 		_worst = 0
 		_count = 0
 		_t = 0.0
-
-
-## Mean of the steps recorded since `from` (an index into history).
-func mean_since(from: int) -> float:
-	var n := history.size() - from
-	if n <= 0:
-		return 0.0
-	var total := 0.0
-	for k in range(from, history.size()):
-		total += history[k]
-	return total / n
