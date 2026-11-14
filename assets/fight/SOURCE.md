@@ -2,7 +2,8 @@
 
 `moves.tres` is a Godot animation library for the mannequin of
 `assets/mannequin`, built by `tools/moves/build.py` from two sources:
-animations made for games, and motion capture for what those do not have.
+animations made for games, and motion capture for the one move those do
+not have (the kick).
 
 ## Made for games: Universal Animation Library 2
 
@@ -26,6 +27,7 @@ mirror <https://github.com/NafisRayan/Animate-Rigged-Humanoid-No-Blender>
 | `upswing` | `Sword_Regular_A`, then `Sword_Regular_A_Rec` | dashing in, a swing from low on the right to high on the left |
 | `backhand` | `Sword_Regular_B`, then `Sword_Regular_B_Rec` | back across, from the left to the right |
 | `slam` | `Sword_Heavy_Combo`, 2.1 to 3.8 s | a leap, the fist straight up, and down to the ground |
+| `guard` | the last pose of `Melee_Hook_Rec` | both fists up in front of the face: one pose, held |
 | `thrown` | `Hit_Knockback` | off its feet, over backwards, onto its back |
 | `getup` | `LayToIdle` | from lying on its back to standing |
 
@@ -51,26 +53,24 @@ mirrored at <https://github.com/una-dinosauria/cmu-mocap> (commit
 
 | Clip | Take (as the database names it) | Seconds of the take | What it is in the game |
 | --- | --- | --- | --- |
-| `stance` | 137_41 (strong man wait) | 11.52 to 13.12 | standing ready, a loop |
 | `kick` | 135_04 (front kick) | 2.62 to 3.31 | straight ahead with the right leg, stepping in |
-| `duck` | 13_17 (boxing) | 11.62 to 12.41 | down under a blow and back up |
 
-These are put on the mannequin's skeleton by the tool, and the kick is
-retimed: its wind-up and its recovery take 1.2 and 1.3 times as long as
-performed, the last 0.12 s before it lands 0.65 of their time, and the
-0.06 s after it 2.5 times theirs.
+It is put on the mannequin's skeleton by the tool and retimed: its
+wind-up and its recovery take 1.2 and 1.3 times as long as performed, the
+last 0.12 s before it lands 0.65 of their time, and the 0.06 s after it
+2.5 times theirs.
 
 ## Making it again
 
 ```sh
 git clone --depth 1 --filter=blob:none --sparse https://github.com/una-dinosauria/cmu-mocap /tmp/cmu
-git -C /tmp/cmu sparse-checkout set --no-cone /data/013/13_17.bvh /data/135/135_04.bvh /data/137/137_41.bvh
+git -C /tmp/cmu sparse-checkout set --no-cone /data/135/135_04.bvh
 # /tmp/ual2: UAL2_Standard.glb and UAL2_Standard_RM.glb, from the pack's "Unreal-Godot" folder
 python3 tools/moves/build.py /tmp/cmu/data /tmp/ual2        # needs numpy
 ```
 
 It prints, for each clip, when its fist or foot gets there, how far it
 reaches and how far the body walks; the same numbers are stored in the
-clip (`metadata/hit`, `next`, `reach`, `power`, `height`, `ducked`, and
-`way_x`, `way_y`, `way_z`: which way the fist or foot is going when it
-gets there) and read by `scripts/player/character.gd`.
+clip (`metadata/hit`, `next`, `reach`, `power`, `height`, and `way_x`,
+`way_y`, `way_z`: which way the fist or foot is going when it gets there)
+and read by `scripts/player/character.gd`.

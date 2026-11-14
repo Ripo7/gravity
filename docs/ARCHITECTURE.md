@@ -75,7 +75,7 @@ library: see below.
 `scripts/player/character.gd` builds the tree that blends all of them;
 `scripts/player/player.gd` moves the capsule and tells the character how
 fast it goes, whether it is in the air, and when it jumps, lands,
-strikes, kicks or ducks. The other brute (`scripts/game/brute.gd`) is the
+strikes, kicks or guards. The other brute (`scripts/game/brute.gd`) is the
 same character in other colours; what the two have in common (what a
 blow does, being thrown) is in `scripts/game/fighter.gd`.
 
@@ -100,13 +100,13 @@ blow does, being thrown) is in `scripts/game/fighter.gd`.
   hook); the others are sword strokes thrown without the sword. What is
   measured on each is stored with it: when the fist gets there (the blow
   counts then), when the next move may start, how far and how high it
-  reaches, which way it is going, and whether ducking avoids it.
-- **What is still motion capture.** The kick, the duck and the stance are
-  what real people did (CMU motion capture database, free to use): the
-  free library has none. The tool puts them on the mannequin's skeleton
+  reaches, and which way it is going.
+- **What is still motion capture.** The kick is what a real person did
+  (CMU motion capture database, free to use): the free library has none.
+  The tool puts it on the mannequin's skeleton
   (every bone takes the turn its joint made since the T pose; the hips go
   where the hip joints were, scaled by the length of the legs) and
-  retimes the kick (a slow wind-up, the last 0.12 s in two thirds of
+  retimes it (a slow wind-up, the last 0.12 s in two thirds of
   their time, the pose all but held for an instant after).
 - **The combination.** A lunging hook, a swing up from the right, one
   back across from the left, a leap that comes down fist first, then
@@ -134,8 +134,16 @@ blow does, being thrown) is in `scripts/game/fighter.gd`.
   flash white, lean and slide the way the fist goes (back for the hook,
   to the left for the swing up, to the right for the one back across:
   5 m/s, about 0.6 m). The leap, which ends the combination, and the kick
-  throw it: 12 m/s along the ground, 4 up. Ducking lets the three swings
-  go by, not the leap nor the kick: each clip says which.
+  throw it: 12 m/s along the ground, 4 up. After a blow the body stands
+  again: there is no stance in between.
+- **The guard** (`Player.guard`, `Character.guard`, `Fighter.blocks`).
+  Held, it is one pose, both fists up in front of the face (the pose the
+  hook's recovery ends in), feet still, turned to who the player is
+  locked on. A blow that comes from within 1.2 rad of where the body
+  faces stops on it, whatever the blow: no flinch, no throw, a push of
+  1 m/s for each point of power, a short hold and a small jolt. From
+  behind it does nothing. A strike can be thrown from it; it comes back
+  after the strike if it is still held. The other brute never guards.
 - **The instant a blow lands** (`Fighter.STOP`, `Character.hold`). Both
   brutes are held still, 0.07 s for a blow and 0.12 s for one that
   throws: the pose, the move under way and the body, on the frame in
@@ -155,7 +163,8 @@ blow does, being thrown) is in `scripts/game/fighter.gd`.
   character sprints at it first and strikes when it would: no blow is
   thrown at nothing. Held up 0.15 s on the way by what stands, it goes
   through: a hole its size (`Fighter.breach`, the one the other brute
-  makes). It gives up after 4 s; ducking or jumping calls the run off.
+  makes). It gives up after 4 s; taking up the guard or jumping calls the
+  run off.
 - **Thrown.** A brute off its feet goes over backwards and flies, back
   first. Nothing that stands stops it: every step of its flight, the
   shards within 0.95 m of its middle are knocked out (the nearest in
@@ -177,8 +186,8 @@ blow does, being thrown) is in `scripts/game/fighter.gd`.
 Not there: strafing and walking backwards (the free clips only go
 forward, so the character always turns to where it goes), feet placed on
 uneven ground. For the fight: no health and no end (it goes on until the
-house is gone), moving around in the stance (it is dropped to walk),
-blocking, the brutes being any bigger than people. Who takes a blow
+house is gone), moving while guarding, a guard that gives way under
+enough blows, the brutes being any bigger than people. Who takes a blow
 leans in one piece, about its feet. Locked on, the camera cannot be
 turned, there is no circling around the other, and the stick still
 pushes the character where the camera looks, which is no longer straight
@@ -188,9 +197,7 @@ stands is still pushed a little by a piece that lands against it.
 What the free version of the library leaves to be desired: three of the
 four blows are sword strokes, so the arm swings as if it held one; the
 hook and the leap were not made to follow the two swings, a blend joins
-them; there is no kick and no dodge in it, and the duck that is kept
-looks wrong against blows that now come in at the waist (it still avoids
-the three swings, by rule). The paid version has the combination, the
+them; there is no kick in it. The paid version has the combination, the
 knee and the uppercut that were made bare-handed, a ground pound,
 hits taken in the air and walking in eight directions.
 

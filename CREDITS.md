@@ -5,8 +5,8 @@ The code is the project's own. What it uses:
 | What | From | Terms |
 | --- | --- | --- |
 | The mannequin and 10 of its clips (`assets/mannequin/`) | [Quaternius, Universal Animation Library](https://quaternius.com/packs/universalanimationlibrary.html) | CC0 |
-| The blows, being thrown and getting up (`assets/fight/`) | [Quaternius, Universal Animation Library 2](https://quaternius.com/packs/universalanimationlibrary2.html), free "Standard" version | CC0 |
-| The kick, the duck and the stance (`assets/fight/`) | [CMU Graphics Lab Motion Capture Database](http://mocap.cs.cmu.edu/), BVH conversion by Bruce Hahne | free for research and commercial use |
+| The blows, the guard, being thrown and getting up (`assets/fight/`) | [Quaternius, Universal Animation Library 2](https://quaternius.com/packs/universalanimationlibrary2.html), free "Standard" version | CC0 |
+| The kick (`assets/fight/`) | [CMU Graphics Lab Motion Capture Database](http://mocap.cs.cmu.edu/), BVH conversion by Bruce Hahne | free for research and commercial use |
 | Two grid textures (`addons/kenney_prototype_textures/`) | [Kenney, Prototype Textures](https://kenney.nl/assets/prototype-textures), as packaged for Godot by [Calinou](https://github.com/Calinou/kenney-prototype-textures) | CC0 |
 | The engine | [Godot](https://godotengine.org/) 4.7, with Jolt physics | MIT |
 

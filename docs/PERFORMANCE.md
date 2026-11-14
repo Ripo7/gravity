@@ -63,10 +63,13 @@ From 7.8 m with a wall in between, it lands 1.8 to 2.5 s after the press
 apart at arm's length and 0.37 rad at 3 m (0.04 and 0.08 with the camera
 straight behind the character).
 
-A scripted fight of 28 s as played (the other brute attacking, the player
-locked on, three combinations and three kicks) costs 0.2 ms a physics
-step at the median, 99% of the steps under 1.9 ms, the slowest 2.9 ms
-(2 runs). The move library is 0.69 MB of text (the clips made for games
-move every finger); the web export's data file is 2.4 MB.
+The guard, held for 15 s against the other brute: 10 blows met it, none
+got through (not a flinch, not a throw), 0.8 m of ground given in all.
+
+A scripted fight of 26 s as played (the other brute attacking, the player
+locked on: two combinations, the guard held twice, two kicks) costs
+0.2 ms a physics step at the median, 99% of the steps under 1.4 ms, the
+slowest 3.0 ms (1 run). The move library is 0.55 MB of text (the clips made for games
+move every finger); the web export's data file is 2.3 MB.
 
 Not measured: a real phone. The line at the top left is there for that.

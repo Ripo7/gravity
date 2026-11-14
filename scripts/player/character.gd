@@ -3,13 +3,13 @@ extends Node3D
 ## A body you see: a mannequin and the tree that blends its clips. It
 ## decides nothing. Whoever owns it (the Player, a Brute) tells it how fast
 ## it goes, whether it is in the air, and when it jumps, lands,
-## punches, kicks, ducks, is hit or goes down; it turns that into a pose.
+## punches, kicks, guards, is hit or goes down; it turns that into a pose.
 ##
 ## Two sets of clips: the mannequin's own (Quaternius, CC0, assets/mannequin:
 ## standing, walking, jumping, flinching) and the fight (assets/fight, see
-## SOURCE.md there): blows, being thrown and getting up made for games, by
-## the same author on the same skeleton, and a kick, a duck and a stance
-## that are motion capture.
+## SOURCE.md there): blows, the guard, being thrown and getting up made
+## for games, by the same author on the same skeleton, and a kick that is
+## motion capture.
 ##
 ## The tree, from the clips to the pose:
 ##
@@ -21,8 +21,7 @@ extends Node3D
 ##   Jump (in the air) ──────────────────────────┤
 ##   Jump_Land ──pace────────────────────────────┤
 ##   fight/hook, upswing, backhand, slam, kick ──┤
-##   fight/duck ──pace───────────────────────────┤
-##   fight/stance (a loop) ──────────────────────┤
+##   fight/guard (one pose) ─────────────────────┤
 ##   Hit_Chest, Hit_Head ────────────────────────┤
 ##   fight/thrown, fight/getup ──pace────────────┘
 ##
@@ -63,13 +62,11 @@ const LAND_TIME := 0.5  ## s before the legs go back to standing or running
 ## when its fist is there, when the next move may start, how far it
 ## reaches and how hard it is (see tools/moves/build.py).
 const COMBO: Array[String] = ["hook", "upswing", "backhand", "slam"]
-## The moves played faster than they were captured.
-const PACE := {"duck": 1.3}
 ## Steps of a sixtieth add up to a hair under the frame a clip says its
 ## blow lands on: this much (s) short still counts as there.
 const LATE := 0.002
-## After a move the guard is held this long (s).
-const GUARD_TIME := 1.6
+## The fists come up into the guard in this long (s), and down as fast.
+const GUARD_UP := 0.1
 ## The bone the steps of the moves are given to.
 const ROOT := "Rig/Skeleton3D:root"
 ## Getting up is played faster than it was made.
@@ -98,7 +95,6 @@ const STATES: Array[String] = [
 	"backhand",
 	"slam",
 	"kick",
-	"duck",
 	"guard",
 	"hit_chest",
 	"hit_head",
@@ -121,7 +117,8 @@ var _fade_back := 0.3  # s that takes
 var _move_for := 0.0  # s of its clip the move under way has played
 var _move_from := 0  # the physics step that took it up
 var _move_out := false  # its fist or foot has been there
-var _then := ""  # the move asked for next: "punch", "kick" or "duck"
+var _then := ""  # the move asked for next: "punch" or "kick"
+var _guards := false  # the guard is asked for
 var _tints: Array[BaseMaterial3D] = []  # its own colours, if it was painted
 var _flash := 0.0  # how white it is (1 to 0)
 var _held := 0.0  # s it stays frozen where it is
@@ -151,8 +148,6 @@ func _ready() -> void:
 	tree.root_motion_track = NodePath(ROOT)
 	tree.active = true
 	tree.set("parameters/land_pace/scale", LAND_PACE)
-	for named: String in PACE:
-		tree.set("parameters/%s_pace/scale" % named, PACE[named])
 	tree.set("parameters/up_pace/scale", UP_PACE)
 	move(0.0)
 
@@ -192,7 +187,7 @@ func jump() -> void:
 ## start of a jump. A move under way goes on: stepping off a heap of rubble
 ## does not cut a blow short.
 func fall() -> void:
-	if state != "jump" and state != "air" and not busy():
+	if state != "jump" and state != "air" and not striking():
 		_go("air", 0.2)
 
 
@@ -212,9 +207,15 @@ func striking() -> bool:
 	return state == "kick" or state in COMBO
 
 
-## Is a move under way that puts the feet where it wants (a strike, a duck)?
+## Is it doing something that keeps its feet where they are (a strike,
+## which steps as it wants, or the guard)?
 func busy() -> bool:
-	return striking() or state == "duck"
+	return striking() or state == "guard"
+
+
+## Are its fists up in front of it?
+func guarding() -> bool:
+	return state == "guard"
 
 
 ## Seconds before the fist or foot of the strike under way is there (0: it
@@ -222,7 +223,7 @@ func busy() -> bool:
 func lands_in() -> float:
 	if not striking() or _move_out:
 		return 0.0
-	return maxf(_about("hit") - _move_for, 0.0) / _pace()
+	return maxf(_about("hit") - _move_for, 0.0)
 
 
 ## How far from the body (m) the fist or foot of the strike under way is
@@ -246,9 +247,9 @@ func root_motion() -> Vector3:
 	return skeleton.global_basis * tree.get_root_motion_position()
 
 
-## Throws a blow: the first of COMBO from standing or from the stance.
-## Asked for while one is under way, the next of COMBO follows it. Each one
-## ends in the stance. Returns false if it cannot (in the air, or knocked down).
+## Throws a blow: the first of COMBO from standing or from the guard.
+## Asked for while one is under way, the next of COMBO follows it. Returns
+## false if it cannot (in the air, or knocked down).
 func punch() -> bool:
 	return _ask("punch", COMBO[0])
 
@@ -258,15 +259,13 @@ func kick() -> bool:
 	return _ask("kick", "kick")
 
 
-## Ducks under what comes.
-func dodge() -> bool:
-	return _ask("duck", "duck")
-
-
-## Fists down at once (the guard is left to walk away).
-func relax() -> void:
-	if state == "guard":
-		_go("ground", 0.2)
+## The guard, for as long as `on`: both fists up in front of the face,
+## nothing else. It is taken up as soon as the body stands free (after the
+## blow under way, if there is one) and let go at once.
+func guard(on: bool) -> void:
+	_guards = on
+	if not on and state == "guard":
+		_go("ground", GUARD_UP)
 
 
 ## Which way the fist or foot of the strike under way goes when it gets
@@ -348,8 +347,10 @@ func _physics_process(delta: float) -> void:
 			_lean = Vector3.ZERO
 			_lean_more = Vector3.ZERO
 		_pose_lean()
-	if busy():
+	if striking():
 		_move(delta)
+	elif _guards and state == "ground":
+		_go("guard", GUARD_UP)
 	if _flash > 0.0:
 		_flash = maxf(_flash - delta / FLASH, 0.0)
 		_show_flash()
@@ -362,7 +363,7 @@ func _physics_process(delta: float) -> void:
 ## A move is asked for: it starts now from standing or from the guard, or
 ## after the move under way (`then`: what to remember; `first`: what starts).
 func _ask(then: String, first: String) -> bool:
-	if busy():
+	if striking():
 		_then = then
 		return true
 	if state != "ground" and state != "guard" and state != "land":
@@ -383,35 +384,30 @@ func _start(named: String, fade: float) -> void:
 
 
 ## What the clip of a move says about itself: "hit" (s before its fist or
-## foot gets there), "next", "reach" (m), "power", "height" (m), "ducked"
-## (1: ducking avoids it), "way_x", "way_y", "way_z". See MOVES.
+## foot gets there), "next", "reach" (m), "power", "height" (m), "way_x",
+## "way_y", "way_z". See MOVES.
 func about(named: String, what: String) -> float:
 	return _clips.get_animation("fight/" + named).get_meta(what, 0.0)
 
 
-## Seconds before the fist or foot of the move `named` gets there, as it
-## is played.
+## Seconds before the fist or foot of the move `named` gets there.
 func lands_after(named: String) -> float:
-	return about(named, "hit") / PACE.get(named, 1.0)
+	return about(named, "hit")
 
 
 func _about(what: String) -> float:
 	return about(state, what)
 
 
-func _pace() -> float:
-	return PACE.get(state, 1.0)
-
-
 ## The move under way goes on: its fist or foot gets there, then the move
-## asked for starts, or the fists stay up for a while.
+## asked for starts, or it stands again.
 func _move(delta: float) -> void:
 	# Its clip starts at the end of the step that takes the move up: nothing
 	# of it plays in that one. (This count and the pose must agree to the
 	# step: a fist can go a metre in one, and the blow counts on the pose in
 	# which it is there.)
 	if Engine.get_physics_frames() > _move_from:
-		_move_for += delta * _pace()
+		_move_for += delta
 	if striking() and not _move_out and _move_for >= _about("hit") - LATE:
 		_move_out = true
 		struck.emit(state)
@@ -425,7 +421,7 @@ func _move(delta: float) -> void:
 		else:
 			_start(_then, 0.12)
 	elif _move_for >= length:
-		_go("guard", 0.25, GUARD_TIME, 0.35)
+		_go("ground", 0.25)
 
 
 ## Into state `to` over `fade` s. With `lasts`, it gives way to "ground"
@@ -477,12 +473,9 @@ func _build() -> AnimationNodeBlendTree:
 	var land_pace := AnimationNodeTimeScale.new()
 	t.add_node("land_pace", land_pace)
 	t.connect_node("land_pace", 0, "land")
-	# Fighting: the blows, and the stance they end in.
-	for named: String in COMBO + (["kick"] as Array[String]):
+	# Fighting: the blows and the guard.
+	for named: String in COMBO + (["kick", "guard"] as Array[String]):
 		t.add_node(named, _clip("fight/" + named))
-	t.add_node("guard", _clip("fight/stance"))
-	for named: String in PACE:
-		_paced(t, named, _clip("fight/" + named))
 	t.add_node("hit_chest", _clip("Hit_Chest"))
 	t.add_node("hit_head", _clip("Hit_Head"))
 	t.add_node("blown", _clip("fight/thrown"))
@@ -505,7 +498,6 @@ func _build() -> AnimationNodeBlendTree:
 		"backhand",
 		"slam",
 		"kick",
-		"duck_pace",
 		"guard",
 		"hit_chest",
 		"hit_head",

@@ -36,6 +36,13 @@ const STOP: Array[float] = [0.0, 0.05, 0.07, 0.12]
 const JOLT_GIVEN: Array[float] = [0.0, 0.35, 0.5, 0.75]
 const JOLT_TAKEN: Array[float] = [0.0, 0.4, 0.6, 1.0]
 const JOLT_WALL := 0.25
+## A blow that meets a guard (see `take_hit`): it only pushes who holds it,
+## this fast (m/s) for each point of power, and jolts it this much.
+const BLOCKED := 1.0
+const JOLT_BLOCKED := 0.3
+## A guard stops what comes from in front: from no more than this (rad)
+## off the way its holder faces.
+const GUARD_WIDE := 1.2
 ## What a fist or a foot knocks out of what stands: within this radius
 ## (m), by power (2 a blow, 3 one that throws).
 const HOLE: Array[float] = [0.0, 0.45, 0.7, 1.0]
@@ -93,7 +100,6 @@ func strike(move: String, facing: float) -> void:
 	var reach := character.reach()
 	var power := character.power()
 	var height := character.height()
-	var ducked := character.about(move, "ducked") > 0.0
 	var going := Basis(Vector3.UP, facing) * character.way()
 	var landed := false
 	for node in body.get_tree().get_nodes_in_group(GROUP):
@@ -104,7 +110,7 @@ func strike(move: String, facing: float) -> void:
 		if absf(d.y) < 1.0 and along > 0.0 and along < reach + CONTACT + SLACK:
 			if absf(d.cross(ahead).y) < WIDE:
 				var other := node.get("fighter") as Fighter
-				if other.take_hit(ahead, power, move in LAUNCHERS, ducked, going):
+				if other.take_hit(ahead, power, move in LAUNCHERS, going):
 					landed = true
 	var broken := 0
 	if structure != null:
@@ -130,12 +136,19 @@ func strike(move: String, facing: float) -> void:
 
 ## A blow from a brute that faces along `way`, of `power`, its fist going
 ## along `going` (along `way` if nothing is said). `thrown`: it sends the
-## body flying. `ducked`: ducking avoids it. Returns false if it does not
-## take it (off its feet already, or ducking it).
-func take_hit(way: Vector3, power: int, thrown: bool, ducked := true, going := Vector3.ZERO) -> bool:
-	if state != "up" or (ducked and character.state == "duck"):
+## body flying. Returns false if it does not reach it (off its feet
+## already). A body that holds its guard towards the blow blocks it,
+## whatever the blow: it keeps its feet and its guard, and gives a little
+## ground.
+func take_hit(way: Vector3, power: int, thrown: bool, going := Vector3.ZERO) -> bool:
+	if state != "up":
 		return false
 	var flat := Vector3(way.x, 0, way.z).normalized()
+	if blocks(flat):
+		body.velocity += flat * BLOCKED * power
+		character.hold(STOP[1], true)
+		jolted.emit(JOLT_BLOCKED)
+		return true
 	if thrown:
 		launch(flat * THROW + Vector3.UP * LIFT)
 	else:
@@ -145,6 +158,15 @@ func take_hit(way: Vector3, power: int, thrown: bool, ducked := true, going := V
 	character.hold(STOP[power], true)
 	jolted.emit(JOLT_TAKEN[power])
 	return true
+
+
+## Would its guard stop a blow that goes along `way` (flat)? It is up, and
+## turned towards where the blow comes from.
+func blocks(way: Vector3) -> bool:
+	if not character.guarding():
+		return false
+	var facing: float = body.get("facing")
+	return (Basis(Vector3.UP, facing) * Vector3.FORWARD).angle_to(-way) < GUARD_WIDE
 
 
 ## Held still by a blow that has just landed: nothing moves it meanwhile.

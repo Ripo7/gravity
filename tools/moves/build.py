@@ -57,17 +57,8 @@ LINGERS = 2.5
 #   next move may start; power: 2 a blow, 3 one that throws
 #   slow: how much longer the wind-up and the recovery take than performed
 #   (the blow itself is retimed the same way for all, see SNAP)
-#   ducked: ducking avoids it (a swing; not what comes down from overhead,
-#   nor a kick)
 #   steps: the root takes the steps (else the clip stays where it is)
-#   loop: the end is made to run into the start
-#   turn: with no strike to tell where the opponent is, it is where the
-#   hips look, plus this (rad): for someone who stands side on
 CLIPS = [
-    # A strong man waiting: the stance.
-    dict(name="stance", take="137_41", t0=8.0, t1=16.0, loop=(1.6, 3.2)),
-    # A boxer ducking.
-    dict(name="duck", take="13_17", t0=11.62, t1=12.40, low=11.96, turn=0.61),
     # A karateka's front kick, stepping in.
     dict(name="kick", take="135_04", t0=2.62, t1=3.30, hit=3.11, limb="RightFoot", next=3.26, power=3,
          slow=(1.2, 1.3), steps=True),
@@ -79,8 +70,8 @@ CLIPS = [
 #   parts: the clips of the file it is made of, end to end; each one a
 #   name, and from when to when (s) if not the whole of it
 #   hit, next: s into the result (hit on one of its 30 frames a second:
-#   the fist goes a long way between two); limb, power, ducked, steps:
-#   as below
+#   the fist goes a long way between two); limb, power, steps: as above
+#   still: only its last pose, held
 # The blows are sword strokes, thrown without the sword: A, B and the
 # last of the heavy ones, each with the recovery that follows it when no
 # other blow does.
@@ -88,16 +79,19 @@ MADE_FPS = 30
 MADE = [
     # A lunging hook: the one blow of the set that was made as a punch.
     dict(name="hook", glb="UAL2_Standard_RM", parts=[("Melee_Hook",), ("Melee_Hook_Rec",)],
-         hit=8 / 30, limb="RightHand", next=0.47, power=2, ducked=True, steps=True),
+         hit=8 / 30, limb="RightHand", next=0.47, power=2, steps=True),
     # Dashing in, a swing from low on the right to high on the left.
     dict(name="upswing", glb="UAL2_Standard_RM", parts=[("Sword_Regular_A",), ("Sword_Regular_A_Rec",)],
-         hit=7 / 30, limb="RightHand", next=0.43, power=2, ducked=True, steps=True),
+         hit=7 / 30, limb="RightHand", next=0.43, power=2, steps=True),
     # Back across, from the left to the right.
     dict(name="backhand", glb="UAL2_Standard_RM", parts=[("Sword_Regular_B",), ("Sword_Regular_B_Rec",)],
-         hit=7 / 30, limb="RightHand", next=0.53, power=2, ducked=True, steps=True),
+         hit=7 / 30, limb="RightHand", next=0.53, power=2, steps=True),
     # A leap, the fist straight up, and down to the ground.
     dict(name="slam", glb="UAL2_Standard_RM", parts=[("Sword_Heavy_Combo", 2.1, 3.8)],
          hit=15 / 30, limb="RightHand", next=1.1, power=3, steps=True),
+    # The guard: both fists up in front of the face, where the hook's
+    # recovery ends.
+    dict(name="guard", glb="UAL2_Standard", parts=[("Melee_Hook_Rec",)], still=True),
     # Knocked off its feet: over backwards, onto its back.
     dict(name="thrown", glb="UAL2_Standard", parts=[("Hit_Knockback",)]),
     # From lying on its back to standing.
@@ -109,6 +103,9 @@ LIMBS = {"LeftHand": "DEF-hand.L", "RightHand": "DEF-hand.R", "RightFoot": "DEF-
 def made(lib, skel, spec):
     """One clip made of clips of the library: tracks and metadata."""
     turns, places = library.join([lib.clip(part[0], MADE_FPS, *part[1:]) for part in spec["parts"]])
+    if spec.get("still"):
+        turns = {bone: np.repeat(v[-1:], 2, axis=0) for bone, v in turns.items()}
+        places = {bone: np.repeat(v[-1:], 2, axis=0) for bone, v in places.items()}
     walk = places["root"] - places["root"][0]
     tracks = []
     if spec.get("steps"):
@@ -130,9 +127,9 @@ def made(lib, skel, spec):
         going /= max(np.linalg.norm(going), 1e-6)
         meta.update(hit=spec["hit"], next=spec["next"], power=spec["power"],
                     reach=float(np.hypot(at[0], at[2])), height=float(at[1]), aside=float(at[0]),
-                    ducked=1.0 if spec.get("ducked") else 0.0,
                     way_x=float(going[0]), way_y=float(going[1]), way_z=float(going[2]))
-    clip = {"name": spec["name"], "dt": 1.0 / MADE_FPS, "tracks": tracks, "meta": meta, "loop": False}
+    still = bool(spec.get("still"))
+    clip = {"name": spec["name"], "dt": 1.0 / MADE_FPS, "tracks": tracks, "meta": meta, "loop": still}
     return clip, walk
 
 
@@ -181,10 +178,6 @@ class Capture:
         self.pos[:, :, 1] += lift
         ground = self.motion.hips * [1, 0, 1]
         self.walk = rt.smooth(ground, STEPS * FPS)  # where the body is, without its sway
-        hips = skel.index("DEF-hips")
-        ahead = self.motion.world[:, hips] @ skel.world_rot[hips].T @ np.array([0, 0, 1.0])
-        self.hips_yaw = np.unwrap(np.arctan2(ahead[:, 0], ahead[:, 2]))
-        self.hips_yaw = rt.smooth(self.hips_yaw[:, None], 0.25 * FPS)[:, 0]
 
     def frame(self, t):
         return int(np.clip(round((t - self.time[0]) * FPS), 0, len(self.time) - 1))
@@ -196,44 +189,13 @@ class Capture:
         return angle(self.pos[f, self.skel.index(bone)] - self.walk[f])
 
 
-def mean_angle(angles):
-    return np.arctan2(np.mean(np.sin(angles)), np.mean(np.cos(angles)))
-
-
-def best_loop(cap, a, b, shortest, longest):
-    """The two frames between times a and b, shortest to longest seconds
-    apart, where the body is most alike (pose and speed): a loop."""
-    s = cap.skel
-    fa, fb = cap.frame(a), cap.frame(b)
-    idx = np.arange(fa, fb)
-    # joints seen from the body: turned by its heading, placed on its walk
-    local = np.empty((len(idx), len(s.names), 3))
-    for k, f in enumerate(idx):
-        local[k] = (cap.pos[f] - cap.walk[f]) @ rt.turn_y(-cap.hips_yaw[f]).T
-    speed = np.gradient(local, axis=0) * FPS
-    best = (np.inf, 0, 0)
-    for i in range(0, len(idx) - int(shortest * FPS)):
-        for j in range(i + int(shortest * FPS), min(i + int(longest * FPS), len(idx))):
-            d = np.linalg.norm(local[i] - local[j], axis=1).mean() + 0.08 * np.linalg.norm(speed[i] - speed[j], axis=1).mean()
-            # a loop that goes nowhere: the walk comes back to where it was
-            d += 0.3 * np.linalg.norm(cap.walk[idx[i]] - cap.walk[idx[j]])
-            if d < best[0]:
-                best = (d, idx[i], idx[j])
-    return best
-
-
 def build(cap, spec):
     """One clip: tracks and metadata."""
     s = cap.skel
     f0, f1 = cap.frame(spec["t0"]), cap.frame(spec["t1"])
-    if "loop" in spec:
-        _, f0, f1 = best_loop(cap, spec["t0"], spec["t1"], *spec["loop"])
     frames = np.arange(f0, f1 + 1)
-    if "hit" in spec:
-        headings = [cap.towards(spec["limb"], spec["hit"])]
-        heading = mean_angle(headings)
-    else:
-        heading = cap.hips_yaw[f0] + spec.get("turn", 0.0)
+    # The opponent is where the fist or foot goes.
+    heading = cap.towards(spec["limb"], spec["hit"])
     turn = rt.turn_y(-heading)
     root = s.index("root")
     world = turn @ cap.motion.world[frames]
@@ -241,40 +203,17 @@ def build(cap, spec):
     hips = (cap.motion.hips[frames] - cap.walk[f0]) @ turn.T
     walk = (cap.walk[frames] - cap.walk[f0]) @ turn.T
     if not spec.get("steps"):
-        if "loop" in spec:
-            hips = hips - walk  # only the sway is kept
         walk = np.zeros_like(walk)
     hips = hips - walk
     quats = matrix_to_quat(rt.Motion(s, world, hips).local())
     for f in range(1, len(quats)):
         flip = (quats[f] * quats[f - 1]).sum(-1) < 0
         quats[f][flip] *= -1
-    if "loop" in spec:
-        # The last frames slide into what came before the first.
-        n = min(int(0.3 * FPS), f0)
-        before = np.arange(f0 - n, f0)
-        w_b = turn @ cap.motion.world[before]
-        w_b[:, root] = s.world_rot[root]
-        h_b = (cap.motion.hips[before] - cap.walk[before]) @ turn.T
-        q_b = matrix_to_quat(rt.Motion(s, w_b, h_b).local())
-        for k in range(n):
-            t = (k + 1) / (n + 1)
-            t = t * t * (3 - 2 * t)
-            f = len(frames) - n + k
-            qb = q_b[k].copy()
-            qb[(qb * quats[f]).sum(-1) < 0] *= -1
-            mixed = quats[f] * (1 - t) + qb * t
-            quats[f] = mixed / np.linalg.norm(mixed, axis=-1, keepdims=True)
-            hips[f] = hips[f] * (1 - t) + h_b[k] * t
-        # and the heading at the end is the one at the start: the loop does not turn
-    hit_at = (cap.frame(spec["hit"]) - f0) if "hit" in spec else 0.0
-    slowed = lambda frame: float(frame)  # noqa: E731
-    if "slow" in spec:
-        src, slowed = warp(len(frames), hit_at, *spec["slow"])
-        quats = resample(quats, src)
-        quats /= np.linalg.norm(quats, axis=-1, keepdims=True)
-        hips = resample(hips, src)
-        walk = resample(walk, src)
+    src, slowed = warp(len(frames), cap.frame(spec["hit"]) - f0, *spec["slow"])
+    quats = resample(quats, src)
+    quats /= np.linalg.norm(quats, axis=-1, keepdims=True)
+    hips = resample(hips, src)
+    walk = resample(walk, src)
     root0 = s.world_rot[s.index("root")]
     tracks = []
     if spec.get("steps"):
@@ -283,23 +222,18 @@ def build(cap, spec):
     for b, bone in enumerate(s.names):
         if bone != "root":
             tracks.append(("Rig/Skeleton3D:%s" % bone, "rotation_3d", quats[:, b]))
-    meta = {}
-    if "hit" in spec:
-        fh = cap.frame(spec["hit"])
-        bone = LIMBS[spec["limb"]]
-        at = (cap.pos[fh, s.index(bone)] - cap.walk[fh]) @ turn.T
-        # (to the wrist; for a kick, to the ball of the foot: FOOT past the ankle)
-        reach = float(np.hypot(at[0], at[2])) + (FOOT if spec["limb"].endswith("Foot") else 0.0)
-        # Which way the fist or foot is going when it gets there (x aside, y up, z ahead).
-        going = (cap.pos[fh, s.index(bone)] - cap.pos[max(fh - 3, 0), s.index(bone)]) @ turn.T
-        going /= max(np.linalg.norm(going), 1e-6)
-        meta.update(hit=slowed(fh - f0) / FPS, next=slowed(cap.frame(spec["next"]) - f0) / FPS,
-                    power=spec["power"], reach=reach, height=float(at[1]), aside=float(at[0]),
-                    ducked=1.0 if spec.get("ducked") else 0.0,
-                    way_x=float(going[0]), way_y=float(going[1]), way_z=float(going[2]))
-    if "low" in spec:
-        meta["low"] = (cap.frame(spec["low"]) - f0) / FPS
-    return {"name": spec["name"], "dt": 1.0 / FPS, "tracks": tracks, "meta": meta, "loop": "loop" in spec}, heading, (f0, f1), walk
+    fh = cap.frame(spec["hit"])
+    bone = LIMBS[spec["limb"]]
+    at = (cap.pos[fh, s.index(bone)] - cap.walk[fh]) @ turn.T
+    # (to the wrist; for a kick, to the ball of the foot: FOOT past the ankle)
+    reach = float(np.hypot(at[0], at[2])) + (FOOT if spec["limb"].endswith("Foot") else 0.0)
+    # Which way the fist or foot is going when it gets there (x aside, y up, z ahead).
+    going = (cap.pos[fh, s.index(bone)] - cap.pos[max(fh - 3, 0), s.index(bone)]) @ turn.T
+    going /= max(np.linalg.norm(going), 1e-6)
+    meta = dict(hit=slowed(fh - f0) / FPS, next=slowed(cap.frame(spec["next"]) - f0) / FPS,
+                power=spec["power"], reach=reach, height=float(at[1]), aside=float(at[0]),
+                way_x=float(going[0]), way_y=float(going[1]), way_z=float(going[2]))
+    return {"name": spec["name"], "dt": 1.0 / FPS, "tracks": tracks, "meta": meta, "loop": False}, heading, (f0, f1), walk
 
 
 def main():
