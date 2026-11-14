@@ -16,7 +16,7 @@ matter (what breaks, what moves) work. Numbers are in
 | `scripts/player/` | `Player` (controls, camera) and `Character` (the animated body, shared by both brutes) |
 | `scripts/fx/`, `scripts/ui/` | dust and chips; HUD and touch controls |
 | `shaders/` | the one shader that draws every shard |
-| `assets/` | the mannequin and the fighting moves (made by `tools/mocap`) |
+| `assets/` | the mannequin and the fighting moves (made by `tools/moves`) |
 | `tools/` | CI and build scripts, the perf gate, the web probe, the asset tools |
 | `tests/` | headless tests, one file per subject |
 
@@ -70,8 +70,8 @@ through one would carry it along.
 
 The mannequin and its clips are the free part of Quaternius's Universal
 Animation Library (CC0, see `assets/mannequin/SOURCE.md`): one rigged
-figure, 46 clips, of which 10 are played. The blows are not from that
-library: they are motion capture (see below).
+figure, 46 clips, of which 9 are played. The fight is not from that
+library: see below.
 `scripts/player/character.gd` builds the tree that blends all of them;
 `scripts/player/player.gd` moves the capsule and tells the character how
 fast it goes, whether it is in the air, and when it jumps, lands,
@@ -90,42 +90,52 @@ blow does, being thrown) is in `scripts/game/fighter.gd`.
 - **The air.** A jump leaves at once (the clip's crouch is skipped), runs
   into the pose held in the air, and ends in a landing only when you come
   down hard or on the spot: running, the legs run on.
-- **Blows, from motion capture.** The stance, the three blows, the kick
-  and the duck are what real people did, recorded in the CMU motion
-  capture database (free to use, see `assets/fight/SOURCE.md`). They were
-  picked for weight, not for technique: a strong man waiting (the
-  stance), a boxer's long right, a baseball swing without the bat (both
-  fists across), wood being chopped without the axe (both fists from
-  overhead), a karateka's front kick, a boxer ducking.
-  `tools/mocap/build.py` reads the takes, puts them on the mannequin's
-  skeleton (every bone takes the turn its joint made since the T pose;
-  the hips go where the hip joints were, scaled by the length of the
-  legs), cuts the moves out, turns each so that its blow goes straight
-  ahead, retimes it (a slow wind-up, the last 0.12 s before the blow
-  lands in two thirds of their time, the pose all but held for an instant
-  after it) and writes one animation library. What it measures on each
-  move is stored with it: when the fist or foot gets there (the blow
+- **Blows made for games.** The four blows, being thrown and getting up
+  come from Quaternius's Universal Animation Library 2 (CC0, the free
+  version; see `assets/fight/SOURCE.md`): animations drawn for games,
+  with big poses and blows that land within a third of a second. Its
+  skeleton is the mannequin's own under other names, so
+  `tools/moves/build.py` takes the clips over as they are, joins each
+  stroke to its recovery and measures it. One was made as a punch (the
+  hook); the others are sword strokes thrown without the sword. What is
+  measured on each is stored with it: when the fist gets there (the blow
   counts then), when the next move may start, how far and how high it
-  reaches, and which way it is going.
-- **The combination.** A long right, both fists across, both from
-  overhead, then round again. They are three takes of three people, so
-  one runs into the next by a blend, not by one person's own motion.
-  Pressed once, a blow runs into the stance instead.
-- **Steps that are real.** Those people step with their blows. The steps
-  are taken out of the pose and given to the skeleton's root bone; the
-  game moves the body by them (root motion), so a foot that is planted in
-  the capture is planted in the game. A strike also goes for the opponent
-  in front: the character turns to it, and if the fist would stop short
-  it is carried the rest of the way while the arm goes out (that part
-  slides). A blow under way is not cut short by stepping off a heap of
-  rubble, and its steps go up onto rubble like any others.
+  reaches, which way it is going, and whether ducking avoids it.
+- **What is still motion capture.** The kick, the duck and the stance are
+  what real people did (CMU motion capture database, free to use): the
+  free library has none. The tool puts them on the mannequin's skeleton
+  (every bone takes the turn its joint made since the T pose; the hips go
+  where the hip joints were, scaled by the length of the legs) and
+  retimes the kick (a slow wind-up, the last 0.12 s in two thirds of
+  their time, the pose all but held for an instant after).
+- **The combination.** A lunging hook, a swing up from the right, one
+  back across from the left, a leap that comes down fist first, then
+  round again. The two swings were made to follow one another; the next
+  blow starts where a stroke ends, and its recovery only plays when
+  nothing follows.
+- **Steps that are real.** The blows step, some a long way (the swing up
+  dashes 0.8 m in, the leap 1 m). The steps are on the skeleton's root
+  bone; the game moves the body by them (root motion), so a planted foot
+  stays planted. A strike also goes for the opponent in front: the
+  character turns to it, and its steps are fitted to it until the blow
+  lands, carried farther if the fist would stop short (that part slides)
+  and held back if they would take it past, so that the fist ends on the
+  other: 0.22 to 0.24 m from its axis for all four. A blow under way is
+  not cut short by stepping off a heap of rubble, and its steps go up
+  onto rubble like any others.
+- **The clock of a move.** A fist goes more than a metre between two
+  frames of these clips, so the blow has to count on the very step whose
+  pose shows it there. A clip starts at the end of the step that takes
+  the move up, whoever asked for it (a key between two steps, a button or
+  the combination during one): `Character` counts from there, and the
+  clips say their blow lands on one of their own frames.
 - **Blows.** When a fist or a foot gets there, the other brute takes it
-  if it is in front and within reach. The long right and the swing make
-  it flinch, flash white, lean and slide the way the fist goes (straight
-  back for the right, to the side for the swing: 5 m/s, about 0.6 m). The
-  blow from overhead, which ends the combination, and the kick throw it:
-  12 m/s along the ground, 4 up. Ducking lets a blow higher than 1.2 m go
-  over, but not the one that comes down from overhead.
+  if it is in front and within reach. The first three make it flinch,
+  flash white, lean and slide the way the fist goes (back for the hook,
+  to the left for the swing up, to the right for the one back across:
+  5 m/s, about 0.6 m). The leap, which ends the combination, and the kick
+  throw it: 12 m/s along the ground, 4 up. Ducking lets the three swings
+  go by, not the leap nor the kick: each clip says which.
 - **The instant a blow lands** (`Fighter.STOP`, `Character.hold`). Both
   brutes are held still, 0.07 s for a blow and 0.12 s for one that
   throws: the pose, the move under way and the body, on the frame in
@@ -150,31 +160,39 @@ blow does, being thrown) is in `scripts/game/fighter.gd`.
   first. Nothing that stands stops it: every step of its flight, the
   shards within 0.95 m of its middle are knocked out (the nearest in
   crumbs), each one taking a little of its speed, so it goes through a
-  wall, across a room and out through the next. It lands, slides, lies
-  0.7 s and gets up (the fall played backwards, the library having no
-  clip for getting up).
+  wall, across a room and out through the next. It tumbles over
+  backwards, lands on its back, slides, lies 0.7 s and gets up (1.2 s).
 - **Fists break what stands.** A strike that reaches a wall or a pillar
-  knocks out what is within 0.7 m of a blow, 1 m of the blow from
-  overhead or of a kick, and sends off the loose pieces that lie there.
+  knocks out what is within 0.7 m of where the fist meets it (1 m for the
+  leap or a kick), and sends off the loose pieces that lie there. A blow
+  that lunges reaches past the body: the hole is made at the first
+  standing thing on the fist's way.
 - **The other brute** has no plan: it walks straight at you, stops at
   arm's length, and after a wait of 0.5 to 1.3 s kicks (3 times in 10) or
-  throws one to three blows of the combination. It steps onto rubble;
+  throws one to four blows of the combination. It steps onto rubble;
   stopped by a wall for a third of a second, it kicks it in and goes
-  through. From behind the house it reaches you in front of it in 5 to
-  8 s, 25 to 37 shards knocked out on the way.
+  through. From behind the house it reaches you in front of it in 6 to
+  9 s, 34 to 37 shards knocked out on the way.
 
 Not there: strafing and walking backwards (the free clips only go
 forward, so the character always turns to where it goes), feet placed on
 uneven ground. For the fight: no health and no end (it goes on until the
 house is gone), moving around in the stance (it is dropped to walk),
-blocking, a real tumble in the air (the thrown body holds one pose), the
-brutes being any bigger than people. Who takes a blow leans in one piece,
-about its feet. Locked on, the camera cannot be turned, there is no
-circling around the other, and the stick still pushes the character
-where the camera looks, which is no longer straight at the other. Between two blows of
-the combination the weight does not shift as one person's would. A
-thrown body passes through loose rubble; a brute that stands is still
-pushed a little by a piece that lands against it.
+blocking, the brutes being any bigger than people. Who takes a blow
+leans in one piece, about its feet. Locked on, the camera cannot be
+turned, there is no circling around the other, and the stick still
+pushes the character where the camera looks, which is no longer straight
+at the other. A thrown body passes through loose rubble; a brute that
+stands is still pushed a little by a piece that lands against it.
+
+What the free version of the library leaves to be desired: three of the
+four blows are sword strokes, so the arm swings as if it held one; the
+hook and the leap were not made to follow the two swings, a blend joins
+them; there is no kick and no dodge in it, and the duck that is kept
+looks wrong against blows that now come in at the waist (it still avoids
+the three swings, by rule). The paid version has the combination, the
+knee and the uppercut that were made bare-handed, a ground pound,
+hits taken in the air and walking in eight directions.
 
 
 ## How the destruction works

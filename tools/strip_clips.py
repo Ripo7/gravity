@@ -3,8 +3,8 @@
 
     python3 tools/strip_clips.py assets/mannequin/AnimationLibrary_Godot_Standard.gltf
 
-The library comes with 46 clips; the game plays 10 of them and the mocap
-tool reads one more. The others were two thirds of the file. This rewrites
+The library comes with 46 clips; the game plays 9 of them and the tool
+that builds the fighting moves reads one more. The others were two thirds of the file. This rewrites
 the .gltf and its .bin in place without them: clips, then the accessors
 and the stretches of the buffer nothing refers to any more. To get a clip
 back, start again from the original (assets/mannequin/SOURCE.md says where
@@ -25,8 +25,7 @@ KEEP = [
     "Jump_Land",
     "Hit_Chest",
     "Hit_Head",
-    "Death01",
-    "Punch_Jab",  # not played: tools/mocap takes the closed fist from it
+    "Punch_Jab",  # not played: tools/moves takes the closed fist from it
 ]
 
 

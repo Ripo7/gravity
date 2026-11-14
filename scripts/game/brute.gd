@@ -9,7 +9,7 @@ const JOINTS := Color(0.22, 0.2, 0.2)
 ## (KICKS of the time) or one to three blows of the combination, with a
 ## wait between two attacks (WAITS: from, to, in s).
 const PACE := 3.2
-const RANGE := 1.15
+const RANGE := 1.4
 const KICKS := 0.3
 const WAITS := Vector2(0.5, 1.3)
 ## It turns at TURN rad/s to whoever is nearer than NOTICE m.

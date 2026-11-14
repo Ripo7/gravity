@@ -5,9 +5,11 @@ extends Node3D
 ## it goes, whether it is in the air, and when it jumps, lands,
 ## punches, kicks, ducks, is hit or goes down; it turns that into a pose.
 ##
-## Two sets of clips: Quaternius's (CC0, assets/mannequin: standing, walking,
-## jumping, being hit) and the blows, which are motion capture of real
-## people put on the same skeleton (assets/fight, see SOURCE.md there).
+## Two sets of clips: the mannequin's own (Quaternius, CC0, assets/mannequin:
+## standing, walking, jumping, flinching) and the fight (assets/fight, see
+## SOURCE.md there): blows, being thrown and getting up made for games, by
+## the same author on the same skeleton, and a kick, a duck and a stance
+## that are motion capture.
 ##
 ## The tree, from the clips to the pose:
 ##
@@ -18,11 +20,11 @@ extends Node3D
 ##   Jump_Start ─────────────────────────────────┤
 ##   Jump (in the air) ──────────────────────────┤
 ##   Jump_Land ──pace────────────────────────────┤
-##   fight/haymaker, swing, smash, kick ─────────┤
+##   fight/hook, upswing, backhand, slam, kick ──┤
 ##   fight/duck ──pace───────────────────────────┤
 ##   fight/stance (a loop) ──────────────────────┤
 ##   Hit_Chest, Hit_Head ────────────────────────┤
-##   Death01 (thrown), the same backwards ──pace─┘
+##   fight/thrown, fight/getup ──pace────────────┘
 ##
 ## Walk, jog and sprint are stretched to one common cycle so that the same
 ## foot is forward in all three, then mixed by speed; the cycle is the one
@@ -56,22 +58,22 @@ const LAND_HARD := 8.5  ## m/s down: a landing this hard is always shown
 const LAND_STILL := 1.5  ## m/s along the ground: slower than this, it is shown too
 const LAND_TIME := 0.5  ## s before the legs go back to standing or running
 ## Fighting. The blows the punch button chains, in order (then round
-## again): a long right, both fists swung across, both fists brought down
-## from overhead. Each clip says when its fist is there, when the next
-## move may start, how far it reaches and how hard it is (see
-## tools/mocap/build.py).
-const COMBO: Array[String] = ["haymaker", "swing", "smash"]
+## again): a lunging hook, a swing up from the right, one back across from
+## the left, and a leap that ends fist first on the ground. Each clip says
+## when its fist is there, when the next move may start, how far it
+## reaches and how hard it is (see tools/moves/build.py).
+const COMBO: Array[String] = ["hook", "upswing", "backhand", "slam"]
 ## The moves played faster than they were captured.
 const PACE := {"duck": 1.3}
+## Steps of a sixtieth add up to a hair under the frame a clip says its
+## blow lands on: this much (s) short still counts as there.
+const LATE := 0.002
 ## After a move the guard is held this long (s).
 const GUARD_TIME := 1.6
-## The bone the steps of the boxing moves are given to.
+## The bone the steps of the moves are given to.
 const ROOT := "Rig/Skeleton3D:root"
-## Getting up is the fall played backwards, faster.
-const UP_PACE := 2.0
-## Thrown off its feet, the fall starts where the body goes over: this far
-## (s) into the clip, past the stagger.
-const BLOWN_FROM := 0.6
+## Getting up is played faster than it was made.
+const UP_PACE := 1.3
 ## A blow taken shows as a flash of white (if it has its own colours, see
 ## `paint`) that fades over FLASH s.
 const FLASH := 0.2
@@ -91,9 +93,10 @@ const STATES: Array[String] = [
 	"jump",
 	"air",
 	"land",
-	"haymaker",
-	"swing",
-	"smash",
+	"hook",
+	"upswing",
+	"backhand",
+	"slam",
 	"kick",
 	"duck",
 	"guard",
@@ -116,6 +119,7 @@ var _sprint_cycle := 1.0
 var _left := 0.0  # s before the state gives way to "ground" (0: it stays)
 var _fade_back := 0.3  # s that takes
 var _move_for := 0.0  # s of its clip the move under way has played
+var _move_from := 0  # the physics step that took it up
 var _move_out := false  # its fist or foot has been there
 var _then := ""  # the move asked for next: "punch", "kick" or "duck"
 var _tints: Array[BaseMaterial3D] = []  # its own colours, if it was painted
@@ -299,7 +303,8 @@ func held() -> bool:
 	return _held > 0.0
 
 
-## Thrown off its feet: it goes over backwards at once and stays down.
+## Thrown off its feet: it goes over backwards, lands on its back and
+## stays down.
 func blown() -> void:
 	_flash = 1.0
 	_lean_more = Vector3.ZERO
@@ -308,7 +313,7 @@ func blown() -> void:
 
 ## It gets back on its feet. Returns how long that takes (s).
 func up() -> float:
-	var takes := _clips.get_animation("Death01").length / UP_PACE
+	var takes := _clips.get_animation("fight/getup").length / UP_PACE
 	_go("up", 0.1, takes, 0.25)
 	return takes
 
@@ -368,6 +373,8 @@ func _ask(then: String, first: String) -> bool:
 
 func _start(named: String, fade: float) -> void:
 	_move_for = 0.0
+	# (Asked between two steps, by a key: the next one takes it up.)
+	_move_from = Engine.get_physics_frames() + (0 if Engine.is_in_physics_frame() else 1)
 	_move_out = false
 	_then = ""
 	_go(named, fade)
@@ -376,7 +383,8 @@ func _start(named: String, fade: float) -> void:
 
 
 ## What the clip of a move says about itself: "hit" (s before its fist or
-## foot gets there), "next", "reach" (m), "power", "height" (m). See MOVES.
+## foot gets there), "next", "reach" (m), "power", "height" (m), "ducked"
+## (1: ducking avoids it), "way_x", "way_y", "way_z". See MOVES.
 func about(named: String, what: String) -> float:
 	return _clips.get_animation("fight/" + named).get_meta(what, 0.0)
 
@@ -398,8 +406,13 @@ func _pace() -> float:
 ## The move under way goes on: its fist or foot gets there, then the move
 ## asked for starts, or the fists stay up for a while.
 func _move(delta: float) -> void:
-	_move_for += delta * _pace()
-	if striking() and not _move_out and _move_for >= _about("hit"):
+	# Its clip starts at the end of the step that takes the move up: nothing
+	# of it plays in that one. (This count and the pose must agree to the
+	# step: a fist can go a metre in one, and the blow counts on the pose in
+	# which it is there.)
+	if Engine.get_physics_frames() > _move_from:
+		_move_for += delta * _pace()
+	if striking() and not _move_out and _move_for >= _about("hit") - LATE:
 		_move_out = true
 		struck.emit(state)
 	var length := _clips.get_animation("fight/" + state).length
@@ -472,15 +485,8 @@ func _build() -> AnimationNodeBlendTree:
 		_paced(t, named, _clip("fight/" + named))
 	t.add_node("hit_chest", _clip("Hit_Chest"))
 	t.add_node("hit_head", _clip("Hit_Head"))
-	var over := _clip("Death01")
-	over.use_custom_timeline = true
-	over.start_offset = BLOWN_FROM
-	over.timeline_length = _clips.get_animation("Death01").length - BLOWN_FROM
-	over.stretch_time_scale = false
-	t.add_node("blown", over)
-	var rise := _clip("Death01")
-	rise.play_mode = AnimationNodeAnimation.PLAY_MODE_BACKWARD
-	_paced(t, "up", rise)
+	t.add_node("blown", _clip("fight/thrown"))
+	_paced(t, "up", _clip("fight/getup"))
 	var body := AnimationNodeTransition.new()
 	body.input_count = STATES.size()
 	for k in STATES.size():
@@ -494,9 +500,10 @@ func _build() -> AnimationNodeBlendTree:
 		"jump_start",
 		"air",
 		"land_pace",
-		"haymaker",
-		"swing",
-		"smash",
+		"hook",
+		"upswing",
+		"backhand",
+		"slam",
 		"kick",
 		"duck_pace",
 		"guard",

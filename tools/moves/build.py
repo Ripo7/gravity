@@ -1,23 +1,28 @@
 #!/usr/bin/env python3
-"""Builds assets/fight/moves.tres: the fighting moves of the brutes, cut out
-of CMU motion capture takes and put on the mannequin.
+"""Builds assets/fight/moves.tres: the fighting moves of the brutes.
 
-    python3 tools/mocap/build.py <dir of the CMU BVH files> [out.tres]
+    python3 tools/moves/build.py <dir of the CMU BVH files> <dir of the UAL2 .glb files> [out.tres]
 
-The takes come from the CMU Graphics Lab Motion Capture Database, in Bruce
-Hahne's BVH conversion (one mirror: github.com/una-dinosauria/cmu-mocap).
-Which takes and which seconds of them: CLIPS below, and
+Two kinds of clips, in one library:
+
+- MADE: animations made for games, from Quaternius's Universal Animation
+  Library 2 (CC0). Its skeleton is the mannequin's, so they are taken over
+  as they are (library.py): cut, joined end to end, measured.
+- CLIPS: motion capture, from the CMU Graphics Lab Motion Capture Database
+  in Bruce Hahne's BVH conversion, put on the mannequin (retarget.py) and
+  retimed.
+
+Where the files come from, which clips and which seconds of them:
 assets/fight/SOURCE.md.
 
 Every clip starts with the pelvis over the origin, the opponent along +Z
 (where the mannequin looks). The steps of a move are given to the bone
 "root" (the game moves the body by it, so the feet stay where they are
-put); what is left is the pose. A strike is made heavier than it was
-performed: its wind-up and its recovery are slowed, the blow itself is
-not. Each clip carries, as metadata, the moment its fist or foot gets
-there ("hit"), the moment the next move may start ("next"), how far from
-the body that fist or foot is then ("reach"), how high ("height") and how
-hard it is ("power").
+put); what is left is the pose. Each strike carries, as metadata, the
+moment its fist or foot gets there ("hit"), the moment the next move may
+start ("next"), how far from the body that fist or foot is then
+("reach"), how high ("height"), which way it is going ("way_x", "way_y",
+"way_z") and how hard it is ("power").
 """
 import os
 import sys
@@ -26,6 +31,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import bvh  # noqa: E402
+import library  # noqa: E402
 import retarget as rt  # noqa: E402
 from skeleton import Skeleton, matrix_to_quat  # noqa: E402
 
@@ -51,7 +57,8 @@ LINGERS = 2.5
 #   next move may start; power: 2 a blow, 3 one that throws
 #   slow: how much longer the wind-up and the recovery take than performed
 #   (the blow itself is retimed the same way for all, see SNAP)
-#   above: the blow comes down from overhead (ducking does not avoid it)
+#   ducked: ducking avoids it (a swing; not what comes down from overhead,
+#   nor a kick)
 #   steps: the root takes the steps (else the clip stays where it is)
 #   loop: the end is made to run into the start
 #   turn: with no strike to tell where the opponent is, it is where the
@@ -59,21 +66,74 @@ LINGERS = 2.5
 CLIPS = [
     # A strong man waiting: the stance.
     dict(name="stance", take="137_41", t0=8.0, t1=16.0, loop=(1.6, 3.2)),
-    # A boxer's long right, stepping in.
-    dict(name="haymaker", take="13_17", t0=1.70, t1=2.45, hit=1.98, limb="RightHand", next=2.20, power=2,
-         slow=(1.5, 1.3), steps=True),
-    # A baseball swing, without the bat: both fists across.
-    dict(name="swing", take="124_07", t0=2.55, t1=3.30, hit=2.93, limb="LeftHand", next=3.12, power=2,
-         slow=(1.3, 1.3), steps=True),
-    # Chopping wood, without the axe: both fists from overhead.
-    dict(name="smash", take="79_01", t0=2.26, t1=3.20, hit=2.86, limb="RightHand", next=3.10, power=3,
-         slow=(1.2, 1.4), above=True),
     # A boxer ducking.
     dict(name="duck", take="13_17", t0=11.62, t1=12.40, low=11.96, turn=0.61),
     # A karateka's front kick, stepping in.
     dict(name="kick", take="135_04", t0=2.62, t1=3.30, hit=3.11, limb="RightFoot", next=3.26, power=3,
          slow=(1.2, 1.3), steps=True),
 ]
+
+
+# The clips made for games. name, the file (without .glb: "_RM" has the
+# steps on the root, the other stays in place), then:
+#   parts: the clips of the file it is made of, end to end; each one a
+#   name, and from when to when (s) if not the whole of it
+#   hit, next: s into the result (hit on one of its 30 frames a second:
+#   the fist goes a long way between two); limb, power, ducked, steps:
+#   as below
+# The blows are sword strokes, thrown without the sword: A, B and the
+# last of the heavy ones, each with the recovery that follows it when no
+# other blow does.
+MADE_FPS = 30
+MADE = [
+    # A lunging hook: the one blow of the set that was made as a punch.
+    dict(name="hook", glb="UAL2_Standard_RM", parts=[("Melee_Hook",), ("Melee_Hook_Rec",)],
+         hit=8 / 30, limb="RightHand", next=0.47, power=2, ducked=True, steps=True),
+    # Dashing in, a swing from low on the right to high on the left.
+    dict(name="upswing", glb="UAL2_Standard_RM", parts=[("Sword_Regular_A",), ("Sword_Regular_A_Rec",)],
+         hit=7 / 30, limb="RightHand", next=0.43, power=2, ducked=True, steps=True),
+    # Back across, from the left to the right.
+    dict(name="backhand", glb="UAL2_Standard_RM", parts=[("Sword_Regular_B",), ("Sword_Regular_B_Rec",)],
+         hit=7 / 30, limb="RightHand", next=0.53, power=2, ducked=True, steps=True),
+    # A leap, the fist straight up, and down to the ground.
+    dict(name="slam", glb="UAL2_Standard_RM", parts=[("Sword_Heavy_Combo", 2.1, 3.8)],
+         hit=15 / 30, limb="RightHand", next=1.1, power=3, steps=True),
+    # Knocked off its feet: over backwards, onto its back.
+    dict(name="thrown", glb="UAL2_Standard", parts=[("Hit_Knockback",)]),
+    # From lying on its back to standing.
+    dict(name="getup", glb="UAL2_Standard", parts=[("LayToIdle",)]),
+]
+LIMBS = {"LeftHand": "DEF-hand.L", "RightHand": "DEF-hand.R", "RightFoot": "DEF-foot.R", "LeftFoot": "DEF-foot.L"}
+
+
+def made(lib, skel, spec):
+    """One clip made of clips of the library: tracks and metadata."""
+    turns, places = library.join([lib.clip(part[0], MADE_FPS, *part[1:]) for part in spec["parts"]])
+    walk = places["root"] - places["root"][0]
+    tracks = []
+    if spec.get("steps"):
+        tracks.append(("Rig/Skeleton3D:root", "position_3d", walk))
+    tracks.append(("Rig/Skeleton3D:DEF-hips", "position_3d", places["DEF-hips"]))
+    for bone in skel.names:
+        if bone != "root" and bone in turns:
+            tracks.append(("Rig/Skeleton3D:%s" % bone, "rotation_3d", turns[bone]))
+    meta = {}
+    if "hit" in spec:
+        limb = library.positions(skel, turns, places)[:, skel.index(LIMBS[spec["limb"]])]
+        frames = np.arange(len(limb), dtype=float)
+
+        def where(t):
+            return np.array([np.interp(t * MADE_FPS, frames, limb[:, k]) for k in range(3)])
+
+        at = where(spec["hit"])
+        going = where(spec["hit"] + 0.5 / MADE_FPS) - where(spec["hit"] - 0.5 / MADE_FPS)
+        going /= max(np.linalg.norm(going), 1e-6)
+        meta.update(hit=spec["hit"], next=spec["next"], power=spec["power"],
+                    reach=float(np.hypot(at[0], at[2])), height=float(at[1]), aside=float(at[0]),
+                    ducked=1.0 if spec.get("ducked") else 0.0,
+                    way_x=float(going[0]), way_y=float(going[1]), way_z=float(going[2]))
+    clip = {"name": spec["name"], "dt": 1.0 / MADE_FPS, "tracks": tracks, "meta": meta, "loop": False}
+    return clip, walk
 
 
 def warp(count, hit, before, after):
@@ -131,7 +191,7 @@ class Capture:
 
     def towards(self, limb, t):
         """Heading from the body to a hand or foot at time t."""
-        bone = {"LeftHand": "DEF-hand.L", "RightHand": "DEF-hand.R", "RightFoot": "DEF-foot.R", "LeftFoot": "DEF-foot.L"}[limb]
+        bone = LIMBS[limb]
         f = self.frame(t)
         return angle(self.pos[f, self.skel.index(bone)] - self.walk[f])
 
@@ -226,7 +286,7 @@ def build(cap, spec):
     meta = {}
     if "hit" in spec:
         fh = cap.frame(spec["hit"])
-        bone = {"LeftHand": "DEF-hand.L", "RightHand": "DEF-hand.R", "RightFoot": "DEF-foot.R"}[spec["limb"]]
+        bone = LIMBS[spec["limb"]]
         at = (cap.pos[fh, s.index(bone)] - cap.walk[fh]) @ turn.T
         # (to the wrist; for a kick, to the ball of the foot: FOOT past the ankle)
         reach = float(np.hypot(at[0], at[2])) + (FOOT if spec["limb"].endswith("Foot") else 0.0)
@@ -235,7 +295,7 @@ def build(cap, spec):
         going /= max(np.linalg.norm(going), 1e-6)
         meta.update(hit=slowed(fh - f0) / FPS, next=slowed(cap.frame(spec["next"]) - f0) / FPS,
                     power=spec["power"], reach=reach, height=float(at[1]), aside=float(at[0]),
-                    above=1.0 if spec.get("above") else 0.0,
+                    ducked=1.0 if spec.get("ducked") else 0.0,
                     way_x=float(going[0]), way_y=float(going[1]), way_z=float(going[2]))
     if "low" in spec:
         meta["low"] = (cap.frame(spec["low"]) - f0) / FPS
@@ -243,8 +303,8 @@ def build(cap, spec):
 
 
 def main():
-    data = sys.argv[1]
-    out = sys.argv[2] if len(sys.argv) > 2 else os.path.join(os.path.dirname(__file__), "../../assets/fight/moves.tres")
+    data, games = sys.argv[1], sys.argv[2]
+    out = sys.argv[3] if len(sys.argv) > 3 else os.path.join(os.path.dirname(__file__), "../../assets/fight/moves.tres")
     skel = Skeleton(MANNEQUIN)
     fist = {k: v for k, v in skel.clip_rotations("Punch_Jab", 0.0).items() if "f_" in k or "thumb" in k}
     captures = {}
@@ -253,6 +313,16 @@ def main():
             subject = spec["take"].split("_")[0]
             captures[spec["take"]] = Capture(os.path.join(data, "%03d" % int(subject), spec["take"] + ".bvh"), skel, fist)
     clips = []
+    libraries = {}
+    for spec in MADE:
+        if spec["glb"] not in libraries:
+            libraries[spec["glb"]] = library.Library(os.path.join(games, spec["glb"] + ".glb"))
+        clip, walk = made(libraries[spec["glb"]], skel, spec)
+        clips.append(clip)
+        length = (max(len(v) for _, _, v in clip["tracks"]) - 1) / MADE_FPS
+        print("%-8s %s (plays %.2f s)  walks %+.2f m ahead, %+.2f aside  %s" % (
+            spec["name"], " + ".join(part[0] for part in spec["parts"]), length, walk[-1, 2], walk[-1, 0],
+            "  ".join("%s %.2f" % kv for kv in clip["meta"].items())))
     for spec in CLIPS:
         cap = captures[spec["take"]]
         clip, heading, (f0, f1), walk = build(cap, spec)

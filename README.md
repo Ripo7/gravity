@@ -9,13 +9,14 @@ Seen in third person.
   falls, and breaks again when it lands. Nothing disappears: the rubble
   stays and you can climb on it. Fists, feet and flying bodies break it.
 - **Character animation.** A mannequin that stands, walks, jogs, sprints,
-  jumps and lands by blending ready-made clips; and that fights with the
-  motion of real people (motion capture), picked for weight rather than
-  for technique: a long right, both fists swung across, both fists brought
-  down from overhead, a kick straight ahead, a duck.
+  jumps and lands by blending ready-made clips; and that fights with
+  animations made for games, big and quick: a lunging hook, a swing up, one
+  back across, a leap that ends fist first on the ground. Thrown, it goes
+  over backwards onto its back and gets up. (The kick and the duck are
+  still motion capture.)
 - **The fight.** The other brute, in red, walks up to you and throws the
-  same moves. The blow from overhead and the kick send whoever takes them
-  flying, through anything that stands in the way.
+  same moves. The leap and the kick send whoever takes them flying,
+  through anything that stands in the way.
 - **Locking on.** Locked on the other brute, the camera stays on it and a
   blow asked for from too far runs at it first, through a wall if there is
   one, so that it lands instead of being thrown at nothing.
@@ -45,11 +46,12 @@ head; it comes closer when a wall is behind (and the character is not
 drawn when the camera is right against its back). The character goes where
 you push, seen from the camera, and turns to face where it goes.
 
-The strike button throws a long right; pressed again before it is over,
-the next blow of the combination follows: both fists swung across, then
-both brought down from overhead, then round again. The blow from overhead
-and the kick throw the other brute; it throws you the same way. Ducking
-lets what comes at your head go over, but not what comes down from above.
+The strike button throws a lunging hook; pressed again before it is over,
+the next blow of the combination follows: a swing up from the right, one
+back across from the left, then a leap that comes down fist first, then
+round again. The leap and the kick throw the other brute; it throws you
+the same way. Ducking lets the three swings go by, but not what comes
+down from above, nor a kick.
 
 A blow that lands stops both brutes for an instant and shakes the camera;
 who takes it leans and slides the way the fist goes.
@@ -105,7 +107,7 @@ Add `--write-movie out.avi --fixed-fps 30` before `--path` to record a run.
   what holds and what falls, blows at the house, the controls, and the
   character: where the camera sits and how it comes in at walls, the
   character turning to where it goes, its planted foot not sliding from a
-  slow walk to a sprint, jumps and landings, and the fight: the three
+  slow walk to a sprint, jumps and landings, and the fight: the four
   blows in order then the stance, the step in and the fist being on the
   other brute when the blow counts, what is out of reach, the blow from
   overhead throwing it through the house, the kick, fists breaking a
