@@ -7,7 +7,8 @@ extends Node
 ##        there, "w<seconds>" wait,
 ##        "f<seconds>" run forward, "r<seconds>" sprint forward,
 ##        "p<x>,<y>,<seconds>[,1]" push the stick (y -1 is forward; 1: sprint),
-##        "j" jump, "h" punch, "t<degrees>,<seconds>" turn the camera to the
+##        "j" jump, "h" punch, "k" kick, "u" duck,
+##        "t<degrees>,<seconds>" turn the camera to the
 ##        left, "d@x,y,z" put the dummy there (in the house's space),
 ##        "c@x0,y0,z0,x1,y1,z1" knock out what stands in that box.
 ##   --mode=showcase   a fixed tour that takes the house apart
@@ -118,6 +119,10 @@ func _play() -> void:
 			player.touch_jump = true
 		elif kind == "h":
 			player.touch_punch = true
+		elif kind == "k":
+			player.touch_kick = true
+		elif kind == "u":
+			player.touch_dodge = true
 		elif kind == "d":
 			world.dummy.global_position = world.house_at * _vec(spec.substr(2))
 		elif kind == "t":

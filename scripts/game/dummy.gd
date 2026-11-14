@@ -7,11 +7,12 @@ extends CharacterBody3D
 const GROUP := "opponent"
 const BODY := Color(0.8, 0.36, 0.26)
 const JOINTS := Color(0.22, 0.2, 0.2)
-## What it takes before it goes down: a jab counts for 1, a cross or a shot
-## for 2.
-const BLOWS := 6
-## A blow pushes it back this fast (m/s; twice that for a hard one), and it
-## slows down at SLOWS m/s2: a few centimetres for a jab, 25 for a cross.
+## What it takes before it goes down: a jab counts for 1, a harder punch or
+## a shot for 2, a kick for 3. The four punches of the combination make 7.
+const BLOWS := 7
+## A blow pushes it back this fast (m/s) for each point it counts for, and
+## it slows down at SLOWS m/s2: a few centimetres for a jab, half a metre
+## for a kick.
 const PUSHED := 1.0
 const SLOWS := 8.0
 ## It turns at TURN rad/s to whoever is nearer than NOTICE m.
@@ -66,16 +67,16 @@ func _ready() -> void:
 	character.rotation.y = facing
 
 
-## A blow going along `way`, `hard` (a cross, a shot) or not (a jab).
-## Returns false if it is not standing to take it.
-func take_hit(way: Vector3, hard: bool) -> bool:
+## A blow going along `way`, that counts for `power` (see BLOWS). Returns
+## false if it is not standing to take it.
+func take_hit(way: Vector3, power: int) -> bool:
 	if state != "up":
 		return false
-	blows_left -= 2 if hard else 1
+	blows_left -= power
 	var flat := Vector3(way.x, 0, way.z).normalized()
 	if blows_left > 0:
-		character.hit(hard)
-		velocity += flat * PUSHED * (2.0 if hard else 1.0)
+		character.hit(power > 1)
+		velocity += flat * PUSHED * power
 		return true
 	state = "down"
 	_for = 0.0

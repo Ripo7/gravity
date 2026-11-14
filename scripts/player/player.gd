@@ -6,8 +6,10 @@ extends CharacterBody3D
 ## the character goes where you push, relative to the camera, and turns to
 ## face where it goes. The fire button shoots a projectile at what is under
 ## the crosshair, and the character turns to it. The punch button throws a
-## jab, then a cross if it is pressed again, and so on; a punch goes for
-## the opponent in front, stepping in if it is a little too far.
+## jab, then the next punch of the combination if it is pressed again, and
+## so on; there is a kick and a duck too. A strike goes for the opponent in
+## front, stepping in if it is a little too far. While such a move plays,
+## the body goes where the move steps (Character.root_motion).
 
 ## A shot leaves from `from` (the character's chest) along `direction`.
 signal fired(from: Vector3, direction: Vector3)
@@ -45,18 +47,18 @@ const TURN := 12.0
 const AIM_HOLD := 0.45
 ## In the air this long (s) without having jumped: it is a fall.
 const FALL_AFTER := 0.12
-## A punch goes for the nearest opponent within PUNCH_SEEK m, if it is less
-## than PUNCH_CONE rad off where the punch is thrown. Farther than PUNCH_FROM
-## m (where the fist reaches it), the character steps in while the fist goes
-## out, at LUNGE m/s at most. When the fist is out, the opponent takes it if
-## it is within PUNCH_REACH m ahead (the fist a hand's width short of it at
-## most) and PUNCH_WIDE m to either side.
-const PUNCH_SEEK := 2.2
-const PUNCH_CONE := 1.2
-const PUNCH_FROM := 0.85
+## A strike goes for the nearest opponent within SEEK m, if it is less than
+## CONE rad off where it is thrown. If the fist or foot would stop short of
+## it, the character steps in while it goes out, at LUNGE m/s at most, to
+## where the fist is CONTACT m from the opponent's axis: on its chest. When
+## it gets there, the opponent takes it if the fist is no more than SLACK m
+## short and the opponent no more than WIDE m to either side.
+const SEEK := 2.4
+const CONE := 1.2
 const LUNGE := 5.0
-const PUNCH_REACH := 1.1
-const PUNCH_WIDE := 0.5
+const CONTACT := 0.22
+const SLACK := 0.25
+const WIDE := 0.5
 
 ## Full tilt of the stick, or the keys: a jog. The clips' feet do not slide
 ## at these speeds (see Character).
@@ -74,6 +76,8 @@ var touch_move := Vector2.ZERO
 var touch_jump := false
 var touch_fire := false
 var touch_punch := false
+var touch_kick := false
+var touch_dodge := false
 ## Set by TouchControls and scripted runs: sprint without the key.
 var touch_sprint := false
 var cooldown_left := 0.0
@@ -161,6 +165,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		fire()
 	elif event.is_action_pressed("punch"):
 		punch()
+	elif event.is_action_pressed("kick"):
+		kick()
+	elif event.is_action_pressed("dodge"):
+		dodge()
 	elif event.is_action_pressed("release_mouse"):
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
@@ -204,7 +212,7 @@ func aim_point() -> Vector3:
 ## Shoots at what is under the crosshair, if the last shot is far enough
 ## behind. The character turns to it.
 func fire() -> bool:
-	if cooldown_left > 0.0 or character.punching():
+	if cooldown_left > 0.0 or character.busy():
 		return false
 	cooldown_left = COOLDOWN
 	var from := global_position + Vector3.UP * CHEST
@@ -223,6 +231,16 @@ func punch() -> bool:
 	return is_on_floor() and character.punch()
 
 
+## A kick, feet on the ground.
+func kick() -> bool:
+	return is_on_floor() and character.kick()
+
+
+## Ducks, feet on the ground.
+func dodge() -> bool:
+	return is_on_floor() and character.dodge()
+
+
 func _physics_process(delta: float) -> void:
 	cooldown_left = maxf(cooldown_left - delta, 0.0)
 	var stick := Vector2.ZERO
@@ -235,8 +253,14 @@ func _physics_process(delta: float) -> void:
 			fire()
 		if touch_punch:
 			punch()
+		if touch_kick:
+			kick()
+		if touch_dodge:
+			dodge()
 	touch_fire = false
 	touch_punch = false
+	touch_kick = false
+	touch_dodge = false
 	if stick != Vector2.ZERO:
 		# Squared response curve gives fine aim near the centre.
 		look(stick * stick.length() * stick_sensitivity * delta)
@@ -247,10 +271,10 @@ func _physics_process(delta: float) -> void:
 	var sprinting := touch_sprint or Input.is_action_pressed("sprint")
 	var speed := sprint_speed if input_enabled and sprinting else run_speed
 	var accel := acceleration if is_on_floor() else air_acceleration
-	var punching := character.punching()
+	var busy := character.busy()
 	var horizontal := Vector3(velocity.x, 0, velocity.z)
-	if punching:
-		horizontal = _punch_speed(horizontal, delta)
+	if busy:
+		horizontal = _move_speed(delta)
 	else:
 		horizontal = horizontal.move_toward(wish * speed, accel * delta)
 		if wish.length() > 0.1:
@@ -259,7 +283,7 @@ func _physics_process(delta: float) -> void:
 	velocity.z = horizontal.z
 	var grounded := is_on_floor()
 	if grounded:
-		if input_enabled and not punching and (Input.is_action_just_pressed("jump") or touch_jump):
+		if input_enabled and not busy and (Input.is_action_just_pressed("jump") or touch_jump):
 			velocity.y = jump_velocity
 			character.jump()
 	else:
@@ -280,7 +304,7 @@ func _physics_process(delta: float) -> void:
 ## Turns the character and tells it what its legs are doing.
 func _animate(wish: Vector3, delta: float) -> void:
 	_aim_left = maxf(_aim_left - delta, 0.0)
-	if character.punching():
+	if character.busy():
 		if is_instance_valid(_opponent):
 			var d := _opponent.global_position - global_position
 			_punch_to = atan2(-d.x, -d.z)
@@ -305,52 +329,56 @@ func _animate(wish: Vector3, delta: float) -> void:
 			character.fall()
 
 
-## A punch starts: it is thrown where the stick pushes (or where the
+## A strike starts: it is thrown where the stick pushes (or where the
 ## character faces), at the opponent that is there if there is one.
-func _on_swung(_strong: bool) -> void:
+func _on_swung(_move: String) -> void:
 	_aim_left = 0.0
 	_punch_to = atan2(-_wish.x, -_wish.z) if _wish.length() > 0.1 else facing
 	var ahead := Basis(Vector3.UP, _punch_to) * Vector3.FORWARD
 	_opponent = null
-	var nearest := PUNCH_SEEK
+	var nearest := SEEK
 	for node in get_tree().get_nodes_in_group(Dummy.GROUP):
 		var other := node as Dummy
 		var d := other.global_position - global_position
 		var off := Vector3(d.x, 0, d.z)
 		if other.state != "up" or absf(d.y) > 1.0 or off.length() >= nearest:
 			continue
-		if off.length() > 0.01 and ahead.angle_to(off) > PUNCH_CONE:
+		if off.length() > 0.01 and ahead.angle_to(off) > CONE:
 			continue
 		nearest = off.length()
 		_opponent = other
 
 
-## The speed over the ground (m/s) during a punch, having been going at
-## `now`: what brings the character to where its fist reaches the opponent
-## by the time it is out, then none: feet planted. With no one to go for,
-## it only comes to a stop.
-func _punch_speed(now: Vector3, delta: float) -> Vector3:
-	if not is_instance_valid(_opponent):
-		return now.move_toward(Vector3.ZERO, acceleration * 2.0 * delta)
+## The speed over the ground (m/s) during a boxing move: where the move
+## itself steps, and for a strike that would stop short of the opponent,
+## what brings its fist or foot onto it by the time it gets there.
+func _move_speed(delta: float) -> Vector3:
+	var steps := character.root_motion() / delta
+	steps.y = 0.0
 	var lands_in := character.lands_in()
+	if not is_instance_valid(_opponent) or lands_in <= 0.0:
+		return steps
 	var d := _opponent.global_position - global_position
 	d.y = 0.0
-	var gap := d.length() - PUNCH_FROM
-	if lands_in <= 0.0 or gap <= 0.0:
-		return Vector3.ZERO
-	return d.normalized() * minf(gap / maxf(lands_in, delta), LUNGE)
+	var gap := d.length() - character.reach() - CONTACT
+	if gap <= 0.0:
+		return steps
+	var towards := d.normalized()
+	var needed := minf(gap / maxf(lands_in, delta), LUNGE)
+	return steps + towards * maxf(needed - steps.dot(towards), 0.0)
 
 
-## The fist is out: the opponent that is there takes it.
-func _on_struck(strong: bool) -> void:
+## The fist or foot is there: the opponent in the way takes it.
+func _on_struck(_move: String) -> void:
 	var ahead := Basis(Vector3.UP, facing) * Vector3.FORWARD
+	var far := character.reach() + CONTACT + SLACK
 	for node in get_tree().get_nodes_in_group(Dummy.GROUP):
 		var other := node as Dummy
 		var d := other.global_position - global_position
 		var along := d.dot(ahead)
 		var aside := absf(d.cross(ahead).y)
-		if absf(d.y) < 1.0 and along > 0.0 and along < PUNCH_REACH and aside < PUNCH_WIDE:
-			other.take_hit(ahead, strong)
+		if absf(d.y) < 1.0 and along > 0.0 and along < far and aside < WIDE:
+			other.take_hit(ahead, character.power())
 
 
 ## Puts the camera behind the shoulder, nearer when something is in

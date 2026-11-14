@@ -9,9 +9,10 @@ and a character that is animated.
   stays and you can climb on it. What is shot at it is a plain ball, a
   stand-in.
 - **Character animation.** A mannequin that stands, walks, jogs, sprints,
-  jumps, lands, puts its arm out to shoot and throws punches, by blending
-  ready-made clips; and a second one to punch, which flinches, goes down
-  and gets back up.
+  jumps, lands and puts its arm out to shoot, by blending ready-made
+  clips; and that boxes, with the motion of real boxers (motion capture):
+  a guard, a four-punch combination, a duck and a kick. A second mannequin
+  is there to take it: it flinches, goes down and gets back up.
 
 Godot 4.7, GDScript, Jolt physics, Compatibility renderer (WebGL2), so it
 can be played in Safari on an iPhone from each pull request's preview.
@@ -28,6 +29,8 @@ The previous project, Gravity, is kept as it was on the branch
 | Look | mouse | drag on the right half |
 | Shoot | left click or F | blue button |
 | Punch | right click or E | red button |
+| Kick | Q (A on AZERTY) | orange button |
+| Duck | C or ctrl | white button |
 | Jump | space | small button |
 | Rebuild the house | R | "Reconstruire" |
 
@@ -36,9 +39,10 @@ head; it comes closer when a wall is behind (and the character is not
 drawn when the camera is right against its back). The character goes where
 you push, seen from the camera, and turns to face where it goes. A shot
 goes to what is under the crosshair, and the character turns to it. A
-punch is a jab; pressed again before it is over, a cross follows, then a
-jab, and so on. The red mannequin near where you start is there to take
-them.
+punch is a jab; pressed again before it is over, the next punch of the
+combination follows: a cross, then a left and a right to the body, then a
+jab again. The red mannequin near where you start is there to take them:
+the four punches put it down.
 
 The line at the top left shows frames per second, the cost of one physics
 step and how many pieces there are (and how many are moving).
@@ -47,12 +51,13 @@ step and how many pieces there are (and how many are moving).
 
 The mannequin and its clips are the free part of Quaternius's Universal
 Animation Library (CC0, see `assets/mannequin/SOURCE.md`): one rigged
-figure, 46 clips, of which 14 are used. `scripts/player/character.gd`
-builds the tree that blends them; `scripts/player/player.gd` moves the
-capsule and tells the character how fast it goes, whether it is in the
-air, and when it jumps, lands, shoots or punches. The dummy
-(`scripts/game/dummy.gd`) is the same character in other colours, told
-when it is hit and when it goes down.
+figure, 46 clips, of which 11 are used. The boxing moves are not from
+that library: they are motion capture (see below).
+`scripts/player/character.gd` builds the tree that blends all of them;
+`scripts/player/player.gd` moves the capsule and tells the character how
+fast it goes, whether it is in the air, and when it jumps, lands, shoots,
+punches, kicks or ducks. The dummy (`scripts/game/dummy.gd`) is the same
+character in other colours, told when it is hit and when it goes down.
 
 - **Legs that keep pace.** Each clip has one ground speed at which its feet
   do not slide: 1.05 m/s for the walk, 5.2 for the jog, 7.8 for the sprint
@@ -69,27 +74,42 @@ when it is hit and when it goes down.
   do, on the left arm and the chest only; the body turns a little so that
   the arm points at what is aimed at.
 
-- **Punches.** Two clips, a jab (left) and a cross (right), played a
-  little faster than they were made. Three moments were read on each: the
-  fist is out (that is when the blow counts), the fist is on its way back
-  (from then on the other punch may start, if it was asked for), and the
-  fists are back up. After the last punch the guard is held for a second,
-  unless you walk away. A punch is thrown where the stick pushes; if an
-  opponent is there, within 2.2 m, the character turns to it and steps in
-  while the arm goes out, so that the fist arrives on it.
+- **Boxing, from motion capture.** The guard, the punches, the duck and
+  the kick are what real people did: a boxer shadow-boxing and a karateka,
+  recorded in the CMU motion capture database (free to use, see
+  `assets/boxing/SOURCE.md`). `tools/mocap/build.py` reads the takes, puts
+  them on the mannequin's skeleton (every bone takes the turn its joint
+  made since the T pose; the hips go where the hip joints were, scaled by
+  the length of the legs), cuts the moves out and writes one animation
+  library. What it measures on each move is stored with it: when the fist
+  or foot gets there (the blow counts then), when the next move may start,
+  how far it reaches.
+- **The combination.** Jab and cross are one passage of the take, cut in
+  two between the punches, and so are the left and the right to the body:
+  chained, the motion is the boxer's own, weight going from one foot to
+  the other. Pressed once, a punch runs into the guard instead.
+- **Steps that are real.** A boxer steps with his punches. Those steps are
+  taken out of the pose and given to the skeleton's root bone; the game
+  moves the body by them (root motion), so a foot that is planted in the
+  capture is planted in the game. A strike also goes for the opponent in
+  front: the character turns to it, and if the fist would stop short it
+  is carried the rest of the way while the arm goes out (that part
+  slides).
 - **Taking a blow.** The dummy flinches (a small clip for a jab, a bigger
-  one for a cross or a shot), flashes white and is pushed back a little.
-  A jab counts for 1, a cross or a shot for 2; at 6 it falls on its back,
-  away from the blow, lies there 2 s and gets up: the fall played
-  backwards, since the library has no clip for getting up.
+  one for a harder blow), flashes white and is pushed back. A jab counts
+  for 1, the other punches and a shot for 2, a kick for 3; at 7 it falls
+  on its back, away from the blow, lies there 2 s and gets up: the fall
+  played backwards, since the library has no clip for getting up.
 
 Not there: strafing and walking backwards (the free clips only go
 forward, so the character always turns to where it goes, and slides for
 half a second when it shoots while running sideways), feet placed on
 uneven ground, the head or the arm following the aim up and down. For
-fighting: an opponent that hits back, blocking, kicks (no clip), the
-dodge roll (there is a clip), punches that break the house. The feet
-slide during the step into a punch and when the dummy is pushed back.
+fighting: moving around in the guard (the stance is dropped to walk), an
+opponent that hits back or blocks, so the duck avoids nothing yet; hooks
+and uppercuts to the head; punches that break the house. The dummy stands
+upright, so the boxer, who crouches, hits it in the chest. After the kick
+the leg comes back by a blend, not by the karateka's own step.
 
 ## How the destruction works
 
@@ -176,8 +196,8 @@ godot --headless --fixed-fps 60 --path . -- --mode=showcase --seed=1 --prof --qu
 godot --path . -- --mode=play --from=-2.5,0.05,4.2 --steps="a@-2.5,1.4,-0.6;o;w1;o@-2,2,-0.6;w2;f0.8"
 # The character on open ground: walk, run, sprint to the right, jump, shoot.
 godot --path . -- --mode=play --from=-25,0.05,30 --steps="p0.2,0,2;p1,0,2;p1,0,2,1;j;w1.5;o;w1"
-# A fight: walk up to the dummy, jab, cross, jab, cross, and it goes down.
-godot --path . -- --mode=play --from=4,0.05,10.5 --steps="a@4,1.3,7.5;p0,-0.4,0.8;h;w0.25;h;w0.4;h;w0.4;h;w6"
+# A fight: walk up to the dummy, four punches, it goes down; then a duck and a kick.
+godot --path . -- --mode=play --from=4,0.05,10.5 --steps="a@d;p0,-0.4,0.8;h;w0.12;h;w0.2;h;w0.3;h;w6;u;w1;k;w3"
 # How loaded the house is as built (1 = a bond breaks).
 godot --headless --path . -- --mode=check
 ```
@@ -192,10 +212,11 @@ Add `--write-movie out.avi --fixed-fps 30` before `--path` to record a run.
   character: where the camera sits and how it comes in at walls, the
   character turning to where it goes, its planted foot not sliding from a
   slow walk to a sprint, jumps and landings, the arm going out and the
-  shot landing under the crosshair, and the fight: jab then cross then
-  guard, the step in and the fist being on the dummy when the blow
-  counts, what is out of reach, the dummy going down and getting up, a
-  shot hitting it.
+  shot landing under the crosshair, and the fight: the four punches in
+  order then the guard, the step in and the fist being on the dummy when
+  the blow counts, what is out of reach, the kick and its foot on the
+  dummy, the duck, the dummy going down and getting up, a shot hitting
+  it.
 - `tools/perf_gate.py`: reads a profiled showcase and fails when the
   physics gets too slow.
 - `tools/web_probe.mjs`: loads the web export in headless Chromium, breaks
@@ -226,8 +247,17 @@ house standing, nothing drawn) takes 0.10 to 0.13 ms while it runs, and
 about 0.02 to 0.04 ms a frame here. The planted foot slides 0.05 to
 0.2 m/s between a slow walk and a run, 0.5 to 1 m/s at a sprint
 (7.8 m/s). The dummy, a second body with its own tree, adds 0.03 to
-0.05 ms to that frame. Jab, cross, jab, cross puts it down in 1.4 s; it
-is back on its feet 4.5 s after the last blow.
+0.05 ms to that frame.
+
+The fight: the four punches of the combination land 0.13, 0.37, 0.78 and
+1.05 s after the first press, and the last one puts the dummy down; it is
+back on its feet 4.5 s after the last blow. The kick lands 0.42 s after
+the press. When a punch counts, the wrist is 0.59 to 0.76 m ahead of the
+body and within 0.11 m of the line to the opponent. The boxing library is
+0.33 MB of text (0.2 MB more in the web export, 2.8 MB in all). With the
+boxing moves in, three seeds of the showcase tour give 1.3 to 1.6 ms a
+step on average while things move, 99% of the steps under 4.7 to 5.1 ms,
+the slowest 7.0 to 8.4 ms: as before.
 
 Not measured: a real phone. The line at the top left is there for that.
 
@@ -238,6 +268,13 @@ Not measured: a real phone. The line at the top left is there for that.
 Library](https://quaternius.com/packs/universalanimationlibrary.html)
 (CC0). Where the files come from, their checksums and the list of clips are
 in `assets/mannequin/SOURCE.md`.
+
+`assets/boxing/`: the boxing moves, made by `tools/mocap/build.py` from
+two takes of the [CMU Graphics Lab Motion Capture
+Database](http://mocap.cs.cmu.edu/) (free for research and commercial
+use; created with funding from NSF EIA-0196217). Which takes, which
+seconds of them and how to make the file again are in
+`assets/boxing/SOURCE.md`.
 
 `addons/kenney_prototype_textures/`: [Kenney's prototype
 textures](https://kenney.nl/assets/prototype-textures) (CC0), as packaged

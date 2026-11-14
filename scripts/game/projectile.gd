@@ -96,7 +96,7 @@ func _land(at: Vector3, normal: Vector3, rid: RID, what: Object) -> void:
 	var s := structure
 	var torn := 0
 	if what is Dummy:
-		(what as Dummy).take_hit(direction, true)
+		(what as Dummy).take_hit(direction, 2)
 	elif s != null:
 		var piece := s.pieces.index_of(rid)
 		if piece >= 0:

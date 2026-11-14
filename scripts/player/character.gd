@@ -1,10 +1,13 @@
 class_name Character
 extends Node3D
-## A body you see: a mannequin and the tree that blends its clips (both by
-## Quaternius, CC0: see assets/mannequin). It decides nothing. Whoever owns
-## it (the Player, a Dummy) tells it how fast it goes, whether it is in the
-## air, and when it jumps, lands, shoots, punches, is hit or goes down; it
-## turns that into a pose.
+## A body you see: a mannequin and the tree that blends its clips. It
+## decides nothing. Whoever owns it (the Player, a Dummy) tells it how fast
+## it goes, whether it is in the air, and when it jumps, lands, shoots,
+## punches, kicks, ducks, is hit or goes down; it turns that into a pose.
+##
+## Two sets of clips: Quaternius's (CC0, assets/mannequin: standing, walking,
+## jumping, being hit) and the boxing moves, which are motion capture of
+## real boxers put on the same skeleton (assets/boxing, see SOURCE.md there).
 ##
 ## The tree, from the clips to the pose:
 ##
@@ -15,8 +18,9 @@ extends Node3D
 ##   Jump_Start ─────────────────────────────────┤         ├─ cast ─ pose
 ##   Jump (in the air) ──────────────────────────┤         │
 ##   Jump_Land ──pace────────────────────────────┤         │
-##   Punch_Jab, Punch_Cross ──pace───────────────┤         │
-##   Punch_Enter (its last pose: the guard) ─────┤         │
+##   box/jab, cross, hook_l, hook_r ─────────────┤         │
+##   box/kick, box/duck ──pace───────────────────┤         │
+##   box/guard (a loop) ─────────────────────────┤         │
 ##   Hit_Chest, Hit_Head ────────────────────────┤         │
 ##   Death01, and the same backwards ──pace──────┘         │
 ##   Spell_Simple_Shoot (left arm only) ───────────────────┘
@@ -26,12 +30,13 @@ extends Node3D
 ## at which the mixed stride covers the ground actually covered, so the feet
 ## do not slide.
 
-## A punch starts (`strong`: a cross, with the right; else a jab).
-signal swung(strong: bool)
-## Its fist is out: what is there is hit.
-signal struck(strong: bool)
+## A strike starts: one of COMBO, or "kick".
+signal swung(move: String)
+## Its fist or foot is there: what is in the way takes it.
+signal struck(move: String)
 
 const SCENE := "res://assets/mannequin/AnimationLibrary_Godot_Standard.gltf"
+const BOXING := "res://assets/boxing/boxing.tres"
 ## The model looks along +Z; this node looks along -Z like everything else.
 const TURNED := PI
 ## Ground speed (m/s) at which the feet of each clip do not slide, measured
@@ -51,15 +56,17 @@ const LAND_PACE := 1.5
 const LAND_HARD := 8.5  ## m/s down: a landing this hard is always shown
 const LAND_STILL := 1.5  ## m/s along the ground: slower than this, it is shown too
 const LAND_TIME := 0.5  ## s before the legs go back to standing or running
-## Fighting: the punches are played a little faster than the clips; the
-## guard they end in is held GUARD_TIME s after the last one.
-const PUNCH_PACE := 1.2
-const GUARD_TIME := 0.9
-## The moments of a punch, in seconds of its clip: the fist is out (the arm
-## goes from the guard to straight in two frames just before), another
-## punch may follow (the fist is on its way back), the fists are back up.
-const JAB: Array[float] = [0.19, 0.4, 0.7]
-const CROSS: Array[float] = [0.27, 0.55, 0.9]
+## Fighting. The punches the punch button chains, in order (then round
+## again): a jab and a cross to the head, a left and a right to the body.
+## Each clip says when its fist is there, when the next move may start, how
+## far it reaches and how hard it is (see tools/mocap/build.py).
+const COMBO: Array[String] = ["jab", "cross", "hook_l", "hook_r"]
+## The moves played faster than they were captured.
+const PACE := {"kick": 1.3, "duck": 1.3}
+## After a move the guard is held this long (s).
+const GUARD_TIME := 1.6
+## The bone the steps of the boxing moves are given to.
+const ROOT := "Rig/Skeleton3D:root"
 ## Getting up is the fall played backwards, faster.
 const UP_PACE := 1.6
 ## A blow taken shows as a flash of white (if it has its own colours, see
@@ -69,7 +76,21 @@ const FLASH_MOST := 0.7
 ## What the legs can be doing (see `state`), in the order of the tree's
 ## inputs.
 const STATES: Array[String] = [
-	"ground", "jump", "air", "land", "jab", "cross", "guard", "hit_chest", "hit_head", "down", "up"
+	"ground",
+	"jump",
+	"air",
+	"land",
+	"jab",
+	"cross",
+	"hook_l",
+	"hook_r",
+	"kick",
+	"duck",
+	"guard",
+	"hit_chest",
+	"hit_head",
+	"down",
+	"up"
 ]
 ## Shooting: the left arm (the one the clip raises) goes out over CAST_IN s,
 ## stays CAST_HOLD s after the last shot and comes back over CAST_OUT s.
@@ -102,9 +123,9 @@ var _cast := 0.0  # how far out the arm is (0 to 1)
 var _cast_left := 0.0  # s it stays out
 var _left := 0.0  # s before the state gives way to "ground" (0: it stays)
 var _fade_back := 0.3  # s that takes
-var _punch_for := 0.0  # s of its clip the punch under way has played
-var _punch_out := false  # its fist has been out
-var _punch_again := false  # another one is asked for
+var _move_for := 0.0  # s of its clip the move under way has played
+var _move_out := false  # its fist or foot has been there
+var _then := ""  # the move asked for next: "punch", "kick" or "duck"
 var _tints: Array[BaseMaterial3D] = []  # its own colours, if it was painted
 var _flash := 0.0  # how white it is (1 to 0)
 
@@ -114,6 +135,7 @@ func _ready() -> void:
 	_model.rotation.y = TURNED
 	add_child(_model)
 	_clips = _model.get_node("AnimationPlayer")
+	_clips.add_animation_library("box", load(BOXING) as AnimationLibrary)
 	skeleton = _model.get_node("Rig/Skeleton3D")
 	_skin = skeleton.get_node("Mannequin")
 	_walk_cycle = _clips.get_animation("Walk").length
@@ -123,10 +145,14 @@ func _ready() -> void:
 	tree.tree_root = _build()
 	_model.add_child(tree)
 	tree.anim_player = tree.get_path_to(_clips)
+	# With the physics, so that the steps of a move reach the body that takes
+	# them at the same pace.
+	tree.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_PHYSICS
+	tree.root_motion_track = NodePath(ROOT)
 	tree.active = true
 	tree.set("parameters/land_pace/scale", LAND_PACE)
-	tree.set("parameters/jab_pace/scale", PUNCH_PACE)
-	tree.set("parameters/cross_pace/scale", PUNCH_PACE)
+	for move: String in PACE:
+		tree.set("parameters/%s_pace/scale" % move, PACE[move])
 	tree.set("parameters/up_pace/scale", UP_PACE)
 	move(0.0)
 
@@ -180,30 +206,55 @@ func land(down: float, along: float) -> void:
 		_go("ground", 0.15)
 
 
-## Is a punch under way?
-func punching() -> bool:
-	return state == "jab" or state == "cross"
+## Is a punch or a kick under way?
+func striking() -> bool:
+	return state == "kick" or state in COMBO
 
 
-## Seconds before the fist of the punch under way is out (0: it has been).
+## Is a move under way that puts the feet where it wants (a strike, a duck)?
+func busy() -> bool:
+	return striking() or state == "duck"
+
+
+## Seconds before the fist or foot of the strike under way is there (0: it
+## has been, or there is none).
 func lands_in() -> float:
-	if not punching() or _punch_out:
+	if not striking() or _move_out:
 		return 0.0
-	return maxf(_moments()[0] - _punch_for, 0.0) / PUNCH_PACE
+	return maxf(_about("hit") - _move_for, 0.0) / _pace()
 
 
-## Throws a punch: a jab (left) from standing or from the guard, and while
-## one is under way, the other hand is asked for next: jab, cross, jab...
-## Each one ends in the guard. Returns false if it cannot (in the air, or
-## knocked down).
+## How far from the body (m) the fist or foot of the strike under way is
+## when it gets there, and how hard it is (1 a jab, 2 a punch, 3 a kick).
+func reach() -> float:
+	return _about("reach") if striking() else 0.0
+
+
+func power() -> int:
+	return int(_about("power")) if striking() else 0
+
+
+## How far the clips carried the body in the last physics step (m, in the
+## world): the steps of the boxing moves.
+func root_motion() -> Vector3:
+	return skeleton.global_basis * tree.get_root_motion_position()
+
+
+## Throws a punch: a jab from standing or from the guard. Asked for while a
+## move is under way, the next punch of COMBO follows it. Each one ends in
+## the guard. Returns false if it cannot (in the air, or knocked down).
 func punch() -> bool:
-	if punching():
-		_punch_again = true
-		return true
-	if state != "ground" and state != "guard" and state != "land":
-		return false
-	_swing("jab")
-	return true
+	return _ask("punch", "jab")
+
+
+## A kick: a roundhouse with the right leg.
+func kick() -> bool:
+	return _ask("kick", "kick")
+
+
+## Ducks under what comes.
+func dodge() -> bool:
+	return _ask("duck", "duck")
 
 
 ## Fists down at once (the guard is left to walk away).
@@ -254,8 +305,8 @@ func shoot() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if punching():
-		_punch(delta)
+	if busy():
+		_move(delta)
 	if _flash > 0.0:
 		_flash = maxf(_flash - delta / FLASH, 0.0)
 		for mat in _tints:
@@ -271,30 +322,54 @@ func _physics_process(delta: float) -> void:
 	_model.rotation.y = TURNED - CAST_TURN * smoothstep(0.0, 1.0, _cast)
 
 
-func _swing(kind: String) -> void:
-	_punch_for = 0.0
-	_punch_out = false
-	_punch_again = false
-	_go(kind, 0.08)
-	swung.emit(kind == "cross")
+## A move is asked for: it starts now from standing or from the guard, or
+## after the move under way (`then`: what to remember; `first`: what starts).
+func _ask(then: String, first: String) -> bool:
+	if busy():
+		_then = then
+		return true
+	if state != "ground" and state != "guard" and state != "land":
+		return false
+	_start(first, 0.08)
+	return true
 
 
-func _moments() -> Array[float]:
-	return CROSS if state == "cross" else JAB
+func _start(move: String, fade: float) -> void:
+	_move_for = 0.0
+	_move_out = false
+	_then = ""
+	_go(move, fade)
+	if striking():
+		swung.emit(move)
 
 
-## The punch under way goes on: its fist gets there, then the next punch
-## starts if one was asked for, or the fists stay up for a while.
-func _punch(delta: float) -> void:
-	var moments := _moments()
-	_punch_for += delta * PUNCH_PACE
-	if not _punch_out and _punch_for >= moments[0]:
-		_punch_out = true
-		struck.emit(state == "cross")
-	if _punch_again and _punch_for >= moments[1]:
-		_swing("jab" if state == "cross" else "cross")
-	elif _punch_for >= moments[2]:
-		_go("guard", 0.12, GUARD_TIME, 0.35)
+## What the clip of the move under way says about itself (see BOXING).
+func _about(what: String) -> float:
+	return _clips.get_animation("box/" + state).get_meta(what, 0.0)
+
+
+func _pace() -> float:
+	return PACE.get(state, 1.0)
+
+
+## The move under way goes on: its fist or foot gets there, then the move
+## asked for starts, or the fists stay up for a while.
+func _move(delta: float) -> void:
+	_move_for += delta * _pace()
+	if striking() and not _move_out and _move_for >= _about("hit"):
+		_move_out = true
+		struck.emit(state)
+	var length := _clips.get_animation("box/" + state).length
+	var free := _about("next") if striking() else length
+	if _then != "" and _move_for >= free:
+		if _then == "punch":
+			var k := COMBO.find(state)
+			# After a punch, the next one; after anything else, a jab.
+			_start(COMBO[(k + 1) % COMBO.size()] if k >= 0 else "jab", 0.06 if k >= 0 else 0.12)
+		else:
+			_start(_then, 0.12)
+	elif _move_for >= length:
+		_go("guard", 0.25, GUARD_TIME, 0.35)
 
 
 ## Into state `to` over `fade` s. With `lasts`, it gives way to "ground"
@@ -334,16 +409,11 @@ func _build() -> AnimationNodeBlendTree:
 	var land_pace := AnimationNodeTimeScale.new()
 	t.add_node("land_pace", land_pace)
 	t.connect_node("land_pace", 0, "land")
-	# Fighting: two punches, the guard they end in (the last pose of the clip
-	# that goes into it), two blows taken, the fall and the same backwards.
-	_paced(t, "jab", _clip("Punch_Jab"))
-	_paced(t, "cross", _clip("Punch_Cross"))
-	var fists_up := _clip("Punch_Enter")
-	fists_up.use_custom_timeline = true
-	fists_up.start_offset = _clips.get_animation("Punch_Enter").length - 0.02
-	fists_up.timeline_length = 0.02
-	fists_up.stretch_time_scale = false
-	t.add_node("guard", fists_up)
+	# Fighting: the boxing moves, and the guard they end in.
+	for move: String in ["jab", "cross", "hook_l", "hook_r", "guard"]:
+		t.add_node(move, _clip("box/" + move))
+	for move: String in PACE:
+		_paced(t, move, _clip("box/" + move))
 	t.add_node("hit_chest", _clip("Hit_Chest"))
 	t.add_node("hit_head", _clip("Hit_Head"))
 	t.add_node("down", _clip("Death01"))
@@ -363,8 +433,12 @@ func _build() -> AnimationNodeBlendTree:
 		"jump_start",
 		"air",
 		"land_pace",
-		"jab_pace",
-		"cross_pace",
+		"jab",
+		"cross",
+		"hook_l",
+		"hook_r",
+		"kick_pace",
+		"duck_pace",
 		"guard",
 		"hit_chest",
 		"hit_head",
