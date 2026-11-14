@@ -9,13 +9,14 @@ Seen in third person.
   falls, and breaks again when it lands. Nothing disappears: the rubble
   stays and you can climb on it. Fists, feet and flying bodies break it.
 - **Character animation.** A mannequin that stands, walks, jogs, sprints,
-  jumps and lands by blending ready-made clips; and that fights with the
-  motion of real people (motion capture), picked for weight rather than
-  for technique: a long right, both fists swung across, both fists brought
-  down from overhead, a kick straight ahead, a duck.
+  jumps and lands by blending ready-made clips; and that fights with
+  animations made for games, big and quick: a lunging hook, a swing up, one
+  back across, a leap that ends fist first on the ground. Thrown, it goes
+  over backwards onto its back and gets up. Holding the guard, it puts
+  both fists up and nothing else. (The kick is still motion capture.)
 - **The fight.** The other brute, in red, walks up to you and throws the
-  same moves. The blow from overhead and the kick send whoever takes them
-  flying, through anything that stands in the way.
+  same moves. The leap and the kick send whoever takes them flying,
+  through anything that stands in the way.
 - **Locking on.** Locked on the other brute, the camera stays on it and a
   blow asked for from too far runs at it first, through a wall if there is
   one, so that it lands instead of being thrown at nothing.
@@ -35,7 +36,7 @@ The previous project, Gravity, is kept as it was on the branch
 | Look | mouse | drag on the right half |
 | Strike | left click or F | big red button |
 | Kick | right click or E | orange button |
-| Duck | C or ctrl | white button |
+| Guard (hold) | C or ctrl | white button |
 | Lock on / let go | middle click or tab | the sight |
 | Jump | space | small button |
 | Rebuild the house | R | "Reconstruire" |
@@ -45,11 +46,18 @@ head; it comes closer when a wall is behind (and the character is not
 drawn when the camera is right against its back). The character goes where
 you push, seen from the camera, and turns to face where it goes.
 
-The strike button throws a long right; pressed again before it is over,
-the next blow of the combination follows: both fists swung across, then
-both brought down from overhead, then round again. The blow from overhead
-and the kick throw the other brute; it throws you the same way. Ducking
-lets what comes at your head go over, but not what comes down from above.
+The strike button throws a lunging hook; pressed again before it is over,
+the next blow of the combination follows: a swing up from the right, one
+back across from the left, then a leap that comes down fist first, then
+round again. The leap and the kick throw the other brute; it throws you
+the same way.
+
+The guard is held: both fists come up in front of the face and stay there
+for as long as the button is down, feet still, turned to the other brute
+when locked on. Whatever comes from in front then stops on it: no flinch,
+no throw, a little ground given. From behind it is no use. A strike can
+be thrown from it, and it comes back after the strike if it is still
+held.
 
 A blow that lands stops both brutes for an instant and shakes the camera;
 who takes it leans and slides the way the fist goes.
@@ -105,12 +113,13 @@ Add `--write-movie out.avi --fixed-fps 30` before `--path` to record a run.
   what holds and what falls, blows at the house, the controls, and the
   character: where the camera sits and how it comes in at walls, the
   character turning to where it goes, its planted foot not sliding from a
-  slow walk to a sprint, jumps and landings, and the fight: the three
-  blows in order then the stance, the step in and the fist being on the
+  slow walk to a sprint, jumps and landings, and the fight: the four
+  blows in order then standing again, the step in and the fist being on the
   other brute when the blow counts, what is out of reach, the blow from
   overhead throwing it through the house, the kick, fists breaking a
   wall, the other brute coming through the house to hit back and throwing
-  the player, ducking; a blow that lands holding both for an instant and
+  the player; the guard held, stopping what comes from in front and not
+  what comes from behind; a blow that lands holding both for an instant and
   shaking the camera, who takes it going the way it goes; and locking on:
   the camera showing the two side by side, a blow from afar running in
   and landing, through a wall too.

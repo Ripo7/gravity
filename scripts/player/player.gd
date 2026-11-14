@@ -4,10 +4,10 @@ extends CharacterBody3D
 ## around with the camera, which sits behind the character's left shoulder;
 ## the character goes where you push, relative to the camera, and turns to
 ## face where it goes. The punch button throws a blow, then the next of the
-## combination if it is pressed again, and so on; there is a kick and a
-## duck too. A strike goes for the opponent in front, stepping in if it is
-## a little too far. While such a move plays, the body goes where the move
-## steps (Character.root_motion).
+## combination if it is pressed again, and so on; there is a kick too, and
+## a guard for as long as its button is held. A strike goes for the
+## opponent in front, stepping in if it is a little too far. While such a
+## move plays, the body goes where the move steps (Character.root_motion).
 ##
 ## Locked on the other brute (see lock), the camera stays on it and a
 ## strike asked for from too far runs at it first, so that it lands.
@@ -82,7 +82,8 @@ var touch_move := Vector2.ZERO
 var touch_jump := false
 var touch_punch := false
 var touch_kick := false
-var touch_dodge := false
+## Set by TouchControls and scripted runs: the guard is held.
+var touch_guard := false
 ## Set by TouchControls and scripted runs: sprint without the key.
 var touch_sprint := false
 ## Where the camera looks (rad): `yaw` about the vertical (0 is along -Z),
@@ -116,6 +117,7 @@ var _charge := ""  # the strike to throw on reaching who it is locked on
 var _charge_for := 0.0  # s it has been running at it
 var _stopped := 0.0  # s it has been stopped by something on the way there
 var _mark: MeshInstance3D  # the ring at the feet of who it is locked on
+var _guarded := false  # the guard was asked for at the last step
 var _shake := 0.0  # how much the camera shakes (1 to 0)
 var _shaken := 0.0  # s it has shaken in all: where its tremor is
 
@@ -201,8 +203,6 @@ func _unhandled_input(event: InputEvent) -> void:
 		kick()
 	elif event.is_action_pressed("lock"):
 		lock()
-	elif event.is_action_pressed("dodge"):
-		dodge()
 	elif event.is_action_pressed("release_mouse"):
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
@@ -259,10 +259,15 @@ func kick() -> bool:
 	return _strike("kick")
 
 
-## Ducks, feet on the ground.
-func dodge() -> bool:
-	_charge = ""
-	return fighter.up() and is_on_floor() and character.dodge()
+## The guard, for as long as `on`: fists up in front of the face, feet
+## still, turned to who it is locked on. A blow from the front is blocked
+## (Fighter.take_hit). Taking it up calls a run off; a strike asked for
+## from it lets it go for as long as the strike takes.
+func guard(on: bool) -> void:
+	if on and not _guarded:
+		_charge = ""
+	_guarded = on
+	character.guard(on and _charge == "" and fighter.up() and is_on_floor())
 
 
 func _physics_process(delta: float) -> void:
@@ -275,7 +280,6 @@ func _physics_process(delta: float) -> void:
 		# Knocked off its feet: nothing to steer until it is up again.
 		touch_punch = false
 		touch_kick = false
-		touch_dodge = false
 		touch_jump = false
 		_airborne = 0.0
 		character.rotation.y = facing
@@ -292,11 +296,9 @@ func _physics_process(delta: float) -> void:
 			punch()
 		if touch_kick:
 			kick()
-		if touch_dodge:
-			dodge()
+	guard(input_enabled and (touch_guard or Input.is_action_pressed("guard")))
 	touch_punch = false
 	touch_kick = false
-	touch_dodge = false
 	if stick != Vector2.ZERO:
 		# Squared response curve gives fine aim near the centre.
 		look(stick * stick.length() * stick_sensitivity * delta)
@@ -307,22 +309,23 @@ func _physics_process(delta: float) -> void:
 	var charging := _charging(delta)
 	if charging != Vector3.ZERO:
 		wish = charging  # running at who it is locked on: the stick waits
+	elif character.guarding():
+		wish = Vector3.ZERO  # the guard is held standing
 	var sprinting := touch_sprint or Input.is_action_pressed("sprint")
 	var speed := sprint_speed if charging != Vector3.ZERO or (input_enabled and sprinting) else run_speed
 	var accel := acceleration if is_on_floor() else air_acceleration
-	var busy := character.busy()
+	var busy := character.striking()
 	var horizontal := Vector3(velocity.x, 0, velocity.z)
 	if busy:
 		horizontal = Fighter.move_speed(self, character, _opponent, delta)
 	else:
 		horizontal = horizontal.move_toward(wish * speed, accel * delta)
-		if wish.length() > 0.1:
-			character.relax()  # walking away from the guard
 	velocity.x = horizontal.x
 	velocity.z = horizontal.z
 	var grounded := is_on_floor()
 	if grounded:
-		if input_enabled and not busy and (Input.is_action_just_pressed("jump") or touch_jump):
+		var free := not busy and not character.guarding()
+		if input_enabled and free and (Input.is_action_just_pressed("jump") or touch_jump):
 			_charge = ""
 			velocity.y = jump_velocity
 			character.jump()
@@ -349,11 +352,16 @@ func _physics_process(delta: float) -> void:
 
 ## Turns the character and tells it what its legs are doing.
 func _animate(wish: Vector3, delta: float) -> void:
-	if character.busy():
+	if character.striking():
 		if is_instance_valid(_opponent):
 			var d := _opponent.global_position - global_position
 			_punch_to = atan2(-d.x, -d.z)
 		facing = rotate_toward(facing, _punch_to, TURN * delta)
+	elif character.guarding():
+		var against := _target()
+		if against != null:
+			var d := against.global_position - global_position
+			facing = rotate_toward(facing, atan2(-d.x, -d.z), TURN * delta)
 	elif wish.length() > 0.1:
 		var to := atan2(-wish.x, -wish.z)
 		facing = rotate_toward(facing, to, TURN * delta)
@@ -408,7 +416,7 @@ func _target() -> Node3D:
 func _strike(kind: String) -> bool:
 	if not fighter.up() or not is_on_floor():
 		return false
-	if _target() != null and not character.busy() and not _within(kind):
+	if _target() != null and not character.striking() and not _within(kind):
 		_charge = kind
 		_charge_for = 0.0
 		return true
@@ -445,7 +453,7 @@ func _charging(delta: float) -> Vector3:
 	if _charge == "":
 		return Vector3.ZERO
 	_charge_for += delta
-	if _target() == null or _charge_for > CHARGE_MOST or character.busy():
+	if _target() == null or _charge_for > CHARGE_MOST or character.striking():
 		_charge = ""
 		return Vector3.ZERO
 	if _within(_charge):

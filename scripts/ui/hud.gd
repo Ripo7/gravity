@@ -27,12 +27,12 @@ func _ready() -> void:
 	_hint = _label(22)
 	_hint.position = Vector2(20, 44)
 	_hint.text = (
-		"Clic ou F : frapper  ·  Clic droit ou E : coup de pied  ·  C : esquiver  ·  Tab : verrouiller\n"
+		"Clic ou F : frapper  ·  Clic droit ou E : coup de pied  ·  C maintenu : garde  ·  Tab : verrouiller\n"
 		+ "Espace : sauter  ·  Maj : sprinter  ·  R : reconstruire"
 	)
 	if TouchControls.should_show():
 		_hint.text = (
-			"Rouge : frapper  ·  Orange : coup de pied  ·  Blanc : esquiver  ·  Viseur : verrouiller\n"
+			"Rouge : frapper  ·  Orange : coup de pied  ·  Blanc maintenu : garde  ·  Viseur : verrouiller\n"
 			+ "Manette poussée à fond : sprint"
 		)
 	var button := Button.new()

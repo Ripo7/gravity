@@ -25,7 +25,7 @@ const LUNGE := 5.0
 ## ends the combination, the kick), at THROW m/s along the ground and LIFT
 ## up. The others push it SHOVE m/s for each point of power, the way the
 ## fist goes (and half as much away from who throws it).
-const LAUNCHERS: Array[String] = ["smash", "kick"]
+const LAUNCHERS: Array[String] = ["slam", "kick"]
 const THROW := 12.0
 const LIFT := 4.0
 const SHOVE := 2.5
@@ -36,8 +36,13 @@ const STOP: Array[float] = [0.0, 0.05, 0.07, 0.12]
 const JOLT_GIVEN: Array[float] = [0.0, 0.35, 0.5, 0.75]
 const JOLT_TAKEN: Array[float] = [0.0, 0.4, 0.6, 1.0]
 const JOLT_WALL := 0.25
-## Ducking, a blow higher than this (m) goes over.
-const DUCKS_UNDER := 1.2
+## A blow that meets a guard (see `take_hit`): it only pushes who holds it,
+## this fast (m/s) for each point of power, and jolts it this much.
+const BLOCKED := 1.0
+const JOLT_BLOCKED := 0.3
+## A guard stops what comes from in front: from no more than this (rad)
+## off the way its holder faces.
+const GUARD_WIDE := 1.2
 ## What a fist or a foot knocks out of what stands: within this radius
 ## (m), by power (2 a blow, 3 one that throws).
 const HOLE: Array[float] = [0.0, 0.45, 0.7, 1.0]
@@ -95,8 +100,6 @@ func strike(move: String, facing: float) -> void:
 	var reach := character.reach()
 	var power := character.power()
 	var height := character.height()
-	# What comes down from overhead is not ducked: for that, it is low.
-	var avoided_under := 0.0 if character.about(move, "above") > 0.0 else height
 	var going := Basis(Vector3.UP, facing) * character.way()
 	var landed := false
 	for node in body.get_tree().get_nodes_in_group(GROUP):
@@ -107,11 +110,20 @@ func strike(move: String, facing: float) -> void:
 		if absf(d.y) < 1.0 and along > 0.0 and along < reach + CONTACT + SLACK:
 			if absf(d.cross(ahead).y) < WIDE:
 				var other := node.get("fighter") as Fighter
-				if other.take_hit(ahead, power, move in LAUNCHERS, avoided_under, going):
+				if other.take_hit(ahead, power, move in LAUNCHERS, going):
 					landed = true
 	var broken := 0
 	if structure != null:
-		var at := body.global_position + ahead * (reach + 0.1) + Vector3.UP * height
+		# Where the fist ends up, or the first standing thing on its way there
+		# (a blow that lunges reaches past a wall the body is stopped by).
+		var from := body.global_position + Vector3.UP * height
+		var at := from + ahead * (reach + 0.1)
+		var mask := Structure.LAYER_WORLD | Structure.LAYER_STRUCTURE
+		var met := body.get_world_3d().direct_space_state.intersect_ray(
+			PhysicsRayQueryParameters3D.create(from, at, mask)
+		)
+		if not met.is_empty():
+			at = met["position"]
 		_scatter(at, HOLE[power], ahead, RUBBLE * power)
 		clear(ahead, RUBBLE * power)
 		broken = smash(structure, at, HOLE[power], ahead * 6.0)
@@ -122,14 +134,21 @@ func strike(move: String, facing: float) -> void:
 		jolted.emit(JOLT_WALL)
 
 
-## A blow from a brute that faces along `way`, of `power`, at `height` m,
-## its fist going along `going` (along `way` if nothing is said).
-## `thrown`: it sends the body flying. Returns false if it does not take
-## it (off its feet already, or ducking under it).
-func take_hit(way: Vector3, power: int, thrown: bool, height := 1.3, going := Vector3.ZERO) -> bool:
-	if state != "up" or (character.state == "duck" and height > DUCKS_UNDER):
+## A blow from a brute that faces along `way`, of `power`, its fist going
+## along `going` (along `way` if nothing is said). `thrown`: it sends the
+## body flying. Returns false if it does not reach it (off its feet
+## already). A body that holds its guard towards the blow blocks it,
+## whatever the blow: it keeps its feet and its guard, and gives a little
+## ground.
+func take_hit(way: Vector3, power: int, thrown: bool, going := Vector3.ZERO) -> bool:
+	if state != "up":
 		return false
 	var flat := Vector3(way.x, 0, way.z).normalized()
+	if blocks(flat):
+		body.velocity += flat * BLOCKED * power
+		character.hold(STOP[1], true)
+		jolted.emit(JOLT_BLOCKED)
+		return true
 	if thrown:
 		launch(flat * THROW + Vector3.UP * LIFT)
 	else:
@@ -139,6 +158,15 @@ func take_hit(way: Vector3, power: int, thrown: bool, height := 1.3, going := Ve
 	character.hold(STOP[power], true)
 	jolted.emit(JOLT_TAKEN[power])
 	return true
+
+
+## Would its guard stop a blow that goes along `way` (flat)? It is up, and
+## turned towards where the blow comes from.
+func blocks(way: Vector3) -> bool:
+	if not character.guarding():
+		return false
+	var facing: float = body.get("facing")
+	return (Basis(Vector3.UP, facing) * Vector3.FORWARD).angle_to(-way) < GUARD_WIDE
 
 
 ## Held still by a blow that has just landed: nothing moves it meanwhile.
@@ -232,8 +260,11 @@ func _scatter(at: Vector3, radius: float, way: Vector3, impulse: float) -> void:
 
 
 ## The speed over the ground (m/s) of `of` during a blow: where the
-## move itself steps and, for a strike that would stop short of `opponent`,
-## what brings its fist or foot onto it by the time it gets there.
+## move itself steps, fitted to `opponent` until the blow lands. A strike
+## that would stop short is carried onto it by the time its fist or foot
+## gets there; one whose own steps would take it past (some dash a long
+## way in) is held back, so that the fist lands on the other and not
+## behind it.
 static func move_speed(of: Node3D, with: Character, opponent: Node3D, delta: float) -> Vector3:
 	var steps := with.root_motion() / delta
 	steps.y = 0.0
@@ -243,11 +274,11 @@ static func move_speed(of: Node3D, with: Character, opponent: Node3D, delta: flo
 	var d := opponent.global_position - of.global_position
 	d.y = 0.0
 	var gap := d.length() - with.reach() - CONTACT
-	if gap <= 0.0:
-		return steps
 	var towards := d.normalized()
+	var closing := steps.dot(towards)
 	var needed := minf(gap / maxf(lands_in, delta), LUNGE)
-	return steps + towards * maxf(needed - steps.dot(towards), 0.0)
+	var fitted := clampf(maxf(closing, needed), 0.0, maxf(gap, 0.0) / delta)
+	return steps + towards * (fitted - closing)
 
 
 ## Stopped by something low while going along `wish` (a unit vector, on

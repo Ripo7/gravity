@@ -9,7 +9,7 @@ const JOINTS := Color(0.22, 0.2, 0.2)
 ## (KICKS of the time) or one to three blows of the combination, with a
 ## wait between two attacks (WAITS: from, to, in s).
 const PACE := 3.2
-const RANGE := 1.15
+const RANGE := 1.4
 const KICKS := 0.3
 const WAITS := Vector2(0.5, 1.3)
 ## It turns at TURN rad/s to whoever is nearer than NOTICE m.
@@ -70,7 +70,7 @@ func _physics_process(delta: float) -> void:
 		character.rotation.y = facing
 		return
 	var seen := watches != null and watches.global_position.distance_to(global_position) < NOTICE
-	var busy := character.busy()
+	var busy := character.striking()
 	var to := Vector3.ZERO
 	if seen and (not busy or character.lands_in() > 0.0):
 		facing = rotate_toward(facing, _towards(watches.global_position), TURN * delta)
@@ -117,7 +117,6 @@ func _fight(delta: float) -> Vector3:
 	d.y = 0.0
 	_wait -= delta
 	if d.length() > RANGE:
-		character.relax()
 		return d.normalized() * PACE
 	if _wait <= 0.0 and is_on_floor() and (watches.get("fighter") as Fighter).up():
 		_wait = randf_range(WAITS.x, WAITS.y)

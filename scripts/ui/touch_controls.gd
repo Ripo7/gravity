@@ -6,7 +6,7 @@ extends Control
 ##   full tilt it breaks into a sprint.
 ##   Right half: drag to look.
 ##   Bottom-right: the punch button. Above it: jump. Left of it: the kick,
-##   with the duck above and the lock farther left.
+##   with the guard above (held) and the lock farther left.
 ## Multi-touch is tracked per finger so you can move, look and strike at once.
 
 @export var player: Player
@@ -26,7 +26,7 @@ var _look_finger := -1
 var _jump_finger := -1
 var _punch_finger := -1
 var _kick_finger := -1
-var _dodge_finger := -1
+var _guard_finger := -1
 var _lock_finger := -1
 ## Last position per finger. Deltas are computed from these instead of the
 ## event's `relative`: on the web, Godot pairs multi-touch moves with the
@@ -60,7 +60,7 @@ func kick_center() -> Vector2:
 	return Vector2(size.x - size.y * 0.47, size.y * 0.82)
 
 
-func dodge_center() -> Vector2:
+func guard_center() -> Vector2:
 	return Vector2(size.x - size.y * 0.44, size.y * 0.585)
 
 
@@ -68,7 +68,7 @@ func lock_center() -> Vector2:
 	return Vector2(size.x - size.y * 0.7, size.y * 0.86)
 
 
-## The radius of the kick, duck and lock buttons.
+## The radius of the kick, guard and lock buttons.
 func small_radius() -> float:
 	return size.y * 0.08
 
@@ -95,13 +95,13 @@ func _input(event: InputEvent) -> void:
 
 func _release_all() -> void:
 	var fingers: Array[int] = [
-		_stick_finger, _look_finger, _jump_finger, _punch_finger, _kick_finger, _dodge_finger, _lock_finger
+		_stick_finger, _look_finger, _jump_finger, _punch_finger, _kick_finger, _guard_finger, _lock_finger
 	]
 	if fingers.max() < 0:
 		return
 	_punch_finger = -1
 	_kick_finger = -1
-	_dodge_finger = -1
+	_guard_finger = -1
 	_stick_finger = -1
 	_look_finger = -1
 	_lock_finger = -1
@@ -109,6 +109,7 @@ func _release_all() -> void:
 	_last.clear()
 	if player:
 		player.touch_move = Vector2.ZERO
+		player.touch_guard = false
 	queue_redraw()
 
 
@@ -140,9 +141,9 @@ func _on_touch(e: InputEventScreenTouch) -> void:
 		elif e.position.distance_to(kick_center()) < small_radius() * 1.3 and _kick_finger < 0:
 			_kick_finger = e.index
 			player.touch_kick = true
-		elif e.position.distance_to(dodge_center()) < small_radius() * 1.3 and _dodge_finger < 0:
-			_dodge_finger = e.index
-			player.touch_dodge = true
+		elif e.position.distance_to(guard_center()) < small_radius() * 1.3 and _guard_finger < 0:
+			_guard_finger = e.index
+			player.touch_guard = true
 		elif e.position.x < size.x * 0.5 and _stick_finger < 0:
 			_stick_finger = e.index
 			_stick_origin = e.position
@@ -159,8 +160,9 @@ func _on_touch(e: InputEventScreenTouch) -> void:
 			_punch_finger = -1
 		elif e.index == _kick_finger:
 			_kick_finger = -1
-		elif e.index == _dodge_finger:
-			_dodge_finger = -1
+		elif e.index == _guard_finger:
+			_guard_finger = -1
+			player.touch_guard = false
 		elif e.index == _stick_finger:
 			_stick_finger = -1
 			player.touch_move = Vector2.ZERO
@@ -222,13 +224,23 @@ func _draw() -> void:
 		]
 	)
 	draw_polyline(boot, Color(1, 1, 1, 0.9), r * 0.2, true)
-	# The duck: an arrow that dips, in white.
-	c = dodge_center()
-	draw_circle(c, r * (1.08 if _dodge_finger >= 0 else 1.0), Color(1, 1, 1, 0.35))
-	draw_arc(c, r * 1.12, 0, TAU, 48, Color(1, 1, 1, 0.6), 3.0, true)
-	draw_arc(
-		c + Vector2(0, -r * 0.35), r * 0.55, 0.15 * PI, 0.85 * PI, 16, Color(1, 1, 1, 0.9), r * 0.16, true
+	# The guard: a shield, in white, filled while it is held.
+	c = guard_center()
+	draw_circle(
+		c, r * (1.08 if _guard_finger >= 0 else 1.0), Color(1, 1, 1, 0.6 if _guard_finger >= 0 else 0.35)
 	)
+	draw_arc(c, r * 1.12, 0, TAU, 48, Color(1, 1, 1, 0.6), 3.0, true)
+	var shield := PackedVector2Array(
+		[
+			c + Vector2(-r * 0.42, -r * 0.45),
+			c + Vector2(r * 0.42, -r * 0.45),
+			c + Vector2(r * 0.42, r * 0.05),
+			c + Vector2(0, r * 0.55),
+			c + Vector2(-r * 0.42, r * 0.05),
+			c + Vector2(-r * 0.42, -r * 0.45),
+		]
+	)
+	draw_polyline(shield, Color(1, 1, 1, 0.9), r * 0.16, true)
 	# The lock: a sight, filled while the other brute is locked on.
 	c = lock_center()
 	var on := player != null and player.locked != null

@@ -7,7 +7,8 @@ extends Node
 ##        there, "w<seconds>" wait,
 ##        "f<seconds>" run forward, "r<seconds>" sprint forward,
 ##        "p<x>,<y>,<seconds>[,1]" push the stick (y -1 is forward; 1: sprint),
-##        "j" jump, "h" punch, "k" kick, "u" duck, "l" lock on or let go,
+##        "j" jump, "h" punch, "k" kick, "g<seconds>" hold the guard,
+##        "l" lock on or let go,
 ##        "x1" / "x0" the other brute attacks or stands there,
 ##        "t<degrees>,<seconds>" turn the camera to the
 ##        left, "d@x,y,z" put the other brute there (in the house's space),
@@ -129,8 +130,10 @@ func _play() -> void:
 			player.touch_punch = true
 		elif kind == "k":
 			player.touch_kick = true
-		elif kind == "u":
-			player.touch_dodge = true
+		elif kind == "g":
+			player.touch_guard = true
+			await _wait(float(spec.substr(1)))
+			player.touch_guard = false
 		elif kind == "x":
 			world.brute.ai = spec.substr(1) == "1"
 		elif kind == "l":

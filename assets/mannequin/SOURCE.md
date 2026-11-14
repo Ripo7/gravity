@@ -19,20 +19,20 @@ day, unchanged:
 
 **The files here are those two cut down to the clips the game uses**, by
 `python3 tools/strip_clips.py assets/mannequin/AnimationLibrary_Godot_Standard.gltf`:
-11 clips out of 46, 1.2 MB instead of 4.0 MB. The mesh, the skeleton and
-the 11 clips are untouched. To get another clip, take the two original
+10 clips out of 46, 1.1 MB instead of 4.0 MB. The mesh, the skeleton and
+the 10 clips are untouched. To get another clip, take the two original
 files from the mirror, add its name to `KEEP` in the tool and run it
 again.
 
 Godot drops the `_Loop` at the end of a clip's name when it imports it and
 makes the clip loop: `Jog_Fwd_Loop` in the file is `Jog_Fwd` in the game.
 
-Kept: Death01, Hit_Chest, Hit_Head, Idle, Jog_Fwd, Jump, Jump_Land,
+Kept: Hit_Chest, Hit_Head, Idle, Jog_Fwd, Jump, Jump_Land,
 Jump_Start, Sprint, Walk (played by
-`scripts/player/character.gd`) and Punch_Jab (`tools/mocap` takes the
+`scripts/player/character.gd`) and Punch_Jab (`tools/moves` takes the
 closed fist from it).
 
-Left out: A_TPose, Crouch_Fwd, Crouch_Idle, Dance, Driving,
+Left out: A_TPose, Crouch_Fwd, Crouch_Idle, Dance, Death01, Driving,
 Fixing_Kneeling, Idle_Talking, Idle_Torch, Interact, PickUp_Table,
 Pistol_Aim_Down, Pistol_Aim_Neutral, Pistol_Aim_Up, Pistol_Idle,
 Pistol_Reload, Pistol_Shoot, Punch_Cross, Punch_Enter, Push, Roll, Roll_RM,
