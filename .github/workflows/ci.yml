@@ -68,7 +68,7 @@ jobs:
         run: |
           set -o pipefail
           # --fixed-fps: one physics step per frame, as fast as the machine goes.
-          $GODOT --headless --fixed-fps 60 --path . -- --mode=showcase --seed=1 --prof --quality=low 2>&1 \
+          $GODOT --headless --fixed-fps 60 --path . -- --mode=showcase --city=49 --seed=1 --prof --quality=low 2>&1 \
             | python3 tools/perf_gate.py --max-busy-ms 8
 
   export:

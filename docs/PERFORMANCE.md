@@ -21,14 +21,20 @@ regression, not 10%.
 
 ### The city (default level)
 
-Same machine and settings. The showcase tour of the city (84 blows from
-14 places: each tower and the lots beside it, two corners), seeds 1 to 3: 1.1 to 1.3
-ms a step on average while things move (the house: 1.8 to 2.0 on the same
-run), the worst second 2.0 to 2.5 ms, the slowest step 7.1 to 10.3 ms, at
-most 673 pieces. A 40 s fight on the square (seed 1, the other brute
-attacking): 0.2 to 1.3 ms a second on average. The city is 1893 shards,
-86 618 vertices, cut and bonded in 0.52 to 0.65 s headless (0.29 s
-for the house).
+Same machine and settings. Cities are made up from a number and are not
+all as big: of numbers 0 to 59, the lightest is planned at 844 shards and
+the heaviest at 1889 (the cap is 1900); forty of them built one after the
+other are 830 to 1931 shards, all stand as built (no bond above 0.26 of
+what breaks it) and the slowest is cut and bonded in 0.39 s headless.
+
+The showcase tour (84 blows from 14 places: every tower, then the offices
+and houses nearest the square, each from the nearest kerb), on cities 1,
+4, 19, 37 and 49 (1282 to 1975 shards, the last three among the
+heaviest): 0.7 to 1.0 ms a step on average while things move (the house:
+1.8 to 2.0), the worst second 1.5 to 2.0 ms, the slowest step 4.4 to 6.0
+ms, at most 471 to 595 pieces. A 40 s fight on the square of city 49 (the
+other brute attacking): 0.7 ms in the worst second, 0.16 at the median.
+CI runs the tour on city 49.
 
 ### The house
 

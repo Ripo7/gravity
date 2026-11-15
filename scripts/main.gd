@@ -20,6 +20,11 @@ var hud: Hud
 var level := "city"
 ## Where the house stands.
 var house_at := Transform3D(Basis(), Vector3(0, 0, -4))
+## The city, if that is the ground, and the number it is made up from: a
+## new one each time unless it is set before the scene enters the tree, or
+## told with the launch option --city= (or --seed=, for a scripted run).
+var city: City
+var city_number := -1
 ## The level's own space: the house's, or the world's for the city.
 var level_at := Transform3D.IDENTITY
 ## The other brute, and where it starts (in the house's space): near where
@@ -48,12 +53,15 @@ func _ready() -> void:
 		level_at = house_at
 		House.build(structure, house_at)
 	else:
+		if city_number < 0:
+			city_number = int(options.get("city", options.get("seed", randi() % 100000)))
+		city = City.new(city_number)
 		structure.mesh.squares_per_metre = City.SQUARES_PER_METRE
 		structure.density = City.DENSITY
-		City.build(structure, Transform3D.IDENTITY)
+		city.build(structure, Transform3D.IDENTITY)
 		_pave()
-		starts = City.PLAYER
-		brute_starts = City.BRUTE
+		starts = city.player_start
+		brute_starts = city.brute_start
 	structure.build()
 	build_ms = (Time.get_ticks_usec() - t) / 1000.0
 	dust = Dust.new()
@@ -95,6 +103,21 @@ func _ready() -> void:
 			]
 		)
 	)
+	if city != null:
+		print(
+			(
+				"CITY number=%d blocks=%d towers=%d offices=%d houses=%d cars=%d railway=%d"
+				% [
+					city.number,
+					city.blocks.size(),
+					city.towers.size(),
+					city.offices.size(),
+					city.houses.size(),
+					city.cars.size(),
+					city.railway.size() / 2
+				]
+			)
+		)
 	if options.has("mode"):
 		var director := Director.new()
 		director.options = options
@@ -124,7 +147,7 @@ func blow(from: Vector3, direction: Vector3) -> int:
 ## at, stop after stop.
 func tour() -> Array[Array]:
 	var stops: Array[Array] = []
-	for stop in House.tour() if level == "house" else City.tour():
+	for stop in House.tour() if city == null else city.tour():
 		stops.append([level_at * (stop[0] as Vector3), level_at * (stop[1] as Vector3)])
 	return stops
 
@@ -153,7 +176,7 @@ func _pave() -> void:
 	mat.uv1_triplanar = true
 	mat.uv1_world_triplanar = true
 	mat.uv1_scale = Vector3.ONE * 0.5
-	for pad: Array in City.pads():
+	for pad: Array in city.pads():
 		var size: Vector2 = pad[1]
 		var slab := BoxMesh.new()
 		slab.size = Vector3(size.x, 0.03, size.y)

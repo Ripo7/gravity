@@ -212,8 +212,8 @@ hits taken in the air and walking in eight directions.
    same corners, so an intact wall has no gaps. The house is 1516 shards and
    is cut in about 0.25 s (0.6 s in a browser); rebuilding it reuses the
    cut.
-   The city is 1893 shards (cut in about 0.55 s headless): what is low or
-   small is cut plain (a house in four to six shards, a car, a roof or a
+   A city is 800 to 2000 shards (cut in 0.2 to 0.4 s headless): what is
+   low or small is cut plain (a house in four to six shards, a car, a roof or a
    tree's crown in one), offices and towers at 0.75 m. It is light (300
    kg/m3, `Structure.density`): a toy city is hollow.
 2. **Bonds** (`structure.gd`). Shards that touch are bonded, with the area
@@ -268,6 +268,23 @@ its shards and what holds are the same everywhere.
 
 ## The city: giants in a toy town
 
+- **Made up from a number** (`City.new(number)`). The same number gives
+  the same city. Streets 5.5 to 9.5 m apart cut the ground into three or
+  four rows of three or four blocks; a block that is not on the edge is
+  the square (its middle is the world's). Each other block is a district
+  (downtown, houses, park; downtown six times in ten next to the square,
+  two in ten elsewhere, and twice at least) and is cut in two again and
+  again into lots 2 to 4 m across. A lot gets a tower (one or two per
+  downtown block, two to five in a city), an office, a row or two of
+  houses, or trees. Cars go along every avenue, and two cities in three
+  have a railway down one of them. The city is first a list of boxes
+  (`_boxes`), whose cost in shards is told without cutting anything
+  (`weight()`); above `City.MOST` (1900) it is planned again, with the
+  same streets and less on the lots. `Main` picks the number: set by a
+  test, `--city=`, else `--seed=`, else at random; the plan also tells
+  where things are (`towers`, `offices`, `houses`, `cars`, `blocks`), for
+  the showcase tour and the tests.
+
 - **Wading** (`Fighter.wade`, `trample`). After each step a brute takes,
   whatever stands in front of its knees and reaches no higher than
   `Fighter.WADE` (1.2 m) above its feet is knocked out and kicked ahead,
@@ -288,7 +305,7 @@ its shards and what holds are the same everywhere.
   could not do this on its own: as built, a tower's foot is far below what
   breaks a bond, and making the city brittle enough to fall that way made
   the railway fall down by itself.
-- **Showcase and tests.** The tour comes from the level (`City.tour`,
+- **Showcase and tests.** The tour comes from the level (`city.tour()`,
   `House.tour`); every older test runs on the house (`main.level =
   "house"`), the city has its own (`tests/test_city.gd`).
 
