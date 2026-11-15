@@ -69,4 +69,6 @@ func _process(delta: float) -> void:
 		"%d i/s   physique %.1f ms   %d morceaux (%d en mouvement)   v%s"
 		% [Engine.get_frames_per_second(), world.clock.avg_ms, p.live, p.awake, _build]
 	)
+	if world.city != null:
+		_stats.text += "   ville %d" % world.city.number
 	_hint.modulate.a = move_toward(_hint.modulate.a, 0.0 if p.live > 0 else 1.0, 0.25)

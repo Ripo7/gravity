@@ -16,7 +16,8 @@ extends Node
 ##   --mode=showcase   a fixed tour that takes the level apart
 ##   --mode=still [--pos=x,y,z --at=x,y,z --wait=S]   just look
 ##   --mode=check      how loaded the building is as built
-## --level=city|house: which ground (the city unless told).
+## --level=city|house: which ground (the city unless told). --city=N: which
+## city (the one of --seed if there is one, else a new one each time).
 ## --fight: as played, the other brute attacks and the player is locked on
 ## it (otherwise it only stands there, and the camera is free).
 ## --seed=N makes a run repeatable; --prof prints the cost of the physics

@@ -6,9 +6,13 @@ Seen in third person.
 
 - **The city.** The brutes keep their size and the city is small around
   them (`scripts/game/city.gd`): houses up to their knees, offices up to
-  their heads, four towers three times their height, around a square to
-  fight on. Cars along the avenues, trees, a railway on stilts with a
-  train. What is lower than their waist they walk straight through,
+  their heads, towers three times their height, around a square to fight
+  on. Cars along the avenues, trees, often a railway on stilts with a
+  train. It is made up from a number, a new one each game (and each
+  "Reconstruire"): three or four rows of blocks, never the same size,
+  downtown here, houses or a park there. The number is shown at the top
+  left ("ville 48213"); `?city=48213` in the address (`--city=` on the
+  command line) brings the same city back. What is lower than their waist they walk straight through,
   kicking it ahead (houses, cars, trees, the railway); what they come down
   on is flattened; light rubble does not stop them. Offices and towers
   have to be punched, charged or thrown through. A tower whose foot is
@@ -100,8 +104,9 @@ browser as `index.html?mode=...`:
 
 ```sh
 # A fixed tour that takes the city apart, with the cost of the physics.
-# (--level=house: the house instead, in any mode.)
-godot --headless --fixed-fps 60 --path . -- --mode=showcase --seed=1 --prof --quality=low \
+# (--level=house: the house instead, in any mode. --city=N: which city;
+# without it, the city of --seed.)
+godot --headless --fixed-fps 60 --path . -- --mode=showcase --city=49 --seed=1 --prof --quality=low \
   | python3 tools/perf_gate.py
 # Your own steps: look there, a blow where you look, wait, run forward...
 godot --path . -- --mode=play --from=-2.5,0.05,4.2 --steps="a@-2.5,1.4,-0.6;o;w1;o@-2,2,-0.6;w2;f0.8"
