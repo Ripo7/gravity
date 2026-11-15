@@ -4,6 +4,12 @@ Two fighters, stronger than people are, in a greybox city where what
 stands can be broken: a hard blow sends the other one through the walls.
 Seen in third person.
 
+- **Its walls.** The buildings are still boxes, which is what breaks, but
+  they are no longer grey: each wall is laid, bay by bay and floor by
+  floor, with a façade modelled in Blender and baked into two textures
+  (`tools/blender/facades.py`, see `assets/city/SOURCE.md`): windows set
+  back in the wall, shutters, shop fronts under awnings, cornices, glass
+  towers; bricks or concrete show where a wall is broken.
 - **The city.** The brutes keep their size and the city is small around
   them (`scripts/game/city.gd`): houses up to their knees, offices up to
   their heads, towers three times their height, around a square to fight

@@ -6,8 +6,17 @@ extends MeshInstance3D
 ## while the game runs, are a second, small mesh drawn the same way; it is
 ## made again whenever some are added.
 
+## What a box is dressed as. GRID is the test ground's squares, PLAIN its
+## colour alone; the others are the walls baked by tools/blender/facades.py,
+## laid bay by bay and floor by floor (TILES: the tiles of a roof).
+enum Look { GRID, HOUSE, OFFICE, TOWER, TILES, PLAIN }
+
 const SHADER := preload("res://shaders/shards.gdshader")
 const TEXTURES := "res://addons/kenney_prototype_textures/"
+const FACADES := "res://assets/city/facades_"
+## How wide a bay is and how high a floor, per look (m).
+const BAY: Array[float] = [1.0, 0.42, 0.5, 0.42, 1.0, 1.0]
+const FLOOR: Array[float] = [1.0, 0.36, 0.4, 0.36, 1.0, 1.0]
 ## Texels per row of the two data textures.
 const WIDTH := 256
 ## Floats per body: where rest-space points go (xyz, pad) and a rotation.
@@ -15,6 +24,9 @@ const BODY_FLOATS := 8
 ## A face made by a cut is not left flat: its middle is pushed in or out by
 ## up to this share of its size, so it catches the light like broken stone.
 const ROUGH := 0.14
+
+# The pictures already cut into layers, by path.
+static var _made := {}
 
 var vertex_count := 0
 ## How many squares of the grid to a metre on what stands (set it before
@@ -25,6 +37,7 @@ var _verts := PackedVector3Array()
 var _normals := PackedVector3Array()
 var _colors := PackedColorArray()
 var _uvs := PackedVector2Array()
+var _skins := PackedFloat32Array()
 var _indices := PackedInt32Array()
 var _slots := PackedFloat32Array()
 var _slot_image: Image
@@ -50,12 +63,30 @@ func _init() -> void:
 
 
 func add_shard(
-	id: int, base: int, points: PackedVector3Array, cut: Fracture.Shard, turn: Basis, tint: Color, alone := -1
+	id: int,
+	base: int,
+	points: PackedVector3Array,
+	cut: Fracture.Shard,
+	turn: Basis,
+	tint: Color,
+	alone := -1,
+	look := Look.GRID,
+	box := Transform3D.IDENTITY,
+	size := Vector3.ONE
 ) -> void:
 	_crumbs_changed = _crumbs != null
+	# The look goes with the colour, in its alpha.
+	tint.a = 1.0 - look * 0.2
+	var into := box.affine_inverse()
 	for f in cut.faces.size():
 		var ring := cut.faces[f]
 		var normal := turn * cut.normals[f]
+		# Where a point of a wall is among its bays and floors (see the
+		# shader): bays across, floors up, and how many of each.
+		var across := Vector3.UP.cross(cut.normals[f])
+		var wide := absf(across.x) * size.x + absf(across.z) * size.z
+		var bays := maxf(1.0, roundf(wide / BAY[look]))
+		var floors := maxf(1.0, roundf(size.y / FLOOR[look]))
 		var from := _verts.size()
 		var broken := cut.others[f] >= 0
 		# Which shard, and for a face made by the cut, 1 + the shard on its
@@ -70,6 +101,14 @@ func add_shard(
 			_colors.append(tint)
 			_uvs.append(uv)
 			middle += points[c]
+			var place := Vector4.ZERO
+			if not broken and wide > 0.0:
+				var local := into * points[c]
+				place.x = (local.dot(across) / wide + 0.5) * bays
+				place.y = (local.y / size.y + 0.5) * floors
+				place.z = bays
+				place.w = floors
+			_skins.append_array([place.x, place.y, place.z, place.w])
 		# The ring runs anticlockwise seen from outside; triangles go clockwise.
 		if not broken:
 			for t in range(1, ring.size() - 1):
@@ -84,6 +123,7 @@ func add_shard(
 		_normals.append(normal)
 		_colors.append(tint)
 		_uvs.append(uv)
+		_skins.append_array([0.0, 0.0, 0.0, 0.0])
 		for t in n:
 			_indices.append(from + n)
 			_indices.append(from + (t + 1) % n)
@@ -117,11 +157,14 @@ func build(shards: int, bodies: int, hidden_from: int) -> void:
 	mat.set_shader_parameter("bodies", _body_texture)
 	mat.set_shader_parameter("grid", load(TEXTURES + "light/texture_07.png"))
 	mat.set_shader_parameter("squares_per_metre", squares_per_metre)
+	mat.set_shader_parameter("facade", _layers(FACADES + "albedo.png"))
+	mat.set_shader_parameter("facade_relief", _layers(FACADES + "normal.png"))
 	material_override = mat
 	_verts = PackedVector3Array()
 	_normals = PackedVector3Array()
 	_colors = PackedColorArray()
 	_uvs = PackedVector2Array()
+	_skins = PackedFloat32Array()
 	_indices = PackedInt32Array()
 	_crumbs = MeshInstance3D.new()
 	_crumbs.material_override = mat
@@ -175,7 +218,28 @@ func _surface() -> ArrayMesh:
 	arrays[Mesh.ARRAY_NORMAL] = _normals
 	arrays[Mesh.ARRAY_COLOR] = _colors
 	arrays[Mesh.ARRAY_TEX_UV] = _uvs
+	arrays[Mesh.ARRAY_CUSTOM0] = _skins
 	arrays[Mesh.ARRAY_INDEX] = _indices
 	var m := ArrayMesh.new()
-	m.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	var floats := Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM0_SHIFT
+	m.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays, [], {}, floats)
 	return m
+
+
+## The sixteen tiles of a picture made by tools/blender/facades.py, as the
+## layers of one texture (column by column), each repeating on its own.
+static func _layers(path: String) -> Texture2DArray:
+	if _made.has(path):
+		return _made[path]
+	var whole := (load(path) as Texture2D).get_image()
+	var tile := whole.get_width() / 4
+	var tiles: Array[Image] = []
+	for column in 4:
+		for row in 4:
+			var one := whole.get_region(Rect2i(column * tile, row * tile, tile, tile))
+			one.generate_mipmaps()
+			tiles.append(one)
+	var stack := Texture2DArray.new()
+	stack.create_from_images(tiles)
+	_made[path] = stack
+	return stack

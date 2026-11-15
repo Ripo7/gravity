@@ -308,4 +308,16 @@ its shards and what holds are the same everywhere.
 - **Showcase and tests.** The tour comes from the level (`city.tour()`,
   `House.tour`); every older test runs on the house (`main.level =
   "house"`), the city has its own (`tests/test_city.gd`).
-
+- **Walls** (`ShardMesh.Look`, `shaders/shards.gdshader`). A box is added
+  with a look: the grid of the test ground, its paint alone, or a house,
+  an office, a tower, roof tiles. For a wall, each vertex of a face of the
+  box carries where it is among the bays and floors of that face (`BAY`,
+  `FLOOR`: a whole number of each fits the wall, so no window is cut at a
+  corner); the shader picks the tile (ground floor, a floor in between,
+  top floor; one door to a house), paints it where its alpha says so with
+  the box's colour, and uses its relief as a normal map, turned with the
+  piece once it falls. Broken faces show bricks or concrete. The tiles are
+  made by `tools/blender/facades.py` (Blender as a Python module, no
+  interface: bmesh for the shapes, shader nodes for the passes, Cycles to
+  bake) and loaded as two `Texture2DArray` of sixteen layers. It is still
+  one draw call; the two pictures add 1.5 MB to the web build.

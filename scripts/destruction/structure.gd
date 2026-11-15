@@ -155,6 +155,8 @@ var _planes: Array = []
 var _cut_of: Array[Fracture.Shard] = []
 var _box_xf: Array[Transform3D] = []
 var _box_tint := PackedColorArray()
+var _box_look := PackedInt32Array()
+var _box_size := PackedVector3Array()
 
 
 func _init() -> void:
@@ -182,9 +184,11 @@ func _exit_tree() -> void:
 
 ## Adds a box of `size` at `xf` and cuts it into shards about `grain`
 ## across (`plain`: one to a cell of the cut, never several small ones; a
-## box smaller than `grain` is then a single shard). Call build() once
-## every box is in.
-func add_box(xf: Transform3D, size: Vector3, tint := Color.WHITE, grain := GRAIN, plain := false) -> int:
+## box smaller than `grain` is then a single shard). `look` is what it is
+## dressed as (a ShardMesh.Look). Call build() once every box is in.
+func add_box(
+	xf: Transform3D, size: Vector3, tint := Color.WHITE, grain := GRAIN, plain := false, look := 0
+) -> int:
 	var box := _box_shards.size()
 	var cut_key := [size, grain, cut_seed * 7919 + box * 104729, plain]
 	if not _cuts.has(cut_key):
@@ -192,6 +196,8 @@ func add_box(xf: Transform3D, size: Vector3, tint := Color.WHITE, grain := GRAIN
 	var cut: Array[Fracture.Shard] = _cuts[cut_key]
 	_box_xf.append(xf)
 	_box_tint.append(tint)
+	_box_look.append(look)
+	_box_size.append(size)
 	var base := count
 	var mine := PackedInt32Array()
 	var box_lo := Vector3.INF
@@ -259,7 +265,7 @@ func add_box(xf: Transform3D, size: Vector3, tint := Color.WHITE, grain := GRAIN
 		box_lo = box_lo.min(lo)
 		box_hi = box_hi.max(hi)
 		total_volume += sh.volume
-		mesh.add_shard(i, base, world, sh, xf.basis, tint)
+		mesh.add_shard(i, base, world, sh, xf.basis, tint, -1, look, xf, size)
 	_box_shards.append(mine)
 	_box_lo.append(box_lo)
 	_box_hi.append(box_hi)
@@ -526,7 +532,20 @@ func make_crumbs(i: int) -> PackedInt32Array:
 		piece_of.append(-1)
 		corners.append(around)
 		_shape.append(RID())
-		mesh.add_shard(total, 0, world, bit, xf.basis, _box_tint[element[i]], count + most_crumbs)
+		var box := element[i]
+		var hidden := count + most_crumbs
+		mesh.add_shard(
+			total,
+			0,
+			world,
+			bit,
+			xf.basis,
+			_box_tint[box],
+			hidden,
+			_box_look[box],
+			_box_xf[box],
+			_box_size[box]
+		)
 		out.append(total)
 		total += 1
 	return out
