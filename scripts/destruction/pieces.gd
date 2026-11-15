@@ -49,13 +49,22 @@ const CLEAR_STEPS := 5
 const CONTACTS := 12
 const GRID := 2.0  ## m, the grid frozen pieces are found by
 const NOT_OURS := -1000000
+## A piece no heavier than this (kg) is litter: no obstacle to a brute.
+const LITTER := 500.0
 ## What a piece is stopped by. The brutes too: a piece that only went
 ## through one would carry it along (a body the game moves is pushed out of
 ## whatever overlaps it).
 const MASK_CLEARING := (
-	Structure.LAYER_WORLD | Structure.LAYER_DEBRIS | Structure.LAYER_PLAYER | Structure.LAYER_ACTOR
+	Structure.LAYER_WORLD
+	| Structure.LAYER_DEBRIS
+	| Structure.LAYER_LITTER
+	| Structure.LAYER_PLAYER
+	| Structure.LAYER_ACTOR
 )
 const MASK := MASK_CLEARING | Structure.LAYER_STRUCTURE
+## What litter is not stopped by (layer pairs collide if either one's mask
+## has the other's layer: neither side may have it).
+const NOT_FOR_LITTER := Structure.LAYER_PLAYER | Structure.LAYER_ACTOR
 
 var structure: Structure
 ## Per piece (a piece keeps its number until it breaks up).
@@ -158,8 +167,10 @@ func spawn(
 	PhysicsServer3D.body_set_param(b, PhysicsServer3D.BODY_PARAM_FRICTION, 0.8)
 	PhysicsServer3D.body_set_param(b, PhysicsServer3D.BODY_PARAM_BOUNCE, 0.05)
 	PhysicsServer3D.body_set_param(b, PhysicsServer3D.BODY_PARAM_ANGULAR_DAMP, 0.4)
-	PhysicsServer3D.body_set_collision_layer(b, Structure.LAYER_DEBRIS)
-	PhysicsServer3D.body_set_collision_mask(b, MASK_CLEARING if torn else MASK)
+	var litter := weight <= LITTER
+	var mask := MASK_CLEARING if torn else MASK
+	PhysicsServer3D.body_set_collision_layer(b, Structure.LAYER_LITTER if litter else Structure.LAYER_DEBRIS)
+	PhysicsServer3D.body_set_collision_mask(b, mask & ~NOT_FOR_LITTER if litter else mask)
 	PhysicsServer3D.body_set_state(b, PhysicsServer3D.BODY_STATE_TRANSFORM, xf)
 	PhysicsServer3D.body_set_state(b, PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY, velocity)
 	PhysicsServer3D.body_set_state(b, PhysicsServer3D.BODY_STATE_ANGULAR_VELOCITY, spin)
@@ -235,7 +246,8 @@ func _physics_process(_delta: float) -> void:
 			_clearing[k] = Vector3i(c.x, c.y, c.z - 1)
 			continue
 		if alive[c.x] == 1 and _serial[c.x] == c.y:
-			PhysicsServer3D.body_set_collision_mask(body[c.x], MASK)
+			var litter := mass[c.x] <= LITTER
+			PhysicsServer3D.body_set_collision_mask(body[c.x], MASK & ~NOT_FOR_LITTER if litter else MASK)
 		_clearing.remove_at(k)
 	for i in _freeze:
 		if alive[i] == 1 and frozen[i] == 0 and _quiet[i] >= QUIET_TIME:
@@ -439,7 +451,8 @@ func _shatter(hit: Array) -> void:
 	var total := 0.0
 	for j in impulses:
 		total += j
-	var amount: float = hit[6] / TOUGHNESS
+	# (Per kg, what is light is as tough as what is heavy.)
+	var amount: float = hit[6] / (TOUGHNESS * s.density / Structure.DENSITY)
 	var xf := _xf[i]
 	var from_rest := xf * Transform3D(Basis(), -origin[i])
 	var to_rest := from_rest.affine_inverse()

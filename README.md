@@ -1,8 +1,19 @@
-# Concept: two brutes in a house that breaks
+# Concept: two giant brutes in a toy city
 
-Two fighters, stronger than people are, in a greybox scene where what
+Two fighters, stronger than people are, in a greybox city where what
 stands can be broken: a hard blow sends the other one through the walls.
 Seen in third person.
+
+- **The city.** The brutes keep their size and the city is small around
+  them (`scripts/game/city.gd`): houses up to their knees, offices up to
+  their heads, four towers three times their height, around a square to
+  fight on. Cars along the avenues, trees, a railway on stilts with a
+  train. What is lower than their waist they walk straight through,
+  kicking it ahead (houses, cars, trees, the railway); what they come down
+  on is flattened; light rubble does not stop them. Offices and towers
+  have to be punched, charged or thrown through. A tower whose foot is
+  knocked half out tips over, away from the side that went. The house of
+  earlier versions is still there, as a test bench (`--level=house`).
 
 - **Destruction.** Walls break into irregular shards where they are hit, and
   into smaller crumbs where they are hit hardest; what is no longer held up
@@ -39,7 +50,7 @@ The previous project, Gravity, is kept as it was on the branch
 | Guard (hold) | C or ctrl | white button |
 | Lock on / let go | middle click or tab | the sight |
 | Jump | space | small button |
-| Rebuild the house | R | "Reconstruire" |
+| Rebuild the level | R | "Reconstruire" |
 
 The camera sits behind the character's left shoulder and turns about its
 head; it comes closer when a wall is behind (and the character is not
@@ -88,7 +99,8 @@ Scripted runs (`scripts/core/director.gd`), on desktop after `--`, in a
 browser as `index.html?mode=...`:
 
 ```sh
-# A fixed tour that takes the house apart, with the cost of the physics.
+# A fixed tour that takes the city apart, with the cost of the physics.
+# (--level=house: the house instead, in any mode.)
 godot --headless --fixed-fps 60 --path . -- --mode=showcase --seed=1 --prof --quality=low \
   | python3 tools/perf_gate.py
 # Your own steps: look there, a blow where you look, wait, run forward...
@@ -100,7 +112,7 @@ godot --path . -- --mode=play --from=-25,0.05,30 --steps="p0.2,0,2;p1,0,2;p1,0,2
 godot --path . -- --mode=play --from=4,0.05,15 --steps="l;w0.8;h;w1.5;h;w0.6;h;w0.6;h;w5;k;w4"
 # As played: the other brute attacks, the player is locked on it.
 godot --path . -- --mode=play --fight --from=4,0.05,15 --steps="w1;h;w0.5;h;w0.5;h;w4;k;w3"
-# How loaded the house is as built (1 = a bond breaks).
+# How loaded what stands is as built (1 = a bond breaks).
 godot --headless --path . -- --mode=check
 ```
 

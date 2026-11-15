@@ -39,7 +39,8 @@ class Shard:
 
 
 ## The shards of a box of `size`. `fine` is the share of grid cells that
-## hold several small shards instead of one.
+## hold several small shards instead of one (0: never, not even in a beam;
+## a box smaller than `grain` every way is then one shard).
 static func cut(size: Vector3, grain: float, rng_seed: int, fine := 0.25) -> Array[Shard]:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = rng_seed
@@ -48,7 +49,7 @@ static func cut(size: Vector3, grain: float, rng_seed: int, fine := 0.25) -> Arr
 	)
 	var cell := size / Vector3(n)
 	var half := size * 0.5
-	if int(n.x == 1) + int(n.y == 1) + int(n.z == 1) >= 2:
+	if fine > 0.0 and int(n.x == 1) + int(n.y == 1) + int(n.z == 1) >= 2:
 		fine = maxf(fine, FINE_IN_BEAMS)
 	# How much distances count along each axis, squared.
 	var m2 := Vector3(

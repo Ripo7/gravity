@@ -17,6 +17,9 @@ const BODY_FLOATS := 8
 const ROUGH := 0.14
 
 var vertex_count := 0
+## How many squares of the grid to a metre on what stands (set it before
+## build()): a quarter for a house, more for a toy city.
+var squares_per_metre := 0.25
 
 var _verts := PackedVector3Array()
 var _normals := PackedVector3Array()
@@ -113,6 +116,7 @@ func build(shards: int, bodies: int, hidden_from: int) -> void:
 	mat.set_shader_parameter("slot_of", _slot_texture)
 	mat.set_shader_parameter("bodies", _body_texture)
 	mat.set_shader_parameter("grid", load(TEXTURES + "light/texture_07.png"))
+	mat.set_shader_parameter("squares_per_metre", squares_per_metre)
 	material_override = mat
 	_verts = PackedVector3Array()
 	_normals = PackedVector3Array()

@@ -14,10 +14,6 @@ extends CharacterBody3D
 
 const FOV := 70.0
 const KILL_Y := -25.0
-## Loose pieces lighter than this (kg) are shoved aside when you walk into
-## them; heavier ones are obstacles.
-const SHOVE_MASS := 500.0
-const SHOVE_SPEED := 1.6  ## m/s
 ## Rubble up to this high (m) is stepped onto instead of stopping you.
 const STEP := 0.6
 ## The camera turns about a point this high above the feet (m), and sits
@@ -98,8 +94,6 @@ var character: Character
 var fighter: Fighter
 ## The other brute it is locked on, if any (see `lock`).
 var locked: Node3D
-## Set by the world, to shove loose pieces aside.
-var pieces: Pieces
 
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var _spawn: Transform3D
@@ -334,14 +328,18 @@ func _physics_process(delta: float) -> void:
 		_fell = maxf(-velocity.y, 0.0)
 	touch_jump = false
 	move_and_slide()
+	# Where it means to go, and how fast (held up, it has no speed of its own).
+	var going := horizontal if busy or wish == Vector3.ZERO else wish * speed
+	var waded := fighter.wade(going, horizontal)
 	var pushing := charging
 	if busy and horizontal.length() > 1.0 and _target() != null:
 		pushing = horizontal.normalized()  # the step of a blow that goes to it
 	_go_through(pushing, delta)
-	# A blow that steps in steps onto rubble like any other step.
-	_climb(horizontal.limit_length(1.0) if busy else wish, delta)
+	# A blow that steps in steps onto rubble like any other step. (Not onto
+	# what it has just walked through.)
+	if not waded:
+		_climb(horizontal.limit_length(1.0) if busy else wish, delta)
 	_lift = move_toward(_lift, 0.0, delta * 3.0)
-	_shove()
 	if global_position.y < KILL_Y:
 		global_transform = _spawn
 		velocity = Vector3.ZERO
@@ -542,22 +540,3 @@ func _climb(wish: Vector3, delta: float) -> void:
 		return
 	var rise := Fighter.climb(self, wish.normalized(), maxf(run_speed * delta, 0.15), STEP)
 	_lift = minf(_lift + rise, STEP)
-
-
-## Light pieces you walk into are nudged aside (never launched).
-func _shove() -> void:
-	if pieces == null:
-		return
-	for k in get_slide_collision_count():
-		var c := get_slide_collision(k)
-		var i := pieces.index_of(c.get_collider_rid())
-		if i < 0 or pieces.mass[i] > SHOVE_MASS:
-			continue
-		var way := -c.get_normal()
-		way.y = 0.0
-		if way.length() < 0.3:
-			continue  # standing on it
-		way = way.normalized()
-		var lack := SHOVE_SPEED - pieces.velocity_of(i).dot(way)
-		if lack > 0.0:
-			pieces.push(i, way * minf(lack, 0.5))

@@ -81,6 +81,44 @@ func test_what_sticks_out_too_far_snaps_off() -> void:
 	await _end()
 
 
+func test_a_column_that_loses_half_a_storey_comes_down_away_from_the_gap() -> void:
+	await _begin()
+	# A tower, and beside it a block as wide as it is high.
+	var tower := s.add_box(Transform3D(Basis(), Vector3(0, 2.5, 0)), Vector3(1.8, 5, 1.8), Color.WHITE, 0.75)
+	var block := s.add_box(
+		Transform3D(Basis(), Vector3(8, 1.2, 0)), Vector3(2.4, 2.4, 2.4), Color.WHITE, 0.75
+	)
+	s.build()
+	s.recheck()
+	await frames(20)
+	check_eq(s.held_count, s.count, "both stand as built")
+	# The same bite out of each, a metre up, on the side of +Z.
+	var bitten: Array[int] = [0, 0]
+	for i in s.count:
+		var off := s.centroid[i] - Vector3(8 if s.element[i] == block else 0, 0, 0)
+		if off.y > 0.75 and off.y < 1.5 and off.z > -0.25:
+			bitten[1 if s.element[i] == block else 0] += 1
+			s.blow(i, Vector3(0, 0, -3))
+	check(bitten[0] > 2 and bitten[1] > 2, "a bite out of each (%d and %d shards)" % bitten)
+	await frames(240)
+	var high: Array[int] = [0, 0]
+	var fell := Vector3.ZERO
+	var fallen := 0
+	for i in s.count:
+		if s.held[i] == 1 and s.centroid[i].y > 1.6:
+			high[1 if s.element[i] == block else 0] += 1
+		elif s.element[i] == tower and s.centroid[i].y > 1.6:
+			fell += s.place_of(i)
+			fallen += 1
+	check_eq(high[0], 0, "nothing of the tower stands above the bite")
+	check(high[1] > 5, "the block holds, with its hole (%d shards above it)" % high[1])
+	check(fallen > 15, "the top of the tower came down (%d shards)" % fallen)
+	fell /= maxf(fallen, 1.0)
+	check(fell.z < -1.0, "away from the side that was bitten (%.1f m)" % -fell.z)
+	check(fell.y < 1.5, "to the ground (%.1f m up)" % fell.y)
+	await _end()
+
+
 func test_a_shard_hit_hard_breaks_into_crumbs() -> void:
 	await _begin()
 	s.add_box(Transform3D(Basis(), Vector3(0, 1.5, 0)), Vector3(4, 3, 0.35))

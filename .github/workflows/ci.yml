@@ -63,7 +63,7 @@ jobs:
         run: echo "GODOT=$(tools/install_godot.sh | tail -n1)" >> "$GITHUB_ENV"
       - name: Import project
         run: $GODOT --headless --path . --import
-      - name: Take the house apart at phone settings
+      - name: Take the city apart at phone settings
         shell: bash
         run: |
           set -o pipefail

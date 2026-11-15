@@ -16,8 +16,9 @@ const WAITS := Vector2(0.5, 1.3)
 const TURN := 6.0
 const NOTICE := 60.0
 const QUICKENS := 20.0  ## m/s2
-## Rubble up to STEP m high is stepped onto. Stopped by something on its
-## way, it goes through (Fighter.breach), with a kick for show.
+## What is low it walks through (Fighter.wade). Rubble up to STEP m
+## high is stepped onto. Stopped by something on its way, it goes through
+## (Fighter.breach), with a kick for show.
 const STEP := 0.6
 
 var character: Character
@@ -89,9 +90,11 @@ func _physics_process(delta: float) -> void:
 	if not is_on_floor():
 		velocity.y -= _gravity * delta
 	move_and_slide()
+	var going := flat if to == Vector3.ZERO else to  # (held up, it has no speed of its own)
+	var waded := fighter.wade(going, flat)
 	character.rotation.y = facing
 	if busy:
-		if to.length() > 1.0:
+		if to.length() > 1.0 and not waded:
 			Fighter.climb(self, to.normalized(), 0.15, STEP)  # a blow steps onto rubble too
 		return
 	var pace := Vector2(get_real_velocity().x, get_real_velocity().z).length()
@@ -101,6 +104,9 @@ func _physics_process(delta: float) -> void:
 		return
 	# Rubble in the way: it steps onto it. A wall: it goes through.
 	var ahead := to.normalized()
+	if waded:
+		_stuck = 0.0
+		return
 	Fighter.climb(self, ahead, 0.15, STEP)
 	_stuck = _stuck + delta if pace < 0.6 else 0.0
 	if _stuck > Fighter.STUCK:
