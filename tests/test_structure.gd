@@ -119,6 +119,35 @@ func test_a_column_that_loses_half_a_storey_comes_down_away_from_the_gap() -> vo
 	await _end()
 
 
+func test_a_blow_takes_less_out_of_what_is_solid() -> void:
+	await _begin()
+	# A wall, and a solid block as high: the same blow in the face of each.
+	var wall := s.add_box(Transform3D(Basis(), Vector3(0, 1.2, 0)), Vector3(2.4, 2.4, 0.35), Color.WHITE, 0.6)
+	var block := s.add_box(Transform3D(Basis(), Vector3(8, 1.2, 0)), Vector3(2.4, 2.4, 2.4), Color.WHITE, 0.6)
+	s.build()
+	s.recheck()
+	await frames(10)
+	check_eq(wall, 0, "the wall is the first box")
+	var of_wall := Fighter.smash(s, Vector3(0, 1.2, 0.18), 0.7, Vector3(0, 0, -6), true)
+	var of_block := Fighter.smash(s, Vector3(8, 1.2, 1.2), 0.7, Vector3(0, 0, -6), true)
+	check(of_wall >= 3, "a hole in the wall at once (%d shards)" % of_wall)
+	check_eq(of_block, 0, "the block stands up to it")
+	# Blow after blow, the block gives, a bite at a time.
+	var more := 0
+	var most := 0
+	for k in 8:
+		var bite := Fighter.smash(s, Vector3(8, 1.2, 1.2), 0.7, Vector3(0, 0, -6), true)
+		more += bite
+		most = maxi(most, bite)
+	check(more >= 2, "then gives (%d shards in eight more blows)" % more)
+	check(most < of_wall, "a bite at a time (%d at most)" % most)
+	# Something thrown goes through all the same.
+	var plain := Fighter.smash(s, Vector3(8.0, 1.2, -1.2), 0.7, Vector3(0, 0, 6))
+	check(plain >= 3, "what is not held back takes a full hole (%d)" % plain)
+	check(block == 1, "")
+	await _end()
+
+
 func test_a_shard_hit_hard_breaks_into_crumbs() -> void:
 	await _begin()
 	s.add_box(Transform3D(Basis(), Vector3(0, 1.5, 0)), Vector3(4, 3, 0.35))

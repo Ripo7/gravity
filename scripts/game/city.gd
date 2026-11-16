@@ -52,8 +52,6 @@ const COARSE := 0.75
 const WHOLE := 4.0
 ## kg/m3 of what it is made of: little, a toy city is hollow.
 const DENSITY := 300.0
-## How fine the grid on the walls is (squares of 0.2 m: it reads as windows).
-const SQUARES_PER_METRE := 1.25
 ## Cars are parked KERB m from the edge of an avenue, and drive LANE m from
 ## its middle.
 const KERB := 0.45
@@ -62,21 +60,29 @@ const LANE := 0.5
 const RAIL_HIGH := 0.62
 const RAIL_SPAN := 2.85
 
+## The paints: houses, their roof tiles, offices, the glass of towers, cars.
 const WALLS: Array[Color] = [
-	Color(0.86, 0.8, 0.68),
-	Color(0.8, 0.7, 0.6),
-	Color(0.88, 0.84, 0.78),
-	Color(0.76, 0.66, 0.58),
-	Color(0.82, 0.78, 0.66),
+	Color(0.96, 0.86, 0.62),
+	Color(0.95, 0.7, 0.55),
+	Color(0.66, 0.85, 0.72),
+	Color(0.66, 0.8, 0.93),
+	Color(0.93, 0.68, 0.72),
+	Color(0.95, 0.93, 0.86),
 ]
-const ROOFS: Array[Color] = [Color(0.55, 0.3, 0.24), Color(0.4, 0.36, 0.36), Color(0.5, 0.34, 0.26)]
+const ROOFS: Array[Color] = [Color(0.86, 0.4, 0.28), Color(0.42, 0.5, 0.66), Color(0.62, 0.38, 0.28)]
 const OFFICES: Array[Color] = [
-	Color(0.62, 0.66, 0.72),
-	Color(0.7, 0.7, 0.72),
-	Color(0.58, 0.62, 0.66),
-	Color(0.74, 0.72, 0.68),
+	Color(0.82, 0.46, 0.36),
+	Color(0.9, 0.78, 0.56),
+	Color(0.44, 0.68, 0.68),
+	Color(0.7, 0.64, 0.84),
+	Color(0.64, 0.72, 0.82),
 ]
-const GLASS: Array[Color] = [Color(0.52, 0.64, 0.74), Color(0.6, 0.7, 0.76), Color(0.48, 0.58, 0.7)]
+const GLASS: Array[Color] = [
+	Color(0.36, 0.62, 0.88),
+	Color(0.3, 0.72, 0.76),
+	Color(0.52, 0.6, 0.92),
+	Color(0.4, 0.76, 0.62),
+]
 const CARS: Array[Color] = [
 	Color(0.8, 0.2, 0.18),
 	Color(0.9, 0.75, 0.2),
@@ -108,7 +114,7 @@ var railway: Array[Vector3] = []
 var player_start := Vector3.ZERO
 var brute_start := Vector3.ZERO
 
-# The boxes it is made of, each [foot, size, turn, tint, grain].
+# The boxes it is made of, each [foot, size, turn, tint, grain, look].
 var _boxes: Array[Array] = []
 # Where the trees of the lot being planted stand.
 var _trees: Array[Vector3] = []
@@ -130,7 +136,7 @@ func build(s: Structure, xf: Transform3D) -> void:
 		var size: Vector3 = box[1]
 		var foot: Vector3 = box[0]
 		var placed := Transform3D(Basis(Vector3.UP, box[2]), foot + Vector3(0, size.y * 0.5, 0))
-		s.add_box(xf * placed, size, box[3], box[4], _plain(size, box[4]))
+		s.add_box(xf * placed, size, box[3], box[4], _plain(size, box[4]), box[5])
 
 
 ## About how many shards it is cut into.
@@ -358,14 +364,15 @@ func _tower(lot: Rect2, rng: RandomNumberGenerator) -> void:
 		wide = minf(wide, 1.75)
 		var low := rng.randf_range(3.6, 4.0)
 		var high := rng.randf_range(2.5, 2.9)
-		_add(at, Vector3(wide, low, wide), 0.0, tint, COARSE)
-		_add(at + Vector3(0, low, 0), Vector3(1.15, high, 1.15), 0.0, tint.lightened(0.12), COARSE)
+		_add(at, Vector3(wide, low, wide), 0.0, tint, COARSE, ShardMesh.Look.TOWER)
+		var upper := Vector3(1.15, high, 1.15)
+		_add(at + Vector3(0, low, 0), upper, 0.0, tint.lightened(0.12), COARSE, ShardMesh.Look.TOWER)
 		top = low + high
 	else:
 		var tall := rng.randf_range(4.4, 5.8)
 		var cap := Vector3(wide * 0.63, 0.8, wide * 0.63)
-		_add(at, Vector3(wide, tall, wide), 0.0, tint, COARSE)
-		_add(at + Vector3(0, tall, 0), cap, 0.0, tint.darkened(0.15), FINE)
+		_add(at, Vector3(wide, tall, wide), 0.0, tint, COARSE, ShardMesh.Look.TOWER)
+		_add(at + Vector3(0, tall, 0), cap, 0.0, tint.darkened(0.15), FINE, ShardMesh.Look.TOWER)
 		top = tall + 0.8
 	_add(at + Vector3(0, top, 0), Vector3(0.12, 0.9, 0.12), 0.0, CONCRETE.darkened(0.3), WHOLE)
 
@@ -381,7 +388,7 @@ func _office(lot: Rect2, rng: RandomNumberGenerator) -> void:
 	)
 	var at := _within(lot, Vector2(size.x, size.z), rng)
 	offices.append(at)
-	_add(at, size, 0.0, tint, COARSE)
+	_add(at, size, 0.0, tint, COARSE, ShardMesh.Look.OFFICE)
 	var roof := Vector3(size.x * 0.6, 0.25, size.z * 0.6)
 	_add(at + Vector3(0, size.y, 0), roof, 0.0, tint.darkened(0.25), WHOLE)
 
@@ -410,9 +417,10 @@ func _houses(lot: Rect2, rng: RandomNumberGenerator, fill: float) -> void:
 			var at := Vector3(middle.x + off.x, 0, middle.y + off.y)
 			var turn := turned * PI * 0.5
 			houses.append(at)
-			_add(at, size, turn, WALLS[rng.randi() % WALLS.size()], FINE)
+			_add(at, size, turn, WALLS[rng.randi() % WALLS.size()], FINE, ShardMesh.Look.HOUSE)
 			var roof := Vector3(size.x + 0.1, 0.14, size.z + 0.1)
-			_add(at + Vector3(0, size.y, 0), roof, turn, ROOFS[rng.randi() % ROOFS.size()], WHOLE)
+			var tiles := ROOFS[rng.randi() % ROOFS.size()]
+			_add(at + Vector3(0, size.y, 0), roof, turn, tiles, WHOLE, ShardMesh.Look.TILES)
 
 
 ## Trees on a lot: `share` of what it could hold.
@@ -532,5 +540,7 @@ func _within(lot: Rect2, foot: Vector2, rng: RandomNumberGenerator) -> Vector3:
 
 ## A box standing at `at` (the middle of its foot), turned `turn` rad about
 ## the vertical, cut about `grain` m across.
-func _add(at: Vector3, size: Vector3, turn: float, tint: Color, grain: float) -> void:
-	_boxes.append([at, size, turn, tint, grain])
+func _add(
+	at: Vector3, size: Vector3, turn: float, tint: Color, grain: float, look := ShardMesh.Look.PLAIN
+) -> void:
+	_boxes.append([at, size, turn, tint, grain, look])

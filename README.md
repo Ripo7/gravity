@@ -4,6 +4,12 @@ Two fighters, stronger than people are, in a greybox city where what
 stands can be broken: a hard blow sends the other one through the walls.
 Seen in third person.
 
+- **Its walls.** The buildings are still boxes, which is what breaks, but
+  they are no longer grey: each wall is laid, bay by bay and floor by
+  floor, with a façade modelled in Blender and baked into two textures
+  (`tools/blender/facades.py`, see `assets/city/SOURCE.md`): windows set
+  back in the wall, shutters, shop fronts under awnings, cornices, glass
+  towers; bricks or concrete show where a wall is broken.
 - **The city.** The brutes keep their size and the city is small around
   them (`scripts/game/city.gd`): houses up to their knees, offices up to
   their heads, towers three times their height, around a square to fight
@@ -12,11 +18,14 @@ Seen in third person.
   "Reconstruire"): three or four rows of blocks, never the same size,
   downtown here, houses or a park there. The number is shown at the top
   left ("ville 48213"); `?city=48213` in the address (`--city=` on the
-  command line) brings the same city back. What is lower than their waist they walk straight through,
-  kicking it ahead (houses, cars, trees, the railway); what they come down
-  on is flattened; light rubble does not stop them. Offices and towers
-  have to be punched, charged or thrown through. A tower whose foot is
-  knocked half out tips over, away from the side that went. The house of
+  command line) brings the same city back. Not everything gives way: cars and trees are
+  kicked aside at a walk, but a house is a wall until it is run into (a
+  sprint or a charge goes through, and is slowed by it), punched, or
+  landed on. Offices and towers stand up to blows: each one takes a bite
+  out of them, chips flying the rest of the time, and a tower comes down
+  at about the third combo, tipping over away from the side that went.
+  Only a brute that is thrown goes straight through them. Light rubble
+  does not stop a brute. The house of
   earlier versions is still there, as a test bench (`--level=house`).
 
 - **Destruction.** Walls break into irregular shards where they are hit, and

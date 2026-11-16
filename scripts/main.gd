@@ -40,9 +40,9 @@ var build_ms := 0.0
 func _ready() -> void:
 	clock = PhysicsClock.new()
 	add_child(clock)
-	_build_world()
 	var options: Dictionary = get_node("/root/Launch").options
 	level = options.get("level", level)
+	_build_world()
 	structure = Structure.new()
 	structure.most_crumbs = int(Quality.pick(250, 450, 800))
 	add_child(structure)
@@ -56,7 +56,6 @@ func _ready() -> void:
 		if city_number < 0:
 			city_number = int(options.get("city", options.get("seed", randi() % 100000)))
 		city = City.new(city_number)
-		structure.mesh.squares_per_metre = City.SQUARES_PER_METRE
 		structure.density = City.DENSITY
 		city.build(structure, Transform3D.IDENTITY)
 		_pave()
@@ -171,11 +170,7 @@ func _on_released(at: Vector3, volume: float, velocity: Vector3) -> void:
 ## square, a finger above the road (only to look at).
 func _pave() -> void:
 	var mat := StandardMaterial3D.new()
-	mat.albedo_texture = load(TEXTURES + "light/texture_07.png")
-	mat.albedo_color = Color(0.5, 0.5, 0.5)
-	mat.uv1_triplanar = true
-	mat.uv1_world_triplanar = true
-	mat.uv1_scale = Vector3.ONE * 0.5
+	mat.albedo_color = Color(0.5, 0.48, 0.44)
 	for pad: Array in city.pads():
 		var size: Vector2 = pad[1]
 		var slab := BoxMesh.new()
@@ -192,12 +187,23 @@ func _build_world() -> void:
 	var sky := ProceduralSkyMaterial.new()
 	sky.ground_bottom_color = Color(0.42, 0.4, 0.38)
 	sky.ground_horizon_color = Color(0.62, 0.62, 0.64)
+	if level != "house":
+		# Over the city: a blue sky, and a road with no squares on it.
+		sky.sky_top_color = Color(0.2, 0.45, 0.9)
+		sky.sky_horizon_color = Color(0.7, 0.85, 0.98)
+		sky.ground_horizon_color = Color(0.7, 0.85, 0.98)
+		sky.ground_bottom_color = Color(0.3, 0.34, 0.4)
 	var env := Environment.new()
 	env.background_mode = Environment.BG_SKY
 	env.sky = Sky.new()
 	env.sky.sky_material = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
 	env.ambient_light_energy = 0.45
+	if level != "house":
+		# (Lit by the sky alone, everything would turn blue.)
+		env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+		env.ambient_light_color = Color(0.86, 0.88, 0.95)
+		env.ambient_light_energy = 0.5
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	env.tonemap_exposure = 0.85
 	var world := WorldEnvironment.new()
@@ -207,6 +213,8 @@ func _build_world() -> void:
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-50, -30, 0)
 	sun.light_energy = 0.75
+	if level != "house":
+		sun.light_color = Color(1.0, 0.95, 0.86)
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 60.0
 	add_child(sun)
@@ -219,6 +227,9 @@ func _build_world() -> void:
 	floor_mat.uv1_scale = Vector3.ONE * 0.25
 	floor_mat.metallic_specular = 0.2
 	floor_mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	if level != "house":
+		floor_mat.albedo_texture = null
+		floor_mat.albedo_color = Color(0.25, 0.24, 0.25)
 	var plane := PlaneMesh.new()
 	plane.size = Vector2(400, 400)
 	plane.material = floor_mat
