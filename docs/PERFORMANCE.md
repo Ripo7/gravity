@@ -40,6 +40,23 @@ blurred), no smoothing, both, then without the brutes, then without
 shadows or city, then as played again (to see whether the phone slowed
 down meanwhile).
 
+The second round, same phone and view: as played 48; simple shadows 37;
+no smoothing 29; both 37; both without the brutes 33; without shadows or
+city either 60; as played again 29. The same settings gave 48 at the
+start and 29 half a minute later, so the differences between the cases
+in between mean nothing: three seconds a case on a phone that changes
+pace by itself cannot tell them apart. What both rounds do agree on:
+with no shadows the phone is at its fastest (45 and 47 with the city, 60
+with next to nothing to draw), and it can reach 60.
+
+So the game does not rely on a setting chosen by guess: it keeps pace by
+itself (`Main.keep_pace`). When it is drawn at fewer than 40 frames a
+second over 3 s, twice running, it gives up the sun's shadows (the
+brutes keep a round one at their feet), and if that is not enough, a
+quarter of the resolution; never more, and it does not take them back.
+The counter then shows "allege 1" or "allege 2". Scripted runs are left
+alone.
+
 ### The city (default level)
 
 Same machine and settings. Cities are made up from a number and are not

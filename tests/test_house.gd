@@ -135,6 +135,35 @@ func _local(i: int) -> Vector3:
 	return main.house_at.affine_inverse() * s.centroid[i]
 
 
+func test_the_picture_gives_something_up_when_it_cannot_keep_pace() -> void:
+	await _load()
+	# A minute at sixty frames a second: nothing is given up.
+	for k in 3600:
+		main.keep_pace(1.0 / 60.0)
+	check_eq(main.eased, 0, "at full pace, nothing is given up")
+	# Then at twenty-five: the shadows first, after a few seconds, then some
+	# of the resolution, and no more than that.
+	for k in 200:
+		main.keep_pace(1.0 / 25.0)
+	check_eq(main.eased, 1, "too slow for a while: the shadows go")
+	var sun: DirectionalLight3D
+	for child in main.get_children():
+		if child is DirectionalLight3D:
+			sun = child
+	check(not sun.shadow_enabled, "the sun casts none any more")
+	for k in 2000:
+		main.keep_pace(1.0 / 25.0)
+	check_eq(main.eased, 2, "still too slow: a coarser picture, and that is all")
+	check(is_equal_approx(main.get_viewport().scaling_3d_scale, 0.75), "at three quarters of the resolution")
+	# A frame that took seconds (the page was away) is not a slow game.
+	main.eased = 0
+	for k in 40:
+		main.keep_pace(2.0)
+	check_eq(main.eased, 0, "a page that was away is not a slow game")
+	main.get_viewport().scaling_3d_scale = 1.0
+	await _unload()
+
+
 func _load() -> void:
 	seed(5)
 	main = (load("res://scenes/main.tscn") as PackedScene).instantiate() as Main

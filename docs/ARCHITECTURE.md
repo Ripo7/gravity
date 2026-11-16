@@ -340,3 +340,9 @@ its shards and what holds are the same everywhere.
   enough to hide the fight (`HIDES`, 0.35 m); pieces still moving and
   small bits are let through, so that it does not lurch at everything
   that flies past.
+- **Keeping pace** (`Main.keep_pace`, `eased`). Told each frame how long
+  the last one took; below 40 frames a second over two stretches of 3 s
+  it turns the sun's shadows off for good and shows a round shadow under
+  each brute, then, if still slow, draws at three quarters of the
+  resolution. Not in scripted runs nor without a screen.
+
