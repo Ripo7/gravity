@@ -19,6 +19,44 @@ regression, not 10%.
 
 ## Measured
 
+### On the phone
+
+The first numbers from the phone itself, read off the game's own counter
+in a screen recording by the owner (iPhone, Safari, city 67414, build
+6062656, 52 s of fighting): 30 to 40 frames a second, with the physics at
+0.6 to 2.0 ms a step and 19 to 353 pieces. So it is the picture that
+costs there, not the breaking (recording the screen costs some of it
+too). A first round of `?mode=bench&city=49` on that phone (1758 x 720, the
+same view drawn six ways, 3 s each): as played 32 frames a second;
+without shadows 45; walls without their dress 32; without both 47; at
+half the resolution 45; without the city 28. So the walls' dress costs
+nothing that shows, the city itself is not what is slow, and either the
+shadows or the number of pixels is worth about 9 ms a frame, which points
+at what is done per pixel: reading the shadow (four maps, blurred) and
+smoothing the edges (MSAA 2x), neither of which the phone tier lowers
+today. Even with shadows and dress off it stays under 50. The bench now
+draws seven other ways to tell these apart: simple shadows (one map, not
+blurred), no smoothing, both, then without the brutes, then without
+shadows or city, then as played again (to see whether the phone slowed
+down meanwhile).
+
+The second round, same phone and view: as played 48; simple shadows 37;
+no smoothing 29; both 37; both without the brutes 33; without shadows or
+city either 60; as played again 29. The same settings gave 48 at the
+start and 29 half a minute later, so the differences between the cases
+in between mean nothing: three seconds a case on a phone that changes
+pace by itself cannot tell them apart. What both rounds do agree on:
+with no shadows the phone is at its fastest (45 and 47 with the city, 60
+with next to nothing to draw), and it can reach 60.
+
+So the game does not rely on a setting chosen by guess: it keeps pace by
+itself (`Main.keep_pace`). When it is drawn at fewer than 40 frames a
+second over 3 s, twice running, it gives up the sun's shadows (the
+brutes keep a round one at their feet), and if that is not enough, a
+quarter of the resolution; never more, and it does not take them back.
+The counter then shows "allege 1" or "allege 2". Scripted runs are left
+alone.
+
 ### The city (default level)
 
 Same machine and settings. Cities are made up from a number and are not

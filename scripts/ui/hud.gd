@@ -71,4 +71,6 @@ func _process(delta: float) -> void:
 	)
 	if world.city != null:
 		_stats.text += "   ville %d" % world.city.number
+	if world.eased > 0:
+		_stats.text += "   allege %d" % world.eased
 	_hint.modulate.a = move_toward(_hint.modulate.a, 0.0 if p.live > 0 else 1.0, 0.25)

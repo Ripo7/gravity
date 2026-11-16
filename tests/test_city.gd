@@ -323,6 +323,52 @@ func test_the_other_brute_comes_through_the_city_to_hit_back() -> void:
 	await _unload()
 
 
+func test_the_camera_stays_in_front_of_rubble_at_rest() -> void:
+	await _load(1)
+	# An office knocked down, and its rubble left to come to rest.
+	var office := city.offices[0]
+	for candidate in city.offices:
+		if candidate.length() < office.length():
+			office = candidate
+	var out := office.normalized()
+	for k in 12:
+		var from := office - out * 4.0 + Vector3.UP * 1.6
+		var to := office + out.cross(Vector3.UP) * (k % 3 - 1) * 0.7 + Vector3.UP * (0.4 + (k / 3) * 0.5)
+		main.blow(from, to - from)
+		await frames(12)
+	await frames(480)
+	var pieces := s.pieces
+	var big := -1
+	var small := -1
+	for i in pieces.frozen.size():
+		if pieces.members[i].is_empty() or pieces.frozen[i] == 0:
+			continue
+		if pieces.reach[i] >= 0.6 and big < 0:
+			big = i
+		elif pieces.reach[i] < Player.HIDES * 0.8 and small < 0:
+			small = i
+	check(big >= 0, "a big piece has come to rest")
+	var space := p.get_world_3d().direct_space_state
+	var at := pieces.transform_of(big).origin
+	var above := Vector3.UP * (pieces.reach[big] + 0.4)
+	var hit := p.in_the_way(space, at + above, at - above)
+	check(not hit.is_empty(), "the camera's line stops at rubble at rest")
+	if not hit.is_empty():
+		var stopped := pieces.index_of(hit["rid"])
+		check(
+			stopped >= 0 and pieces.reach[stopped] >= Player.HIDES, "at a piece big enough to hide the fight"
+		)
+		var from_piece := (hit["position"] as Vector3).distance_to(at)
+		check(from_piece < pieces.reach[stopped] * 2.0 + 3.0, "on the way (%.1f m from it)" % from_piece)
+	if small >= 0:
+		# (A line just over a small bit, down onto it: it is let through.)
+		var bit := pieces.transform_of(small).origin
+		var through := p.in_the_way(space, bit + Vector3.UP * 0.5, bit + Vector3.UP * 0.02)
+		var stopped := -1 if through.is_empty() else pieces.index_of(through["rid"])
+		check(stopped != small, "but not at a small bit")
+	await _unload()
+
+
 ## How high the thing that shard `i` is part of stands (m): the top of its
 ## box.
 func _high(i: int) -> float:

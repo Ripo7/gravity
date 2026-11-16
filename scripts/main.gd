@@ -8,6 +8,10 @@ extends Node3D
 ## Textures: Kenney's prototype textures (CC0).
 
 const TEXTURES := "res://addons/kenney_prototype_textures/"
+## The pace below which the picture gives something up (frames a second),
+## and over how long it is told (s). See keep_pace.
+const SLOW := 40.0
+const PACE_OVER := 3.0
 
 var structure: Structure
 var player: Player
@@ -33,8 +37,19 @@ var level_at := Transform3D.IDENTITY
 var brute: Brute
 var brute_at := Vector3(4.0, 0.05, 11.5)
 var fight := true
+## How many things the picture has given up to keep pace (see keep_pace):
+## 0, 1 (the sun's shadows) or 2 (a quarter of the resolution as well).
+var eased := 0
 ## Milliseconds it took to cut and bond what stands.
 var build_ms := 0.0
+
+var _sun: DirectionalLight3D
+var _blobs: Array[MeshInstance3D] = []
+var _pacing := false
+var _paced := 0.0
+var _frames := 0
+var _slow := 0
+var _settled := false
 
 
 func _ready() -> void:
@@ -78,6 +93,10 @@ func _ready() -> void:
 	brute.position = brute_starts
 	brute.fighter.structure = structure
 	add_child(brute)
+	for body: Node3D in [player, brute]:
+		_blobs.append(_blob(body))
+	# (A scripted run is drawn the same way from end to end.)
+	_pacing = not options.has("mode") and DisplayServer.get_name() != "headless"
 	if fight:
 		player.lock()  # the fight starts locked on; a button lets go
 	var ui := CanvasLayer.new()
@@ -140,6 +159,70 @@ func blow(from: Vector3, direction: Vector3) -> int:
 	if hit.is_empty():
 		return 0
 	return Fighter.smash(structure, hit["position"], Fighter.HOLE[2], along * 6.0)
+
+
+func _process(delta: float) -> void:
+	if _pacing:
+		keep_pace(delta)
+
+
+## Told each frame how long the last one took. When the picture is drawn at
+## fewer than SLOW frames a second over PACE_OVER s, twice running, it gives
+## something up for good: first the sun's shadows (the brutes keep a round
+## one at their feet), then a quarter of the resolution. The first stretch
+## after the start does not count, nor one in which the page was away.
+func keep_pace(delta: float) -> void:
+	if delta > 0.25:
+		_paced = 0.0
+		_frames = 0
+		return
+	_paced += delta
+	_frames += 1
+	if _paced < PACE_OVER:
+		return
+	var rate := _frames / _paced
+	_paced = 0.0
+	_frames = 0
+	if not _settled:
+		_settled = true
+		return
+	_slow = _slow + 1 if rate < SLOW else 0
+	if _slow < 2 or eased >= 2:
+		return
+	_slow = 0
+	eased += 1
+	if eased == 1:
+		_sun.shadow_enabled = false
+		for blob in _blobs:
+			blob.visible = true
+	else:
+		get_viewport().scaling_3d_scale = 0.75
+	print("EASED %d at %.0f frames a second" % [eased, rate])
+
+
+## A round shadow at the feet of `body`, for when the sun casts none.
+func _blob(body: Node3D) -> MeshInstance3D:
+	var fade := Gradient.new()
+	fade.colors = PackedColorArray([Color(0, 0, 0, 0.5), Color(0, 0, 0, 0.0)])
+	var round := GradientTexture2D.new()
+	round.gradient = fade
+	round.fill = GradientTexture2D.FILL_RADIAL
+	round.fill_from = Vector2(0.5, 0.5)
+	round.fill_to = Vector2(1.0, 0.5)
+	var mat := StandardMaterial3D.new()
+	mat.albedo_texture = round
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	var flat := PlaneMesh.new()
+	flat.size = Vector2(1.7, 1.7)
+	flat.material = mat
+	var blob := MeshInstance3D.new()
+	blob.mesh = flat
+	blob.position.y = 0.04
+	blob.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	blob.visible = false
+	body.add_child(blob)
+	return blob
 
 
 ## A tour of the level for the showcase: where to stand and what to look
@@ -211,6 +294,7 @@ func _build_world() -> void:
 	add_child(world)
 
 	var sun := DirectionalLight3D.new()
+	_sun = sun
 	sun.rotation_degrees = Vector3(-50, -30, 0)
 	sun.light_energy = 0.75
 	if level != "house":

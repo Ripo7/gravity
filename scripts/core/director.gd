@@ -14,6 +14,8 @@ extends Node
 ##        left, "d@x,y,z" put the other brute there (in the level's space),
 ##        "c@x0,y0,z0,x1,y1,z1" knock out what stands in that box.
 ##   --mode=showcase   a fixed tour that takes the level apart
+##   --mode=bench      what the picture costs here: frames a second with
+##        simpler shadows, no smoothing of edges, no brutes, no city
 ##   --mode=still [--pos=x,y,z --at=x,y,z --wait=S]   just look
 ##   --mode=check      how loaded the building is as built
 ## --level=city|house: which ground (the city unless told). --city=N: which
@@ -51,6 +53,8 @@ func _ready() -> void:
 			_play()
 		"showcase":
 			_showcase()
+		"bench":
+			_bench()
 		"still":
 			_still()
 		"check":
@@ -199,6 +203,70 @@ func _cut(box: AABB) -> void:
 	for i in s.count:
 		if s.held[i] == 1 and box.has_point(s.centroid[i]):
 			s.blow(i, Vector3.ZERO)
+
+
+## Tells what the picture costs on this machine: the same view drawn seven
+## ways, and the frames a second of each, on the screen (to be photographed)
+## and as BENCH lines. (A first round on the phone showed that the walls'
+## dress costs nothing, that the city is not what is slow, and that either
+## dropping the shadows or halving the resolution gives 45 frames a second
+## for 32: this round tells cheaper shadows and edges from the rest.)
+func _bench() -> void:
+	world.hud.visible = false
+	var sun: DirectionalLight3D
+	for child in world.get_children():
+		if child is DirectionalLight3D:
+			sun = child
+	var board := Label.new()
+	board.position = Vector2(24, 24)
+	board.add_theme_font_size_override("font_size", 26)
+	board.add_theme_color_override("font_outline_color", Color.BLACK)
+	board.add_theme_constant_override("outline_size", 8)
+	var layer := CanvasLayer.new()
+	layer.add_child(board)
+	world.add_child(layer)
+	var size := get_viewport().get_visible_rect().size
+	var lines: Array[String] = ["Mesure en cours... (%d x %d)" % [size.x, size.y]]
+	board.text = lines[0]
+	var cases: Array[String] = [
+		"Comme en jeu",
+		"Ombres simples",
+		"Sans lissage des bords",
+		"Ombres simples, sans lissage",
+		"... et sans les brutes",
+		"... et sans ombres ni ville",
+		"Comme en jeu, de nouveau",
+	]
+	await _wait(2.0)
+	for k in cases.size():
+		# Simple shadows: one map instead of four, read once and not blurred.
+		var simple := k == 1 or (k >= 3 and k <= 5)
+		var smooth := k < 2 or k == 6
+		var shown := k < 4 or k == 6
+		sun.directional_shadow_mode = (
+			DirectionalLight3D.SHADOW_ORTHOGONAL if simple else DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
+		)
+		RenderingServer.directional_soft_shadow_filter_set_quality(
+			RenderingServer.SHADOW_QUALITY_HARD if simple else RenderingServer.SHADOW_QUALITY_SOFT_LOW
+		)
+		get_viewport().msaa_3d = Viewport.MSAA_2X if smooth else Viewport.MSAA_DISABLED
+		world.player.visible = shown
+		world.brute.visible = shown
+		sun.shadow_enabled = k != 5
+		world.structure.mesh.visible = k != 5
+		await _wait(1.0)
+		var drawn := Engine.get_frames_drawn()
+		var began := Time.get_ticks_usec()
+		await _wait(3.0)
+		var rate := (Engine.get_frames_drawn() - drawn) / ((Time.get_ticks_usec() - began) / 1e6)
+		lines.append("%s : %.0f images/s" % [cases[k], rate])
+		print("BENCH %s: %.1f" % [cases[k], rate])
+		board.text = "\n".join(lines)
+	lines[0] = "Mesure finie (%d x %d) : fais une capture." % [size.x, size.y]
+	board.text = "\n".join(lines)
+	print("BENCH_DONE")
+	if DisplayServer.get_name() == "headless":
+		get_tree().quit()
 
 
 func _still() -> void:

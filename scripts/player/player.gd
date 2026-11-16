@@ -25,6 +25,8 @@ const SIDE := -1.0
 const BACK := 3.2
 const RAISED := 0.2
 const ROOM := 0.2
+## Rubble the camera stays in front of: at rest, and this big (m) at least.
+const HIDES := 0.35
 ## Pushed in closer than this (m), the camera would see nothing but the
 ## character's back: the character is not drawn.
 const TOO_CLOSE := 0.7
@@ -497,31 +499,48 @@ func _track(delta: float) -> void:
 
 ## Puts the camera behind the shoulder, nearer when something is in
 ## the way (it goes in at once and eases back out over `delta`).
+## The first thing between `from` and `to` that the camera has to stay in
+## front of: what stands, and rubble that has come to rest (what flies past
+## is not worth a lurch, nor are small bits). Empty if there is nothing.
+func in_the_way(space: PhysicsDirectSpaceState3D, from: Vector3, to: Vector3) -> Dictionary:
+	var mask := (
+		Structure.LAYER_WORLD | Structure.LAYER_STRUCTURE | Structure.LAYER_DEBRIS | Structure.LAYER_LITTER
+	)
+	var query := PhysicsRayQueryParameters3D.create(from, to, mask)
+	var passed: Array[RID] = []
+	for attempt in 8:
+		query.exclude = passed
+		var hit := space.intersect_ray(query)
+		if hit.is_empty() or fighter == null or fighter.structure == null:
+			return hit
+		var pieces := fighter.structure.pieces
+		var piece := pieces.index_of(hit["rid"])
+		if piece < 0 or (pieces.frozen[piece] == 1 and pieces.reach[piece] >= HIDES):
+			return hit
+		passed.append(hit["rid"])
+	return {}
+
+
 func _pose_camera(delta := 0.0) -> void:
 	_pivot.position.y = HEAD - _lift
 	_pivot.rotation.y = yaw
 	_arm.rotation.x = pitch
 	if is_inside_tree():
 		var space := get_world_3d().direct_space_state
-		var mask := Structure.LAYER_WORLD | Structure.LAYER_STRUCTURE
 		var head := _pivot.global_position
 		var side := _arm.global_basis.x * SIDE
 		var up := _arm.global_basis.y
 		var back := _arm.global_basis.z
 		# To the shoulder first, then back from there.
 		var shoulder := SHOULDER
-		var hit := space.intersect_ray(
-			PhysicsRayQueryParameters3D.create(head, head + side * (SHOULDER + ROOM), mask)
-		)
+		var hit := in_the_way(space, head, head + side * (SHOULDER + ROOM))
 		if not hit.is_empty():
 			shoulder = maxf(head.distance_to(hit["position"]) - ROOM, 0.0)
 		var from := head + side * shoulder
 		var away := BACK
 		var reach := (back * BACK + up * RAISED).normalized()
 		var length := Vector2(BACK, RAISED).length()
-		hit = space.intersect_ray(
-			PhysicsRayQueryParameters3D.create(from, from + reach * (length + ROOM), mask)
-		)
+		hit = in_the_way(space, from, from + reach * (length + ROOM))
 		if not hit.is_empty():
 			away = maxf(from.distance_to(hit["position"]) - ROOM, 0.0) / length * BACK
 		_shoulder = minf(shoulder, move_toward(_shoulder, shoulder, EASE_OUT * delta))

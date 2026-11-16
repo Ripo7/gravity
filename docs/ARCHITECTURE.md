@@ -335,3 +335,14 @@ its shards and what holds are the same everywhere.
   one draw call. The two pictures are stored lossy (their `.import`
   files): 0.23 MB in the web package instead of 1.04, which is 2.6 MB in
   all.
+- **The camera and rubble** (`Player.in_the_way`). The camera stays in
+  front of what stands, and of rubble that has come to rest and is big
+  enough to hide the fight (`HIDES`, 0.35 m); pieces still moving and
+  small bits are let through, so that it does not lurch at everything
+  that flies past.
+- **Keeping pace** (`Main.keep_pace`, `eased`). Told each frame how long
+  the last one took; below 40 frames a second over two stretches of 3 s
+  it turns the sun's shadows off for good and shows a round shadow under
+  each brute, then, if still slow, draws at three quarters of the
+  resolution. Not in scripted runs nor without a screen.
+
