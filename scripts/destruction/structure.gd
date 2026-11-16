@@ -138,6 +138,7 @@ var _falling_spin := PackedVector3Array()
 var _falling_low := PackedFloat32Array()
 var _leaving := PackedByteArray()  # 1 for a shard in _falling
 var _built := false
+var _worn := PackedByteArray()  # blows each shard has taken without giving (see wear)
 # The storeys of the columns, all in a row. Per box: its first, and how many
 # (none if it is no column). Per shard: its storey, or -1.
 var _box_storey := PackedInt32Array()
@@ -155,7 +156,6 @@ var _planes: Array = []
 var _cut_of: Array[Fracture.Shard] = []
 var _box_xf: Array[Transform3D] = []
 var _box_tint := PackedColorArray()
-var _worn := PackedByteArray()  # blows each shard has taken without giving (see wear)
 
 
 func _init() -> void:
