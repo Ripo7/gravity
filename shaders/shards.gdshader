@@ -20,7 +20,6 @@ uniform sampler2D bodies : filter_nearest, repeat_disable;   // per body: where 
 uniform sampler2D grid : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform float squares_per_metre = 0.25;
 uniform vec3 core : source_color = vec3(0.46, 0.45, 0.45);  // the inside of a wall
-uniform bool bare = false;  // paint alone, to tell what the walls cost (--mode=bench)
 // The tiles of the walls, a layer each: column * 4 + row of the pictures.
 uniform sampler2DArray facade : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2DArray facade_relief : hint_normal, filter_linear_mipmap, repeat_enable;
@@ -99,10 +98,7 @@ void fragment() {
 	vec3 face = paint;
 	vec3 relief = vec3(0.5, 0.5, 1.0);
 	float raised = 0.0;
-	if (bare) {
-		face = paint;
-		built = false;
-	} else if (kind == 0) {
+	if (kind == 0) {
 		face = texture(grid, uv * squares_per_metre).rgb * paint;
 	} else if (built && !flat_top) {
 		// A wall: which tile for this bay of this floor. One door to a

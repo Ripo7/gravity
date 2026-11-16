@@ -26,10 +26,19 @@ in a screen recording by the owner (iPhone, Safari, city 67414, build
 6062656, 52 s of fighting): 30 to 40 frames a second, with the physics at
 0.6 to 2.0 ms a step and 19 to 353 pieces. So it is the picture that
 costs there, not the breaking (recording the screen costs some of it
-too). What in the picture is not known yet: `?mode=bench&city=49` draws
-the same view six ways (as played, without shadows, without the walls'
-dress, without both, at half the resolution, without the city) and
-writes the frames a second of each on the screen.
+too). A first round of `?mode=bench&city=49` on that phone (1758 x 720, the
+same view drawn six ways, 3 s each): as played 32 frames a second;
+without shadows 45; walls without their dress 32; without both 47; at
+half the resolution 45; without the city 28. So the walls' dress costs
+nothing that shows, the city itself is not what is slow, and either the
+shadows or the number of pixels is worth about 9 ms a frame, which points
+at what is done per pixel: reading the shadow (four maps, blurred) and
+smoothing the edges (MSAA 2x), neither of which the phone tier lowers
+today. Even with shadows and dress off it stays under 50. The bench now
+draws seven other ways to tell these apart: simple shadows (one map, not
+blurred), no smoothing, both, then without the brutes, then without
+shadows or city, then as played again (to see whether the phone slowed
+down meanwhile).
 
 ### The city (default level)
 
