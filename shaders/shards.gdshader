@@ -112,6 +112,8 @@ void fragment() {
 		vec3 at = vec3(fract(skin.x), 1.0 - fract(skin.y), float(kind - 1) * 4.0 + row);
 		vec4 tile = textureGrad(facade, at, dFdx(skin.xy), dFdy(skin.xy));
 		face = tile.rgb * mix(vec3(1.0), paint, tile.a);
+		// Darker towards the ground it stood on: it sits there, shadow or not.
+		face *= mix(0.68, 1.0, smoothstep(0.0, 0.45, stood.y));
 		relief = textureGrad(facade_relief, at, dFdx(skin.xy), dFdy(skin.xy)).rgb;
 		raised = 1.0;
 	} else if (built) {
@@ -125,7 +127,7 @@ void fragment() {
 	float grain = hash(floor(stood * 14.0)) * 0.6 + hash(floor(stood * 47.0)) * 0.4;
 	vec3 broken = core * COLOR.rgb * (0.78 + 0.4 * grain);
 	if (built) {
-		broken = texture(facade, vec3(uv * 2.2, kind == 3 ? 14.0 : 13.0)).rgb;
+		broken = texture(facade, vec3(uv * 5.0, kind == 3 ? 14.0 : 13.0)).rgb;
 		broken *= (kind == 3 ? 0.6 : 0.95) + 0.15 * grain;
 	}
 	ALBEDO = mix(face, broken, inside);
@@ -134,6 +136,12 @@ void fragment() {
 	vec3 facet = normalize(cross(dFdx(VERTEX), dFdy(VERTEX)));
 	facet = dot(facet, VERTEX) > 0.0 ? -facet : facet;
 	NORMAL = normalize(mix(NORMAL, facet, step(0.5, inside)));
+	if (kind != 0) {
+		// Less light from below than from the sky: what faces down or
+		// sideways is darker, which gives rubble its shape without a shadow.
+		float skyward = (INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).y;
+		ALBEDO *= mix(0.7, 1.0, clamp(skyward * 0.5 + 0.5, 0.0, 1.0));
+	}
 	NORMAL_MAP = relief;
 	NORMAL_MAP_DEPTH = raised * (1.0 - step(0.5, inside));
 	ROUGHNESS = 0.92;
