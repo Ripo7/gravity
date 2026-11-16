@@ -90,7 +90,7 @@ func test_cities_stand_as_built_around_a_square() -> void:
 		await _unload()
 
 
-func test_a_brute_walks_through_a_block_of_houses() -> void:
+func test_a_brute_has_to_run_to_go_through_houses() -> void:
 	await _load(1)
 	# A line right across a block, with houses on it and nothing tall.
 	var from := Vector3.INF
@@ -112,21 +112,41 @@ func test_a_brute_walks_through_a_block_of_houses() -> void:
 					to = b
 				at += 0.4
 	check(from != Vector3.INF, "a row of houses to go through")
+	var far := from.distance_to(to)
+	var along := (to - from).normalized()
+	# At a jog, the first house is a wall.
 	_stand(from + Vector3.UP * 0.05, to + Vector3.UP)
 	await frames(10)
 	var standing := s.held_count
-	var highest := 0.0
-	var far := from.distance_to(to)
 	p.touch_move = Vector2(0, -1)
-	for k in int((far / Character.JOG_PACE + 0.8) * 60.0):
+	await frames(int((far / Character.JOG_PACE + 0.8) * 60.0))
+	p.touch_move = Vector2.ZERO
+	var went := (p.global_position - from).dot(along)
+	check(went < far - 2.0, "jogging, a house stops it (%.1f m of %.1f)" % [went, far])
+	check(standing - s.held_count < 6, "and stands (%d shards went)" % (standing - s.held_count))
+	# At a run it goes through, and each house slows it.
+	_stand(from + Vector3.UP * 0.05, to + Vector3.UP)
+	await frames(10)
+	standing = s.held_count
+	var highest := 0.0
+	var took := 0
+	p.touch_move = Vector2(0, -1)
+	p.touch_sprint = true
+	while (p.global_position - from).dot(along) < far - 1.0 and took < 600:
 		await frames(1)
+		took += 1
 		highest = maxf(highest, p.global_position.y)
 	p.touch_move = Vector2.ZERO
-	var went := (p.global_position - from).dot((to - from).normalized())
-	check(went > far - 1.0, "it went right through the block (%.1f m of %.1f)" % [went, far])
+	p.touch_sprint = false
+	check(took < 600, "running, it goes right through the block (%.1f s)" % (took / 60.0))
 	check(highest < 0.7, "through the houses, not over them (feet at %.2f m at most)" % highest)
 	var gone := standing - s.held_count
 	check(gone > 8, "knocking down what was in its way (%d shards)" % gone)
+	var open_ground := (far - 1.0) / Character.SPRINT_PACE
+	check(
+		took / 60.0 > open_ground * 1.2,
+		"which slows it (%.1f s, %.1f in the open)" % [took / 60.0, open_ground]
+	)
 	await _unload()
 
 

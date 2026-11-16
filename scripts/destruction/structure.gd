@@ -155,6 +155,7 @@ var _planes: Array = []
 var _cut_of: Array[Fracture.Shard] = []
 var _box_xf: Array[Transform3D] = []
 var _box_tint := PackedColorArray()
+var _worn := PackedByteArray()  # blows each shard has taken without giving (see wear)
 
 
 func _init() -> void:
@@ -445,6 +446,22 @@ func owner_of(rid: RID) -> int:
 ## How high (m) shard `i` reaches where it stands.
 func top(i: int) -> float:
 	return _hi[i].y
+
+
+## How thick (m) the box is that shard `i` was cut from, the way it is
+## thinnest: little for a wall or a slab, more for a solid block.
+func thick(i: int) -> float:
+	var size := _box_hi[element[i]] - _box_lo[element[i]]
+	return minf(size.x, minf(size.y, size.z))
+
+
+## A blow lands on standing shard `i`, which gives at the `blows`th one.
+## Returns true if this is it.
+func wear(i: int, blows: int) -> bool:
+	if _worn.size() < count:
+		_worn.resize(count)
+	_worn[i] = mini(_worn[i] + 1, 255)
+	return _worn[i] >= blows
 
 
 ## What still stands, within `reach` m over the ground of `at`, of the box

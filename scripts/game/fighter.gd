@@ -61,12 +61,25 @@ const SLOWED := 0.012
 const STUCK := 0.35
 const BREACH := 0.9
 const BREACH_AT: Array[float] = [0.6, 1.5]
-## What is lower than WADE m above its feet is no wall to a brute: it
-## walks through it. Of each low thing in front of its legs, what stands
-## within TRAMPLE m of them is knocked out and kicked ahead, KICK m/s
+## What is lower than WADE m above its feet a brute can go through, but
+## not at a walk: it is a wall to it until it runs into it at RAM m/s or
+## more (a sprint, a charge), and then it loses BRAKED of its speed. Only
+## what weighs LIGHT kg or less in front of its legs (a car, a tree) is
+## kicked out of its way at any pace. Of each such thing, what stands
+## within TRAMPLE m of its legs is knocked out and sent ahead, KICK m/s
 ## faster than it goes and up to KICK_UP m/s up. What it comes down on is
 ## flattened.
 const WADE := 1.2
+const RAM := 6.5
+const BRAKED := 0.4
+const LIGHT := 70.0
+## What is solid stands up to blows and charges: as many times as the box
+## is SOLID m thick (TOUGHEST at most), the hole is that much smaller and
+## each shard takes that many blows before it gives, chips flying off it
+## meanwhile. A wall or a house gives at once; an office or a tower takes
+## blow after blow. (A brute that is thrown goes through all the same.)
+const SOLID := 0.7
+const TOUGHEST := 3.0
 const TRAMPLE := 0.75
 const KICK := 2.0
 const KICK_UP := 3.0
@@ -91,6 +104,7 @@ var _mask := 0
 var _for := 0.0  # s in the current state
 var _rises := 0.0  # s it takes to get up
 var _legs := PhysicsShapeQueryParameters3D.new()  # what its legs reach (see trample)
+var _rammed := false  # it has just run through something that slowed it
 
 
 func _init(of: CharacterBody3D, with: Character) -> void:
@@ -144,7 +158,7 @@ func strike(move: String, facing: float) -> void:
 			at = met["position"]
 		_scatter(at, HOLE[power], ahead, RUBBLE * power)
 		clear(ahead, RUBBLE * power)
-		broken = smash(structure, at, HOLE[power], ahead * 6.0)
+		broken = smash(structure, at, HOLE[power], ahead * 6.0, true)
 	if landed:
 		character.hold(STOP[power])
 		jolted.emit(JOLT_GIVEN[power])
@@ -239,35 +253,41 @@ func step(delta: float) -> bool:
 
 
 ## Goes through what stands in front of it, on the side of `ahead`: a hole
-## its size, and the rubble out of the way.
+## its size, and the rubble out of the way. Through what is solid, a bite
+## at a time (see SOLID).
 func breach(ahead: Vector3) -> void:
 	if structure == null:
 		return
 	for height: float in BREACH_AT:
 		var at := body.global_position + ahead * 0.8 + Vector3.UP * height
-		Fighter.smash(structure, at, BREACH, ahead * 5.0)
+		Fighter.smash(structure, at, BREACH, ahead * 5.0, true)
 	# And what it is up against: the edge of a hole too small holds it too.
 	for k in body.get_slide_collision_count():
 		var touched := body.get_slide_collision(k)
 		var i := structure.owner_of(touched.get_collider_rid())
 		if i >= 0 and structure.held[i] == 1 and touched.get_normal().y < 0.7:
-			structure.blow(i, ahead * 5.0)
+			# (What is solid lets go of it a shard now and then.)
+			if randf() < 0.6 * SOLID / maxf(structure.thick(i), 0.6 * SOLID):
+				structure.blow(i, ahead * 5.0)
 	clear(ahead, RUBBLE * 3.0)
 
 
 ## After a step of its body, which went at `had` (m/s) and means to go at
-## `going`: what is low gives way (see trample) without stopping it, and
-## the rubble that lies at rest around its legs wakes up, to be pushed out
-## of its way (litter does not stop a brute, see Pieces.LITTER). Returns
-## true if something gave way (it has nothing to step onto).
+## `going`: what gives way to it does (see trample), slowing it if it had
+## to be run through, and the rubble that lies at rest around its legs
+## wakes up, to be pushed out of its way (litter does not stop a brute, see
+## Pieces.LITTER). Returns true if something gave way (it has nothing to
+## step onto).
 func wade(going: Vector3, had: Vector3) -> bool:
 	if structure != null and Vector2(going.x, going.z).length() > 0.3:
 		var at := body.global_position
 		structure.pieces.thaw_box(at - Vector3(0.6, 0.1, 0.6), at + Vector3(0.6, 1.8, 0.6))
+	_rammed = false
 	if not trample(going):
 		return false
-	body.velocity.x = had.x
-	body.velocity.z = had.z
+	var kept := 1.0 - BRAKED if _rammed else 1.0
+	body.velocity.x = had.x * kept
+	body.velocity.z = had.z * kept
 	return true
 
 
@@ -293,7 +313,8 @@ func trample(going: Vector3) -> bool:
 				gone = true
 	if pace < 0.5:
 		return gone
-	# What stands in front of its knees is kicked ahead.
+	# What stands in front of its knees is kicked ahead: what is light at
+	# any pace, the rest only if it is run into.
 	var way := flat / pace
 	var knees := body.global_position + way * REACH_AHEAD + Vector3.UP * 0.4
 	_legs.transform = Transform3D(Basis(), knees)
@@ -301,6 +322,13 @@ func trample(going: Vector3) -> bool:
 		var ahead := structure.standing_by(found["rid"], knees, TRAMPLE)
 		if not _low(ahead, body.global_position.y + WADE):
 			continue
+		var weight := 0.0
+		for i in ahead:
+			weight += structure.mass[i]
+		if weight > LIGHT:
+			if pace < RAM:
+				continue
+			_rammed = true
 		for i in ahead:
 			var off := structure.centroid[i] - knees
 			var aside := Vector3(off.x, 0, off.z).normalized() * 1.5
@@ -396,21 +424,45 @@ static func climb(of: CharacterBody3D, wish: Vector3, stride: float, height: flo
 
 ## Knocks out of `s` what stands within `radius` m of `at` (the nearest
 ## half in crumbs), thrown along `push`, and cracks what is a little
-## farther. Returns how many shards went.
-static func smash(s: Structure, at: Vector3, radius: float, push: Vector3) -> int:
+## farther. `tough`: what is solid stands up to it (see SOLID), the shard
+## nearest the blow taking it if no other does. Returns how many shards
+## went.
+static func smash(s: Structure, at: Vector3, radius: float, push: Vector3, tough := false) -> int:
 	var broken := 0
+	var held_out := false
+	var nearest := -1
+	var nearest_at := radius
 	for i in s.shards_near(at, radius * 1.5):
 		if s.held[i] == 0:
 			continue
 		var off := s.centroid[i] - at
 		var d := off.length()
+		var solid := clampf(s.thick(i) / SOLID, 1.0, TOUGHEST) if tough else 1.0
 		if d >= radius:
 			s.strike(i, lerpf(0.7, Structure.CRACK, (d - radius) / (radius * 0.5)), push * 0.3)
 			continue
+		if d >= radius / solid:
+			if d < nearest_at:
+				nearest = i
+				nearest_at = d
+			continue
+		nearest_at = 0.0  # (something is within reach: the nearest need not stand in)
+		if solid > 1.0 and not s.wear(i, roundi(solid)):
+			held_out = true
+			continue
 		var away := push * randf_range(0.5, 1.0) + off * 2.0
-		if d < radius * 0.5:
+		if d < radius / solid * 0.5:
 			s.shatter(i, away)
 		else:
 			s.blow(i, away)
 		broken += 1
+	if nearest >= 0 and nearest_at > 0.0:
+		if s.wear(nearest, roundi(clampf(s.thick(nearest) / SOLID, 1.0, TOUGHEST))):
+			s.shatter(nearest, push * randf_range(0.5, 1.0))
+			broken += 1
+		else:
+			held_out = true
+	if held_out and broken == 0:
+		# It held: chips and dust off the face of it.
+		s.released.emit(at, 0.12, -push * 0.4)
 	return broken
