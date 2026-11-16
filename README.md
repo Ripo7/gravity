@@ -18,11 +18,14 @@ Seen in third person.
   "Reconstruire"): three or four rows of blocks, never the same size,
   downtown here, houses or a park there. The number is shown at the top
   left ("ville 48213"); `?city=48213` in the address (`--city=` on the
-  command line) brings the same city back. What is lower than their waist they walk straight through,
-  kicking it ahead (houses, cars, trees, the railway); what they come down
-  on is flattened; light rubble does not stop them. Offices and towers
-  have to be punched, charged or thrown through. A tower whose foot is
-  knocked half out tips over, away from the side that went. The house of
+  command line) brings the same city back. Not everything gives way: cars and trees are
+  kicked aside at a walk, but a house is a wall until it is run into (a
+  sprint or a charge goes through, and is slowed by it), punched, or
+  landed on. Offices and towers stand up to blows: each one takes a bite
+  out of them, chips flying the rest of the time, and a tower comes down
+  at about the third combo, tipping over away from the side that went.
+  Only a brute that is thrown goes straight through them. Light rubble
+  does not stop a brute. The house of
   earlier versions is still there, as a test bench (`--level=house`).
 
 - **Destruction.** Walls break into irregular shards where they are hit, and

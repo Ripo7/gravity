@@ -138,6 +138,7 @@ var _falling_spin := PackedVector3Array()
 var _falling_low := PackedFloat32Array()
 var _leaving := PackedByteArray()  # 1 for a shard in _falling
 var _built := false
+var _worn := PackedByteArray()  # blows each shard has taken without giving (see wear)
 # The storeys of the columns, all in a row. Per box: its first, and how many
 # (none if it is no column). Per shard: its storey, or -1.
 var _box_storey := PackedInt32Array()
@@ -451,6 +452,22 @@ func owner_of(rid: RID) -> int:
 ## How high (m) shard `i` reaches where it stands.
 func top(i: int) -> float:
 	return _hi[i].y
+
+
+## How thick (m) the box is that shard `i` was cut from, the way it is
+## thinnest: little for a wall or a slab, more for a solid block.
+func thick(i: int) -> float:
+	var size := _box_hi[element[i]] - _box_lo[element[i]]
+	return minf(size.x, minf(size.y, size.z))
+
+
+## A blow lands on standing shard `i`, which gives at the `blows`th one.
+## Returns true if this is it.
+func wear(i: int, blows: int) -> bool:
+	if _worn.size() < count:
+		_worn.resize(count)
+	_worn[i] = mini(_worn[i] + 1, 255)
+	return _worn[i] >= blows
 
 
 ## What still stands, within `reach` m over the ground of `at`, of the box

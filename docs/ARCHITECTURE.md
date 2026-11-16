@@ -286,12 +286,24 @@ its shards and what holds are the same everywhere.
   the showcase tour and the tests.
 
 - **Wading** (`Fighter.wade`, `trample`). After each step a brute takes,
-  whatever stands in front of its knees and reaches no higher than
-  `Fighter.WADE` (1.2 m) above its feet is knocked out and kicked ahead,
-  faster than it walks; what it lands on that is that low is shattered.
-  It keeps its speed: a block of houses is crossed at a jog. Higher
-  things (offices, towers) stop it as walls do, and the old rules apply
-  (`breach`, blows, being thrown).
+  what stands in front of its knees, no higher than `Fighter.WADE` (1.2
+  m) above its feet, may give way: at any pace if it weighs `LIGHT` (70
+  kg) or less in all (a car, a tree, a stilt of the railway), and
+  otherwise (a house) only if the brute means to go at `RAM` (6.5 m/s) or
+  more, a sprint or a charge, which then loses `BRAKED` (0.4) of its
+  speed. At a walk or a jog a house is a wall. What a brute lands on that
+  is that low is shattered. Higher things (offices, towers) stop it.
+- **Solid things stand up to blows** (`Fighter.smash(..., tough)`,
+  `SOLID`, `Structure.thick`, `wear`). How solid a box is, is how thick it
+  is the way it is thinnest, in units of 0.7 m, from 1 to 3: a wall, a
+  slab or a house is 1 and gives as before; an office or a tower is 2 or
+  3. A blow or a charge makes a hole that many times smaller in it, and
+  each shard in the hole gives only at that many blows; a blow that
+  breaks nothing throws chips and dust off the face (the `released`
+  signal). In a scripted run a tower hit at its foot comes down during
+  the third four-blow combo (the first, before). A brute that is thrown,
+  and the scripted blows of the showcase and the tests (`Main.blow`), are
+  not held back.
 - **Litter** (`Pieces.LITTER`, `Structure.LAYER_LITTER`). A loose piece
   of 500 kg or less is on a layer of its own that the brutes neither
   collide with nor are pushed by; heavier pieces still block and can be
