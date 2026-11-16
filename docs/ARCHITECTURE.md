@@ -335,3 +335,8 @@ its shards and what holds are the same everywhere.
   one draw call. The two pictures are stored lossy (their `.import`
   files): 0.23 MB in the web package instead of 1.04, which is 2.6 MB in
   all.
+- **The camera and rubble** (`Player.in_the_way`). The camera stays in
+  front of what stands, and of rubble that has come to rest and is big
+  enough to hide the fight (`HIDES`, 0.35 m); pieces still moving and
+  small bits are let through, so that it does not lurch at everything
+  that flies past.

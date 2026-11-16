@@ -19,6 +19,18 @@ regression, not 10%.
 
 ## Measured
 
+### On the phone
+
+The first numbers from the phone itself, read off the game's own counter
+in a screen recording by the owner (iPhone, Safari, city 67414, build
+6062656, 52 s of fighting): 30 to 40 frames a second, with the physics at
+0.6 to 2.0 ms a step and 19 to 353 pieces. So it is the picture that
+costs there, not the breaking (recording the screen costs some of it
+too). What in the picture is not known yet: `?mode=bench&city=49` draws
+the same view six ways (as played, without shadows, without the walls'
+dress, without both, at half the resolution, without the city) and
+writes the frames a second of each on the screen.
+
 ### The city (default level)
 
 Same machine and settings. Cities are made up from a number and are not

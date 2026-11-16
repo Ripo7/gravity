@@ -14,6 +14,8 @@ extends Node
 ##        left, "d@x,y,z" put the other brute there (in the level's space),
 ##        "c@x0,y0,z0,x1,y1,z1" knock out what stands in that box.
 ##   --mode=showcase   a fixed tour that takes the level apart
+##   --mode=bench      what the picture costs here: frames a second with
+##        the shadows, the walls' dress, the resolution or the city left out
 ##   --mode=still [--pos=x,y,z --at=x,y,z --wait=S]   just look
 ##   --mode=check      how loaded the building is as built
 ## --level=city|house: which ground (the city unless told). --city=N: which
@@ -51,6 +53,8 @@ func _ready() -> void:
 			_play()
 		"showcase":
 			_showcase()
+		"bench":
+			_bench()
 		"still":
 			_still()
 		"check":
@@ -199,6 +203,59 @@ func _cut(box: AABB) -> void:
 	for i in s.count:
 		if s.held[i] == 1 and box.has_point(s.centroid[i]):
 			s.blow(i, Vector3.ZERO)
+
+
+## Tells what the picture costs on this machine: the same view drawn six
+## ways, each with something left out, and the frames a second of each, on
+## the screen (to be photographed) and as BENCH lines.
+func _bench() -> void:
+	world.hud.visible = false
+	var sun: DirectionalLight3D
+	for child in world.get_children():
+		if child is DirectionalLight3D:
+			sun = child
+	var walls := world.structure.mesh.material_override as ShaderMaterial
+	var board := Label.new()
+	board.position = Vector2(24, 24)
+	board.add_theme_font_size_override("font_size", 26)
+	board.add_theme_color_override("font_outline_color", Color.BLACK)
+	board.add_theme_constant_override("outline_size", 8)
+	var layer := CanvasLayer.new()
+	layer.add_child(board)
+	world.add_child(layer)
+	var size := get_viewport().get_visible_rect().size
+	var lines: Array[String] = ["Mesure en cours... (%d x %d)" % [size.x, size.y]]
+	board.text = lines[0]
+	var cases: Array[String] = [
+		"Comme en jeu",
+		"Sans les ombres",
+		"Murs sans facades",
+		"Sans ombres ni facades",
+		"Image deux fois moins fine",
+		"Sans la ville",
+	]
+	await _wait(2.0)
+	for k in cases.size():
+		sun.shadow_enabled = k != 1 and k != 3
+		walls.set_shader_parameter("bare", k == 2 or k == 3)
+		get_viewport().scaling_3d_scale = 0.5 if k == 4 else 1.0
+		world.structure.mesh.visible = k != 5
+		await _wait(1.0)
+		var drawn := Engine.get_frames_drawn()
+		var began := Time.get_ticks_usec()
+		await _wait(3.0)
+		var rate := (Engine.get_frames_drawn() - drawn) / ((Time.get_ticks_usec() - began) / 1e6)
+		lines.append("%s : %.0f images/s" % [cases[k], rate])
+		print("BENCH %s: %.1f" % [cases[k], rate])
+		board.text = "\n".join(lines)
+	sun.shadow_enabled = true
+	walls.set_shader_parameter("bare", false)
+	world.structure.mesh.visible = true
+	lines[0] = "Mesure finie (%d x %d) : fais une capture." % [size.x, size.y]
+	board.text = "\n".join(lines)
+	print("BENCH_DONE")
+	if DisplayServer.get_name() == "headless":
+		get_tree().quit()
 
 
 func _still() -> void:

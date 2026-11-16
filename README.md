@@ -126,6 +126,9 @@ godot --path . -- --mode=play --from=-25,0.05,30 --steps="p0.2,0,2;p1,0,2;p1,0,2
 godot --path . -- --mode=play --from=4,0.05,15 --steps="l;w0.8;h;w1.5;h;w0.6;h;w0.6;h;w5;k;w4"
 # As played: the other brute attacks, the player is locked on it.
 godot --path . -- --mode=play --fight --from=4,0.05,15 --steps="w1;h;w0.5;h;w0.5;h;w4;k;w3"
+# What the picture costs on this machine (in a browser: ?mode=bench&city=49).
+godot --path . -- --mode=bench --city=49
+
 # How loaded what stands is as built (1 = a bond breaks).
 godot --headless --path . -- --mode=check
 ```
