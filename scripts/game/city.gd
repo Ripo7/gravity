@@ -52,8 +52,6 @@ const COARSE := 0.75
 const WHOLE := 4.0
 ## kg/m3 of what it is made of: little, a toy city is hollow.
 const DENSITY := 300.0
-## How fine the grid on the walls is (squares of 0.2 m: it reads as windows).
-const SQUARES_PER_METRE := 1.25
 ## Cars are parked KERB m from the edge of an avenue, and drive LANE m from
 ## its middle.
 const KERB := 0.45

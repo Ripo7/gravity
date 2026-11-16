@@ -56,7 +56,6 @@ func _ready() -> void:
 		if city_number < 0:
 			city_number = int(options.get("city", options.get("seed", randi() % 100000)))
 		city = City.new(city_number)
-		structure.mesh.squares_per_metre = City.SQUARES_PER_METRE
 		structure.density = City.DENSITY
 		city.build(structure, Transform3D.IDENTITY)
 		_pave()

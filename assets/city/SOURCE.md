@@ -14,6 +14,10 @@ Cycles, seen straight on, with copies of itself all round so that it
 repeats: its colours, the shade its relief casts on itself, where the
 box's own paint goes (alpha), and its relief as a normal map.
 
+The two `.import` files are kept in the repository: they tell Godot to
+store the pictures lossy (WebP, quality 0.9), a quarter of the size, with
+nothing to see for it at the size they are shown.
+
 Four columns of four 256 px tiles: a house, an office, a tower (ground
 floor, a floor in between, top floor), then roof tiles, bricks, concrete
 and gravel. `ShardMesh` cuts them into the layers of a texture and

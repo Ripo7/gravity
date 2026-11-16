@@ -273,10 +273,6 @@ func transform_of(i: int) -> Transform3D:
 	return _xf[i]
 
 
-func velocity_of(i: int) -> Vector3:
-	return _lin[i]
-
-
 ## Pushes piece `i`: its speed changes by `dv`. Wakes it if it was frozen.
 func push(i: int, dv: Vector3, spin := Vector3.ZERO) -> void:
 	if frozen[i] == 1:

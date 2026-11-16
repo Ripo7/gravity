@@ -332,4 +332,6 @@ its shards and what holds are the same everywhere.
   made by `tools/blender/facades.py` (Blender as a Python module, no
   interface: bmesh for the shapes, shader nodes for the passes, Cycles to
   bake) and loaded as two `Texture2DArray` of sixteen layers. It is still
-  one draw call; the two pictures add 1.5 MB to the web build.
+  one draw call. The two pictures are stored lossy (their `.import`
+  files): 0.23 MB in the web package instead of 1.04, which is 2.6 MB in
+  all.
