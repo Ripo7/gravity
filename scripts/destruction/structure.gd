@@ -186,7 +186,8 @@ func _exit_tree() -> void:
 ## Adds a box of `size` at `xf` and cuts it into shards about `grain`
 ## across (`plain`: one to a cell of the cut, never several small ones; a
 ## box smaller than `grain` is then a single shard). `look` is what it is
-## dressed as (a ShardMesh.Look). Call build() once every box is in.
+## dressed as (a ShardMesh.Look; a model takes the place of a box left in
+## one piece). Call build() once every box is in.
 func add_box(
 	xf: Transform3D, size: Vector3, tint := Color.WHITE, grain := GRAIN, plain := false, look := 0
 ) -> int:
@@ -266,7 +267,10 @@ func add_box(
 		box_lo = box_lo.min(lo)
 		box_hi = box_hi.max(hi)
 		total_volume += sh.volume
-		mesh.add_shard(i, base, world, sh, xf.basis, tint, -1, look, xf, size)
+		if look > ShardMesh.Look.PLAIN and cut.size() == 1:
+			mesh.add_model(i, look, xf, size, tint)
+		else:
+			mesh.add_shard(i, base, world, sh, xf.basis, tint, -1, look, xf, size)
 	_box_shards.append(mine)
 	_box_lo.append(box_lo)
 	_box_hi.append(box_hi)
@@ -462,11 +466,13 @@ func thick(i: int) -> float:
 
 
 ## A blow lands on standing shard `i`, which gives at the `blows`th one.
-## Returns true if this is it.
+## Returns true if this is it. Until then it shows: it is drawn cracked,
+## the more so the nearer it is to giving.
 func wear(i: int, blows: int) -> bool:
 	if _worn.size() < count:
 		_worn.resize(count)
 	_worn[i] = mini(_worn[i] + 1, 255)
+	mesh.set_worn(i, minf(float(_worn[i]) / blows, 1.0))
 	return _worn[i] >= blows
 
 

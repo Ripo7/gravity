@@ -113,7 +113,7 @@ jobs:
         with:
           node-version: "22"
       - run: npm install --no-save playwright@1.64.1 && npx playwright install --with-deps chromium
-      - name: Build the house and break it in WebGL2
+      - name: Build the house and break it, then build a city, in WebGL2
         shell: bash
         run: set -o pipefail; node tools/web_probe.mjs build/web probe.png | tee probe.txt
       - uses: actions/upload-artifact@v4
@@ -122,4 +122,5 @@ jobs:
           name: web-probe
           path: |
             probe.png
+            probe_city.png
             probe.txt

@@ -132,6 +132,15 @@ func test_a_blow_takes_less_out_of_what_is_solid() -> void:
 	var of_block := Fighter.smash(s, Vector3(8, 1.2, 1.2), 0.7, Vector3(0, 0, -6), true)
 	check(of_wall >= 3, "a hole in the wall at once (%d shards)" % of_wall)
 	check_eq(of_block, 0, "the block stands up to it")
+	# And shows it: what took the blow is drawn worn, in part; nothing else.
+	var marked := 0
+	for i in s.count:
+		var share := s.mesh.worn(i)
+		if share > 0.0:
+			marked += 1
+			check(share < 1.0, "a shard that stood has more to take (%.2f)" % share)
+			check(s.held[i] != 0 and s.centroid[i].x > 6.0, "it is of the block, and stands")
+	check(marked >= 1, "the blow shows on the block (%d shards marked)" % marked)
 	# Blow after blow, the block gives, a bite at a time.
 	var more := 0
 	var most := 0
