@@ -59,6 +59,9 @@ const LANE := 0.5
 ## The railway: how high its deck stands (m), and about how long a span is.
 const RAIL_HIGH := 0.62
 const RAIL_SPAN := 2.85
+## How many pixels across the picture of the ground is drawn at (see
+## ground_shade), before it is shrunk.
+const SHADE := 512
 
 ## The paints: houses, their roof tiles, offices, the glass of towers, cars.
 const WALLS: Array[Color] = [
@@ -177,6 +180,39 @@ func tour() -> Array[Array]:
 	for k in mini(targets.size(), 14):
 		stops.append([_kerb(targets[k]), targets[k]])
 	return stops
+
+
+## The ground the city takes up, and a little around.
+func bounds() -> Rect2:
+	var all := blocks[0]
+	for block in blocks:
+		all = all.merge(block)
+	return all.grow(2.0)
+
+
+## A picture of bounds() from above: light where something stands on the
+## ground (the lighter the higher it is) and fading around it. The ground
+## is drawn darker by it (shaders/ground.gdshader).
+func ground_shade() -> ImageTexture:
+	var area := bounds()
+	var drawn := Image.create(SHADE, SHADE, false, Image.FORMAT_L8)
+	for box in _boxes:
+		var foot: Vector3 = box[0]
+		var size: Vector3 = box[1]
+		if foot.y > 0.5 or size.y < 0.3 or maxf(size.x, size.z) < 0.3:
+			continue  # not on the ground, or next to nothing
+		var turned := absf(sin(box[2])) > 0.5
+		var half := (
+			(Vector2(size.z, size.x) if turned else Vector2(size.x, size.z)) * 0.5 + Vector2.ONE * 0.22
+		)
+		var from := (Vector2(foot.x, foot.z) - half - area.position) / area.size * SHADE
+		var to := (Vector2(foot.x, foot.z) + half - area.position) / area.size * SHADE
+		var how := clampf(size.y / 1.5, 0.45, 1.0)
+		drawn.fill_rect(Rect2i(Vector2i(from.floor()), Vector2i((to - from).ceil())), Color(how, how, how))
+	# Shrunk three times over, each time the mean of four: the edges fade.
+	for k in 3:
+		drawn.shrink_x2()
+	return ImageTexture.create_from_image(drawn)
 
 
 ## The block that `at` is in (-1: in the street).

@@ -345,4 +345,13 @@ its shards and what holds are the same everywhere.
   it turns the sun's shadows off for good and shows a round shadow under
   each brute, then, if still slow, draws at three quarters of the
   resolution. Not in scripted runs nor without a screen.
+- **Relief without shadows** (once the sun's shadows have been given up,
+  and with them too). Three things that cost next to nothing: the ground
+  is drawn darker where something stands on it and a little around
+  (`City.ground_shade`: the footprints of the boxes drawn into a 512 px
+  picture, shrunk to 64 so that the edges fade; one look-up in
+  `shaders/ground.gdshader`); a wall is darker over its lowest 45 cm; and
+  what faces down or sideways gets less light than what faces the sky,
+  which gives rubble its shape. The bricks and the concrete of broken
+  faces are laid finer (5 tiles to the metre).
 

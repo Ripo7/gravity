@@ -44,6 +44,7 @@ var eased := 0
 var build_ms := 0.0
 
 var _sun: DirectionalLight3D
+var _floor: PlaneMesh
 var _blobs: Array[MeshInstance3D] = []
 var _pacing := false
 var _paced := 0.0
@@ -252,8 +253,10 @@ func _on_released(at: Vector3, volume: float, velocity: Vector3) -> void:
 ## The pavements of the city: a light pad under each block and under the
 ## square, a finger above the road (only to look at).
 func _pave() -> void:
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.5, 0.48, 0.44)
+	var shade := city.ground_shade()
+	var area := city.bounds()
+	var mat := _ground(Color(0.5, 0.48, 0.44), shade, area)
+	_floor.material = _ground(Color(0.25, 0.24, 0.25), shade, area)
 	for pad: Array in city.pads():
 		var size: Vector2 = pad[1]
 		var slab := BoxMesh.new()
@@ -264,6 +267,17 @@ func _pave() -> void:
 		look.position = (pad[0] as Vector3) + Vector3(0, 0.015, 0)
 		look.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(look)
+
+
+## The ground of the city in `colour`, darker where `shade` says something
+## stands (a picture of `area` from above).
+func _ground(colour: Color, shade: Texture2D, area: Rect2) -> ShaderMaterial:
+	var mat := ShaderMaterial.new()
+	mat.shader = preload("res://shaders/ground.gdshader")
+	mat.set_shader_parameter("colour", colour)
+	mat.set_shader_parameter("shade", shade)
+	mat.set_shader_parameter("area", Vector4(area.position.x, area.position.y, area.size.x, area.size.y))
+	return mat
 
 
 func _build_world() -> void:
@@ -317,6 +331,7 @@ func _build_world() -> void:
 	var plane := PlaneMesh.new()
 	plane.size = Vector2(400, 400)
 	plane.material = floor_mat
+	_floor = plane
 	var ground := StaticBody3D.new()
 	ground.collision_layer = Structure.LAYER_WORLD
 	ground.collision_mask = 0
