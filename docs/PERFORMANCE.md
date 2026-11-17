@@ -74,6 +74,13 @@ ms, at most 471 to 595 pieces. A 40 s fight on the square of city 49 (the
 other brute attacking): 0.7 ms in the worst second, 0.16 at the median.
 CI runs the tour on city 49.
 
+The ground (`shaders/ground.gdshader`) is worked out for each pixel
+instead of being one flat colour. Where every pixel is computed on the
+processor (software rendering, 1280 x 720, city 29, the first three cases
+of `--mode=bench`, three runs each): 3.6 to 3.7, 5.8 to 6.0 and 6.5 to 6.8
+frames a second before; 3.4 to 3.6, 5.7 to 5.8 and 6.4 to 6.6 after. So
+0 to 5 % of the picture there; not measured on the phone.
+
 ### The house
 
 Headless on a 2-core cloud machine, one physics step per frame

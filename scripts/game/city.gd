@@ -102,8 +102,12 @@ const TRAIN := Color(0.85, 0.5, 0.15)
 ## The number it was made up from.
 var number := 0
 ## Its blocks on the ground (x and z), the square among them, and what each
-## one is.
+## one is. They stand in rows and columns: `columns` tells where each
+## column starts along x and how wide it is, `rows` the same along z; the
+## block of column c and row r is blocks[r * columns.size() + c].
 var blocks: Array[Rect2] = []
+var columns := PackedVector2Array()
+var rows := PackedVector2Array()
 var kinds := PackedInt32Array()
 var square := Rect2()
 ## Where things stand (the middle of their foot): towers, offices, houses,
@@ -180,6 +184,18 @@ func tour() -> Array[Array]:
 	for k in mini(targets.size(), 14):
 		stops.append([_kerb(targets[k]), targets[k]])
 	return stops
+
+
+## The avenues that run along `way` (0: along z, between two columns; 1:
+## along x, between two rows): for each, where its middle is across and
+## half its width, from block to block.
+func avenues(way: int) -> PackedVector2Array:
+	var beside := columns if way == 0 else rows
+	var out := PackedVector2Array()
+	for k in beside.size() - 1:
+		var from := beside[k].x + beside[k].y
+		out.append(Vector2((from + beside[k + 1].x) * 0.5, (beside[k + 1].x - from) * 0.5))
+	return out
 
 
 ## The ground the city takes up, and a little around.
@@ -271,6 +287,8 @@ func _plan(fill: float) -> void:
 	railway.clear()
 	var across := _streets(rng)
 	var along := _streets(rng)
+	columns = across
+	rows = along
 	var near: Array[int] = []
 	for z in along.size():
 		for x in across.size():
@@ -435,9 +453,9 @@ func _houses(lot: Rect2, rng: RandomNumberGenerator, fill: float) -> void:
 	var across := lot.size[turned]
 	var deep := lot.size[1 - turned]
 	var side := clampi(int((across - 0.1) / 1.45), 1, 3)
-	var rows := clampi(int((deep - 0.1) / 1.75), 1, 2)
+	var ranks := clampi(int((deep - 0.1) / 1.75), 1, 2)
 	var middle := lot.get_center()
-	for row in rows:
+	for row in ranks:
 		for k in side:
 			if rng.randf() > fill + 0.1:
 				continue
@@ -445,9 +463,9 @@ func _houses(lot: Rect2, rng: RandomNumberGenerator, fill: float) -> void:
 			var size := Vector3(
 				rng.randf_range(1.05, 1.3),
 				rng.randf_range(0.6, 0.85),
-				minf(rng.randf_range(1.3, 2.3), deep / rows - 0.3)
+				minf(rng.randf_range(1.3, 2.3), deep / ranks - 0.3)
 			)
-			var off := Vector2(((k + 0.5) / side - 0.5) * across, ((row + 0.5) / rows - 0.5) * deep)
+			var off := Vector2(((k + 0.5) / side - 0.5) * across, ((row + 0.5) / ranks - 0.5) * deep)
 			if turned == 1:
 				off = Vector2(off.y, off.x)
 			var at := Vector3(middle.x + off.x, 0, middle.y + off.y)
@@ -473,8 +491,9 @@ func _tree(at: Vector3, grown: float) -> void:
 		if other.distance_to(at) < 0.65:
 			return
 	_trees.append(at)
-	_add(at, Vector3(0.09, 0.32, 0.09) * grown, 0.0, TRUNK, WHOLE)
-	_add(at + Vector3(0, 0.32 * grown, 0), Vector3(0.42, 0.4, 0.42) * grown, 0.0, LEAVES, WHOLE)
+	_add(at, Vector3(0.09, 0.32, 0.09) * grown, 0.0, TRUNK, WHOLE, ShardMesh.Look.TRUNK)
+	var crown := Vector3(0.46, 0.44, 0.46) * grown
+	_add(at + Vector3(0, 0.32 * grown, 0), crown, 0.0, LEAVES, WHOLE, ShardMesh.Look.CROWN)
 
 
 ## Cars on every avenue: parked along the kerbs, and a few on the road.
@@ -523,10 +542,12 @@ func _street(way: int, lane: float, at: float) -> Vector3:
 	return Vector3(lane, 0, at) if way == 0 else Vector3(at, 0, lane)
 
 
+## A car, or one time in four a van (which, from where it is: the city of
+## a number stays the same).
 func _car(at: Vector3, turn: float, tint: Color) -> void:
 	cars.append(at)
-	_add(at, Vector3(0.24, 0.13, 0.5), turn, tint, WHOLE)
-	_add(at + Vector3(0, 0.13, 0), Vector3(0.21, 0.09, 0.26), turn, tint.lightened(0.25), WHOLE)
+	var van := int(absf(at.x * 7.0 + at.z * 13.0)) % 4 == 0
+	_add(at, Vector3(0.24, 0.2, 0.5), turn, tint, WHOLE, ShardMesh.Look.VAN if van else ShardMesh.Look.CAR)
 
 
 ## A railway on stilts down the middle (`lane`) of the avenue that runs
@@ -547,7 +568,7 @@ func _railway(way: int, lane: float, from: float, to: float, rng: RandomNumberGe
 	var head := rng.randf_range(from + 1.0, to - 1.0 - coaches)
 	for k in coaches:
 		var coach := _street(way, lane, head + k) + Vector3.UP * (RAIL_HIGH + 0.16)
-		_add(coach, Vector3(0.92, 0.26, 0.34), turn, TRAIN, WHOLE)
+		_add(coach, Vector3(0.92, 0.26, 0.34), turn, TRAIN, WHOLE, ShardMesh.Look.COACH)
 
 
 ## Trees round the square.

@@ -103,9 +103,12 @@ void fragment() {
 	} else if (built && !flat_top) {
 		// A wall: which tile for this bay of this floor. One door to a
 		// house; shops and lobbies all along; the top floor under its cornice.
+		// (The count of bays comes a hair off a whole number from one pixel
+		// to the next: its half is not floored as it is, or the door of a
+		// house with an even count would be in two bays at once.)
 		float row = 1.0;
 		if (skin.y < 1.0) {
-			row = (kind > 1 || abs(floor(skin.x) - floor(skin.z * 0.5)) < 0.5) ? 0.0 : 1.0;
+			row = (kind > 1 || abs(floor(skin.x) - floor(skin.z * 0.5 + 0.25)) < 0.5) ? 0.0 : 1.0;
 		} else if (skin.y > skin.w - 1.0) {
 			row = 2.0;
 		}
