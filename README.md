@@ -13,6 +13,12 @@ Seen in third person.
 - **Its small things.** Cars, vans, trees and the train are small models
   made in Blender (`tools/blender/props.py`), each standing for one box:
   kicked, they fly off as they are.
+- **Its ground.** Dashes down the middle of the avenues, a line along the
+  parked cars, bars to cross on at every corner, kerbs, paving stones,
+  lawns under the houses and in the parks, a square of two stones with a
+  ring on it, and fields round the city that the avenues run out into.
+  None of it is a picture: `shaders/ground.gdshader` works it out from
+  where the blocks are, so it is sharp from any distance.
 - **The city.** The brutes keep their size and the city is small around
   them (`scripts/game/city.gd`): houses up to their knees, offices up to
   their heads, towers three times their height, around a square to fight

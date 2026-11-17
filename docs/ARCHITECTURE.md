@@ -368,4 +368,20 @@ its shards and what holds are the same everywhere.
   still the box. A car is now one box, not two (106 shards fewer in city
   49), but its 80 triangles are more than a box's twelve: city 49 goes
   from 84 107 to 114 501 vertices, built in 0.45 s instead of 0.42.
+- **The ground** (`shaders/ground.gdshader`, one material for the floor
+  and for the slabs under the blocks). Nothing on it is a picture: the
+  shader is told where the blocks are (`City.columns`, `City.rows`: four
+  each way at most), the avenues between them (`City.avenues`) and what
+  each block is, and works out for each pixel how far it is inside a
+  block or from the middle of a street. From that: on the road, dashes
+  down the middle, a line along the parked cars, bars across at each
+  corner, a darker gutter; on a slab, a kerb, paving stones, then a lawn
+  (houses, parks), plain paving (downtown) or the square's two stones and
+  its ring; past the last blocks, fields in plots, with the avenues
+  running on. A picture sharp enough for a line 4 cm wide over 50 m of
+  city would be 4096 px across; this takes no memory and stays sharp
+  under the camera. Lines are smoothed over the width of a pixel and
+  what repeats (dashes, bars, joints) turns to its mean from far, so
+  nothing flickers. The same look-up as before darkens it where things
+  stand.
 
