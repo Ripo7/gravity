@@ -81,6 +81,11 @@ of `--mode=bench`, three runs each): 3.6 to 3.7, 5.8 to 6.0 and 6.5 to 6.8
 frames a second before; 3.4 to 3.6, 5.7 to 5.8 and 6.4 to 6.6 after. So
 0 to 5 % of the picture there; not measured on the phone.
 
+A face of a box is drawn as a fan round its middle (for the scars of a
+shard that has taken blows): one vertex more a face. City 49 goes from
+114 501 to 119 529 vertices (4 %), cut and built in 0.56 to 0.70 s
+instead of 0.54 to 0.64 (three runs each, headless).
+
 ### The house
 
 Headless on a 2-core cloud machine, one physics step per frame

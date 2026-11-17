@@ -2,7 +2,8 @@ class_name ShardMesh
 extends MeshInstance3D
 ## Draws every shard of a Structure in one draw call (see shards.gdshader).
 ## The mesh never changes: breaking only changes two small textures, which
-## shard belongs to which rigid body, and where each body is. Crumbs, cut
+## shard belongs to which rigid body (and how worn it is by the blows it
+## has stood up to), and where each body is. Crumbs, cut
 ## while the game runs, are a second, small mesh drawn the same way; it is
 ## made again whenever some are added.
 
@@ -25,6 +26,8 @@ const BAY: Array[float] = [1.0, 0.42, 0.5, 0.42, 1.0, 1.0]
 const FLOOR: Array[float] = [1.0, 0.36, 0.4, 0.36, 1.0, 1.0]
 ## Texels per row of the two data textures.
 const WIDTH := 256
+## Floats per shard: the body it moves with, and how worn it is.
+const SHARD_FLOATS := 2
 ## Floats per body: where rest-space points go (xyz, pad) and a rotation.
 const BODY_FLOATS := 8
 ## A face made by a cut is not left flat: its middle is pushed in or out by
@@ -100,36 +103,31 @@ func add_shard(
 		var uv := Vector2(id, 0)
 		if broken:
 			uv.y = (alone if alone >= 0 else base + cut.others[f]) + 1
+		# A fan round the middle of the face. On a broken face the middle is
+		# pushed in or out; on a face of the box it is marked as the middle
+		# (-1): cracks run along the edge of a shard that has taken blows.
+		var n := ring.size()
 		var middle := Vector3.ZERO
 		for c in ring:
-			_verts.append(points[c])
+			middle += points[c]
+		middle /= n
+		if broken:
+			middle += normal * sqrt(cut.areas[f]) * ROUGH * _rng.randf_range(-1.0, 0.7)
+		for k in n + 1:
+			var point := points[ring[k]] if k < n else middle
+			_verts.append(point)
 			_normals.append(normal)
 			_colors.append(tint)
-			_uvs.append(uv)
-			middle += points[c]
+			_uvs.append(uv if k < n or broken else Vector2(id, -1))
 			var place := Vector4.ZERO
 			if not broken and wide > 0.0:
-				var local := into * points[c]
+				var local := into * point
 				place.x = (local.dot(across) / wide + 0.5) * bays
 				place.y = (local.y / size.y + 0.5) * floors
 				place.z = bays
 				place.w = floors
 			_skins.append_array([place.x, place.y, place.z, place.w])
 		# The ring runs anticlockwise seen from outside; triangles go clockwise.
-		if not broken:
-			for t in range(1, ring.size() - 1):
-				_indices.append(from)
-				_indices.append(from + t + 1)
-				_indices.append(from + t)
-			continue
-		# A broken face: a fan round its middle, which is pushed in or out.
-		var n := ring.size()
-		middle = middle / n + normal * sqrt(cut.areas[f]) * ROUGH * _rng.randf_range(-1.0, 0.7)
-		_verts.append(middle)
-		_normals.append(normal)
-		_colors.append(tint)
-		_uvs.append(uv)
-		_skins.append_array([0.0, 0.0, 0.0, 0.0])
 		for t in n:
 			_indices.append(from + n)
 			_indices.append(from + (t + 1) % n)
@@ -144,11 +142,11 @@ func build(shards: int, bodies: int, hidden_from: int) -> void:
 	custom_aabb = AABB(Vector3.ONE * -500.0, Vector3.ONE * 1000.0)
 	vertex_count = _verts.size()
 	var rows := maxi(ceili(float(shards) / WIDTH), 1)
-	_slots.resize(WIDTH * rows)
+	_slots.resize(WIDTH * rows * SHARD_FLOATS)
 	_slots.fill(0.0)
-	for k in range(hidden_from, _slots.size()):
-		_slots[k] = -1.0
-	_slot_image = Image.create_from_data(WIDTH, rows, false, Image.FORMAT_RF, _slots.to_byte_array())
+	for k in range(hidden_from, WIDTH * rows):
+		_slots[k * SHARD_FLOATS] = -1.0
+	_slot_image = Image.create_from_data(WIDTH, rows, false, Image.FORMAT_RGF, _slots.to_byte_array())
 	_slot_texture = ImageTexture.create_from_image(_slot_image)
 	var body_rows := maxi(ceili(bodies * 2.0 / WIDTH), 1)
 	_bodies.resize(WIDTH * body_rows * 4)
@@ -179,8 +177,20 @@ func build(shards: int, bodies: int, hidden_from: int) -> void:
 
 ## Shard `shard` now moves with body `slot` (0: the world, -1: hidden).
 func set_slot(shard: int, slot: int) -> void:
-	_slots[shard] = slot
+	_slots[shard * SHARD_FLOATS] = slot
 	_slots_changed = true
+
+
+## Shard `shard` has taken `share` of the blows it can stand up to (0: none,
+## it shows nothing).
+func set_worn(shard: int, share: float) -> void:
+	_slots[shard * SHARD_FLOATS + 1] = share
+	_slots_changed = true
+
+
+## The share shard `shard` is drawn worn by.
+func worn(shard: int) -> float:
+	return _slots[shard * SHARD_FLOATS + 1]
 
 
 ## Body `slot` is at `xf`; `origin` is where its own origin was in the whole
@@ -205,7 +215,7 @@ func _process(_delta: float) -> void:
 		_crumbs.mesh = _surface()
 	if _slots_changed:
 		_slots_changed = false
-		_slot_image.set_data(WIDTH, _slot_image.get_height(), false, Image.FORMAT_RF, _slots.to_byte_array())
+		_slot_image.set_data(WIDTH, _slot_image.get_height(), false, Image.FORMAT_RGF, _slots.to_byte_array())
 		_slot_texture.update(_slot_image)
 	if _bodies_changed:
 		_bodies_changed = false

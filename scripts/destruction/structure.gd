@@ -466,11 +466,13 @@ func thick(i: int) -> float:
 
 
 ## A blow lands on standing shard `i`, which gives at the `blows`th one.
-## Returns true if this is it.
+## Returns true if this is it. Until then it shows: it is drawn cracked,
+## the more so the nearer it is to giving.
 func wear(i: int, blows: int) -> bool:
 	if _worn.size() < count:
 		_worn.resize(count)
 	_worn[i] = mini(_worn[i] + 1, 255)
+	mesh.set_worn(i, minf(float(_worn[i]) / blows, 1.0))
 	return _worn[i] >= blows
 
 

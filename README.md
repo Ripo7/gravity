@@ -31,7 +31,8 @@ Seen in third person.
   kicked aside at a walk, but a house is a wall until it is run into (a
   sprint or a charge goes through, and is slowed by it), punched, or
   landed on. Offices and towers stand up to blows: each one takes a bite
-  out of them, chips flying the rest of the time, and a tower comes down
+  out of them, chips flying the rest of the time and the wall left
+  cracked where it was hit, with bricks showing, and a tower comes down
   at about the third combo, tipping over away from the side that went.
   Only a brute that is thrown goes straight through them. Light rubble
   does not stop a brute. The house of

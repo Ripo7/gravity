@@ -304,6 +304,19 @@ its shards and what holds are the same everywhere.
   the third four-blow combo (the first, before). A brute that is thrown,
   and the scripted blows of the showcase and the tests (`Main.blow`), are
   not held back.
+- **A blow that is stood up to shows** (`ShardMesh.set_worn`, the scars in
+  `shaders/shards.gdshader`). The texture that tells each shard's body
+  carries a second number: the share the shard has taken of the blows it
+  can take (`Structure.wear` sets it). Where it is above 0, the shader
+  cracks the face of the shard into chips (points scattered 5.5 to the
+  metre, the nearest two looked for among nine squares) and takes off the
+  chips whose own number is under a threshold that rises with the share:
+  what the wall is made of shows there, bricks or concrete. So the second
+  blow at the same place widens what the first began, and the third goes
+  through. It fades towards the edge of the shard, whose neighbours took
+  nothing: for that, a face of the box is a fan round its middle, which
+  is marked (one vertex more a face). Only the pixels of a worn shard pay
+  for it. A shard that comes off keeps its scars as a piece.
 - **Litter** (`Pieces.LITTER`, `Structure.LAYER_LITTER`). A loose piece
   of 500 kg or less is on a layer of its own that the brutes neither
   collide with nor are pushed by; heavier pieces still block and can be

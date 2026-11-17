@@ -15,7 +15,9 @@ shader_type spatial;
 // wall modelled and baked in Blender (tools/blender/facades.py), one tile
 // to a bay of a floor, with its relief as a normal map.
 
-uniform sampler2D slot_of : filter_nearest, repeat_disable;  // per shard: its body (-1 hidden)
+// Per shard: its body (-1 hidden), and the share it has taken of the blows
+// it can stand up to.
+uniform sampler2D slot_of : filter_nearest, repeat_disable;
 uniform sampler2D bodies : filter_nearest, repeat_disable;   // per body: where it is (2 texels)
 uniform sampler2D grid : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform float squares_per_metre = 0.25;
@@ -24,11 +26,17 @@ uniform vec3 core : source_color = vec3(0.46, 0.45, 0.45);  // the inside of a w
 uniform sampler2DArray facade : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2DArray facade_relief : hint_normal, filter_linear_mipmap, repeat_enable;
 
+// How many chips to the metre the face of a shard that has taken blows is
+// cracked into.
+const float CHIPS = 5.5;
+
 varying vec3 stood;    // where this point was in the whole building
 varying vec3 facing;   // and which way its face looked
 varying float inside;  // 1 on a face made by the break
 varying vec4 skin;     // on a wall: bays across, floors up, how many of each
 varying float look;    // what the box is dressed as (ShardMesh.Look)
+varying float edge;    // on a face of the box: 0 in its middle, 1 on its edge
+varying float worn;    // the share of the blows its shard can take, taken
 
 vec3 turn(vec4 q, vec3 v) {
 	return v + 2.0 * cross(q.xyz, cross(q.xyz, v) + q.w * v);
@@ -50,10 +58,37 @@ float blotch(vec3 p) {
 	return mix(low, high, f.z);
 }
 
+// Points scattered one to a square of side 1, and the chips they cut a
+// face into: how far `at` is from the edge of its chip (x), and a number
+// that chip has of its own (y).
+vec2 chip(vec2 at) {
+	vec2 square = floor(at);
+	float first = 8.0;
+	float second = 8.0;
+	float own = 0.0;
+	for (int j = -1; j <= 1; j++) {
+		for (int i = -1; i <= 1; i++) {
+			vec2 next = square + vec2(float(i), float(j));
+			vec2 h = fract(sin(vec2(dot(next, vec2(127.1, 311.7)), dot(next, vec2(269.5, 183.3)))) * 43758.5453);
+			vec2 off = next + h - at;
+			float d = dot(off, off);
+			if (d < first) {
+				second = first;
+				first = d;
+				own = h.x;
+			} else if (d < second) {
+				second = d;
+			}
+		}
+	}
+	return vec2((sqrt(second) - sqrt(first)) * 0.5, own);
+}
+
 void vertex() {
 	stood = VERTEX;
 	facing = NORMAL;
 	inside = UV.y > 0.5 ? 1.0 : 0.0;
+	edge = UV.y < -0.5 ? 0.0 : 1.0;
 	skin = CUSTOM0;
 	look = floor((1.0 - COLOR.a) * 5.0 + 0.5);
 	// Which way a wall's picture runs: across, and up.
@@ -62,7 +97,9 @@ void vertex() {
 	BINORMAL = cross(NORMAL, across);
 	int id = int(UV.x + 0.5);
 	int w = textureSize(slot_of, 0).x;
-	float slot = texelFetch(slot_of, ivec2(id % w, id / w), 0).r;
+	vec2 state = texelFetch(slot_of, ivec2(id % w, id / w), 0).rg;
+	float slot = state.r;
+	worn = state.g;
 	bool hidden = slot < -0.5;
 	if (!hidden && UV.y > 0.5) {
 		int other = int(UV.y - 0.5);
@@ -132,6 +169,20 @@ void fragment() {
 	if (built) {
 		broken = texture(facade, vec3(uv * 5.0, kind == 3 ? 14.0 : 13.0)).rgb;
 		broken *= (kind == 3 ? 0.6 : 0.95) + 0.15 * grain;
+	}
+	if (worn > 0.0 && inside < 0.5) {
+		// A shard that has taken blows and stands: what it is faced with
+		// is cracked into chips, and some have come off, more at each blow,
+		// with what the wall is made of showing. Less so towards the edge
+		// of the shard: its neighbours took nothing.
+		vec2 chipped = chip(uv * CHIPS);
+		float blur = max(fwidth(uv.x), fwidth(uv.y)) * CHIPS;
+		float reach = smoothstep(0.0, 0.35, 1.0 - edge);
+		float off = step(chipped.y, (0.12 + 0.5 * worn) * reach);
+		float crack = (1.0 - smoothstep(0.02, 0.045 + blur, chipped.x)) * clamp(1.4 - blur * 3.0, 0.0, 1.0);
+		face = mix(face, broken * 0.8, off);
+		face *= 1.0 - 0.7 * crack * reach * (0.6 + 0.4 * worn);
+		relief = mix(relief, vec3(0.5, 0.5, 1.0), off);
 	}
 	ALBEDO = mix(face, broken, inside);
 	// Each facet of a broken face faces its own way (worked out from the
