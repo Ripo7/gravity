@@ -23,3 +23,19 @@ floor, a floor in between, top floor), then roof tiles, bricks, concrete
 and gravel. `ShardMesh` cuts them into the layers of a texture and
 `shaders/shards.gdshader` lays them on the boxes, bay by bay and floor by
 floor.
+
+# The small things of the city
+
+`props.json` is made by `tools/blender/props.py` (a second or so):
+
+    python3 tools/blender/props.py assets/city
+
+A car, a van, a coach of the train, the crown of a tree and its trunk, 12
+to 80 triangles each, made with Blender's bmesh (boxes, bevels, an
+icosphere pulled about). Each stands for one box of the city that is never
+cut; `ShardMesh.add_model` draws it in place of the box's six faces, in
+the same single draw as everything else, and it flies off with the box
+when it is kicked. A corner of a triangle is a place in the unit cube of
+its box, the way it faces, and a colour with a mark saying whether the
+box's own paint goes on it.
+

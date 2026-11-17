@@ -360,4 +360,12 @@ its shards and what holds are the same everywhere.
   what faces down or sideways gets less light than what faces the sky,
   which gives rubble its shape. The bricks and the concrete of broken
   faces are laid finer (5 tiles to the metre).
+- **Models** (`ShardMesh.add_model`, `Look.CAR` and after). A box that is
+  left in one piece (a car, the crown and the trunk of a tree, a coach of
+  the train) can be drawn as a small model instead of its six faces: the
+  model's triangles carry the shard's number like any other, so they move
+  with its body and vanish with it, in the same draw call; its physics is
+  still the box. A car is now one box, not two (106 shards fewer in city
+  49), but its 80 triangles are more than a box's twelve: city 49 goes
+  from 84 107 to 114 501 vertices, built in 0.45 s instead of 0.42.
 

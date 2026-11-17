@@ -10,6 +10,9 @@ Seen in third person.
   (`tools/blender/facades.py`, see `assets/city/SOURCE.md`): windows set
   back in the wall, shutters, shop fronts under awnings, cornices, glass
   towers; bricks or concrete show where a wall is broken.
+- **Its small things.** Cars, vans, trees and the train are small models
+  made in Blender (`tools/blender/props.py`), each standing for one box:
+  kicked, they fly off as they are.
 - **The city.** The brutes keep their size and the city is small around
   them (`scripts/game/city.gd`): houses up to their knees, offices up to
   their heads, towers three times their height, around a square to fight
