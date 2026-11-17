@@ -74,12 +74,15 @@ const RAM := 6.5
 const BRAKED := 0.4
 const LIGHT := 70.0
 ## What is solid stands up to blows and charges: as many times as the box
-## is SOLID m thick (TOUGHEST at most), the hole is that much smaller and
-## each shard takes that many blows before it gives, chips flying off it
+## is SOLID m thick (TOUGHEST at most), each shard takes that many blows
+## before it gives (more at the edge of the blow), chips flying off it
 ## meanwhile. A wall or a house gives at once; an office or a tower takes
 ## blow after blow. (A brute that is thrown goes through all the same.)
 const SOLID := 0.7
 const TOUGHEST := 3.0
+## How far inside something solid the middle of a shard may be for a blow
+## at its face to count as on it (m).
+const DEEP := 0.35
 const TRAMPLE := 0.75
 const KICK := 2.0
 const KICK_UP := 3.0
@@ -266,9 +269,13 @@ func breach(ahead: Vector3) -> void:
 		var touched := body.get_slide_collision(k)
 		var i := structure.owner_of(touched.get_collider_rid())
 		if i >= 0 and structure.held[i] == 1 and touched.get_normal().y < 0.7:
-			# (What is solid lets go of it a shard now and then.)
+			# (What is solid lets go of it a shard now and then, in crumbs
+			# or in dust: whole, it would stay wedged in its way.)
 			if randf() < 0.6 * SOLID / maxf(structure.thick(i), 0.6 * SOLID):
-				structure.blow(i, ahead * 5.0)
+				if structure.thick(i) > SOLID:
+					structure.shatter(i, _spalled(ahead * 5.0), true)
+				else:
+					structure.blow(i, ahead * 5.0)
 	clear(ahead, RUBBLE * 3.0)
 
 
@@ -422,47 +429,55 @@ static func climb(of: CharacterBody3D, wish: Vector3, stride: float, height: flo
 	return rise
 
 
+## Which way what a blow along `push` knocks off something solid leaves:
+## there is more of the building behind it, so it comes back out, fast
+## enough to be clear of the wall (Structure.TORN_SPEED), up a little and
+## to one side or the other.
+static func _spalled(push: Vector3) -> Vector3:
+	var aside := push.cross(Vector3.UP).normalized() * randf_range(-1.5, 1.5)
+	return -push.normalized() * randf_range(5.5, 7.0) + aside + Vector3.UP * randf_range(0.5, 2.0)
+
+
 ## Knocks out of `s` what stands within `radius` m of `at` (the nearest
 ## half in crumbs), thrown along `push`, and cracks what is a little
-## farther. `tough`: what is solid stands up to it (see SOLID), the shard
-## nearest the blow taking it if no other does. Returns how many shards
-## went.
+## farther. `tough`: what is solid stands up to it (see SOLID): each shard
+## the blow reaches takes it, and gives only at its second or third one,
+## in crumbs thrown back out or in dust. Returns how many shards went.
 static func smash(s: Structure, at: Vector3, radius: float, push: Vector3, tough := false) -> int:
 	var broken := 0
-	var held_out := false
-	var nearest := -1
-	var nearest_at := radius
-	for i in s.shards_near(at, radius * 1.5):
+	var held_out := -1  # a shard that stood up to it
+	for i in s.shards_near(at, radius * 1.5 + DEEP):
 		if s.held[i] == 0:
 			continue
 		var off := s.centroid[i] - at
 		var d := off.length()
 		var solid := clampf(s.thick(i) / SOLID, 1.0, TOUGHEST) if tough else 1.0
+		if solid > 1.0:
+			# (The blow lands on its face; its middle is farther in. And
+			# it does not crack round the blow: a shard that came loose
+			# there, whole, would stay wedged in the building.)
+			var near := maxf(d - minf(s.radius[i] * 0.5, DEEP), 0.0)
+			if near >= radius:
+				continue
+			# (What is at the edge of the blow takes up to twice and a half as many.)
+			if s.wear(i, roundi(solid * (1.0 + 1.5 * near / radius))):
+				s.shatter(i, _spalled(push), true)
+				broken += 1
+			else:
+				held_out = i
+			continue
+		if d >= radius * 1.5:
+			continue
 		if d >= radius:
 			s.strike(i, lerpf(0.7, Structure.CRACK, (d - radius) / (radius * 0.5)), push * 0.3)
 			continue
-		if d >= radius / solid:
-			if d < nearest_at:
-				nearest = i
-				nearest_at = d
-			continue
-		nearest_at = 0.0  # (something is within reach: the nearest need not stand in)
-		if solid > 1.0 and not s.wear(i, roundi(solid)):
-			held_out = true
-			continue
 		var away := push * randf_range(0.5, 1.0) + off * 2.0
-		if d < radius / solid * 0.5:
+		if d < radius * 0.5:
 			s.shatter(i, away)
 		else:
 			s.blow(i, away)
 		broken += 1
-	if nearest >= 0 and nearest_at > 0.0:
-		if s.wear(nearest, roundi(clampf(s.thick(nearest) / SOLID, 1.0, TOUGHEST))):
-			s.shatter(nearest, push * randf_range(0.5, 1.0))
-			broken += 1
-		else:
-			held_out = true
-	if held_out and broken == 0:
+	if held_out >= 0 and broken == 0:
 		# It held: chips and dust off the face of it.
-		s.released.emit(at, 0.12, -push * 0.4)
+		s.released.emit(at, 0.12, -push * 0.4, held_out)
 	return broken

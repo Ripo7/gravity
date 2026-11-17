@@ -219,13 +219,19 @@ func crumble_chance() -> float:
 
 
 ## Shard `m` breaks into crumbs, each a piece of its own, flung apart (or
-## leaves whole if it cannot be cut). `from_rest`, `velocity`, `spin` and
-## `torn` as in spawn(), for the shard as a whole.
-func crumble(m: int, from_rest: Transform3D, velocity: Vector3, spin: Vector3, torn := false) -> void:
+## leaves whole if it cannot be cut; or, `to_dust`, is simply gone).
+## `from_rest`, `velocity`, `spin` and `torn` as in spawn(), for the shard
+## as a whole.
+func crumble(
+	m: int, from_rest: Transform3D, velocity: Vector3, spin: Vector3, torn := false, to_dust := false
+) -> void:
 	var s := structure
 	var bits := s.make_crumbs(m)
 	if bits.is_empty():
-		spawn(PackedInt32Array([m]), from_rest, velocity, spin, RID(), torn)
+		if to_dust:
+			s.mesh.set_slot(m, -1)
+		else:
+			spawn(PackedInt32Array([m]), from_rest, velocity, spin, RID(), torn)
 		return
 	_crumbles_left -= 1
 	s.piece_of[m] = -1
@@ -438,8 +444,9 @@ func _shatter(hit: Array) -> void:
 		var w := _ang[i]
 		_remove(i)
 		crumble(whole, at * Transform3D(Basis(), -origin[i]), v, w)
-		s.released.emit(at.origin, s.volume[whole], v)
+		s.released.emit(at.origin, s.volume[whole], v, whole)
 		return
+	var of: int = members[i][0]
 	var points: PackedVector3Array = hit[2]
 	var impulses: PackedFloat32Array = hit[3]
 	var owners: PackedInt32Array = hit[4]
@@ -523,7 +530,7 @@ func _shatter(hit: Array) -> void:
 				if _mark[s.adj_other[e]] != _stamp:
 					s.bond_health[s.adj_bond[e]] = 0.0
 		spawn(part, from_rest, lin + ang.cross(arm), ang)
-	s.released.emit(xf.origin, amount, lin)
+	s.released.emit(xf.origin, amount, lin, of)
 
 
 ## Weakens the bonds of shard `m` by up to `harm`. True if one broke.

@@ -10,9 +10,10 @@ then baked by Cycles into two images the game lays on its boxes:
 
 Four columns of four tiles. Columns 0 to 2 are a house, an office and a
 tower, each with its ground floor, a floor in between, its top floor, and
-(unused) a spare; column 3 is roof tiles, bricks, concrete (what shows in
-a broken wall) and the gravel of a flat roof. Tiles repeat: each is baked
-with copies of itself all round.
+what is inside: a room seen from where the wall was, on its slab, which
+the game shows where a building is broken open. Column 3 is roof tiles,
+bricks, concrete (the thickness of a broken wall) and the gravel of a
+flat roof. Tiles repeat: each is baked with copies of itself all round.
 
 Needs Blender as a Python module (pip install bpy), numpy and Pillow.
 """
@@ -64,6 +65,14 @@ class Module:
         self.parts.append((obj, rgb, paint, shade))
         return obj
 
+    def face(self, corners, rgb, paint=False):
+        """A flat face through `corners`, each (x across, y in, z up)."""
+        mesh = bpy.data.meshes.new("part")
+        mesh.from_pydata([tuple(c) for c in corners], [], [tuple(range(len(corners)))])
+        obj = bpy.data.objects.new("part", mesh)
+        self.parts.append((obj, rgb, paint, None))
+        return obj
+
     def wall(self, hole, rgb=PAINT, paint=True):
         """A wall with a hole in it (x0, x1, z0, z1), in four strips."""
         x0, x1, z0, z1 = hole
@@ -86,7 +95,98 @@ class Module:
             self.box((x0, x1), (at - 0.011, at + 0.011), (back - 0.03, back), frame, bevel=0.004)
 
 
+# A room is drawn the way a stage is built: its back wall smaller than its
+# front, so that the floor, the ceiling and the walls between rooms all
+# show from straight in front. It is ROOM deep; at the back things are NEAR
+# of their size, round (0.5, MIDDLE).
+ROOM = 0.9
+NEAR = 0.55
+MIDDLE = 0.5
+
+
+def stage(x, y, z, open_floor=False):
+    """Where a point of the room (x across, y in, z up) goes on that stage.
+    An open floor runs on from bay to bay: it only narrows up and down."""
+    s = 1.0 - (1.0 - NEAR) * y / ROOM
+    return (x if open_floor else 0.5 + (x - 0.5) * s, y, MIDDLE + (z - MIDDLE) * s)
+
+
+def inside(kind):
+    """What is behind a wall of `kind` (0 house, 1 office, 2 tower): a room on its slab."""
+    m = Module()
+
+    def far(x, y, z):
+        return stage(x, y, z, kind == 2)
+
+    slab = (0.09, 0.13, 0.12)[kind]  # how thick the floor is
+    floor = ((0.55, 0.36, 0.2), (0.34, 0.4, 0.5), (0.23, 0.25, 0.3))[kind]
+    walls = ((1.0, 1.0, 1.0), (0.84, 0.84, 0.82), (0.5, 0.52, 0.55))[kind]
+    edge = ((0.5, 0.34, 0.2), (0.66, 0.65, 0.63), (0.6, 0.61, 0.64))[kind]
+    # The slab it stands on, cut through: wood under a house, concrete with
+    # its bars elsewhere; and the wall between this room and the next.
+    m.box((0, 1), (0, slab), (-0.004, 0.02), edge, bevel=0)
+    if kind == 0:
+        for k in range(8):
+            m.box((k / 8 + 0.02, k / 8 + 0.1), (0.012, slab - 0.012), (-0.012, 0.0), (0.42, 0.27, 0.15), bevel=0.004)
+    else:
+        for k in range(10):
+            m.box((k / 10 + 0.042, k / 10 + 0.058), (slab * 0.3, slab * 0.3 + 0.016), (-0.01, 0.0), (0.4, 0.2, 0.12), bevel=0.003)
+    if kind < 2:
+        m.box((-0.022, 0.022), (slab, 1), (-0.004, 0.02), edge if kind else (0.86, 0.82, 0.74), bevel=0)
+        m.box((0.978, 1.022), (slab, 1), (-0.004, 0.02), edge if kind else (0.86, 0.82, 0.74), bevel=0)
+    # The room: floor, ceiling, the walls at its sides, the one at the back.
+    low, high = slab, 1.0
+    paint = kind == 0  # a house is papered in its own colour
+    m.face([far(0, 0, low), far(1, 0, low), far(1, ROOM, low), far(0, ROOM, low)], floor)
+    m.face([far(0, 0, high), far(1, 0, high), far(1, ROOM, high), far(0, ROOM, high)], (0.9, 0.9, 0.88))
+    if kind < 2:
+        m.face([far(0, 0, low), far(0, ROOM, low), far(0, ROOM, high), far(0, 0, high)], walls, paint)
+        m.face([far(1, 0, low), far(1, ROOM, low), far(1, ROOM, high), far(1, 0, high)], walls, paint)
+    m.face([far(0, ROOM, low), far(1, ROOM, low), far(1, ROOM, high), far(0, ROOM, high)], walls, paint)
+
+    def thing(x, y, z, rgb, bevel=0.01):
+        """A box of the room, on the stage: x, y and z are (from, to)."""
+        a = far(x[0], y[0], z[0])
+        b = far(x[1], y[1], z[1])
+        m.box((a[0], b[0]), (min(a[2], b[2]), max(a[2], b[2])), (y[0], y[1]), rgb, bevel=bevel)
+
+    if kind == 0:
+        # A sofa, a rug, a picture on the wall, a lamp.
+        thing((0.12, 0.5), (0.5, 0.75), (low, low + 0.2), (0.62, 0.22, 0.2))
+        thing((0.12, 0.5), (0.7, 0.78), (low + 0.2, low + 0.36), (0.55, 0.19, 0.18))
+        thing((0.3, 0.8), (0.2, 0.45), (low, low + 0.012), (0.75, 0.68, 0.5), bevel=0)
+        thing((0.58, 0.82), (ROOM - 0.03, ROOM - 0.01), (0.55, 0.8), (0.3, 0.2, 0.12), bevel=0.004)
+        thing((0.61, 0.79), (ROOM - 0.04, ROOM - 0.03), (0.58, 0.77), (0.5, 0.7, 0.8), bevel=0)
+        thing((0.84, 0.86), (0.6, 0.62), (low, low + 0.45), (0.2, 0.2, 0.2), bevel=0)
+        thing((0.79, 0.91), (0.55, 0.67), (low + 0.45, low + 0.58), (1.0, 0.9, 0.6))
+    elif kind == 1:
+        # A desk with its screen, a chair, a cabinet, a light in the ceiling.
+        thing((0.2, 0.62), (0.35, 0.55), (low + 0.24, low + 0.27), (0.76, 0.6, 0.4), bevel=0.004)
+        thing((0.22, 0.25), (0.37, 0.53), (low, low + 0.24), (0.3, 0.3, 0.32), bevel=0)
+        thing((0.57, 0.6), (0.37, 0.53), (low, low + 0.24), (0.3, 0.3, 0.32), bevel=0)
+        thing((0.3, 0.52), (0.48, 0.5), (low + 0.3, low + 0.46), (0.08, 0.09, 0.1), bevel=0.004)
+        thing((0.32, 0.5), (0.47, 0.48), (low + 0.32, low + 0.44), (0.35, 0.6, 0.9), bevel=0)
+        thing((0.34, 0.48), (0.18, 0.3), (low, low + 0.26), (0.15, 0.2, 0.4))
+        thing((0.72, 0.9), (0.72, 0.88), (low, low + 0.55), (0.55, 0.56, 0.58))
+        thing((0.25, 0.75), (0.3, 0.5), (high - 0.02, high), (1.0, 1.0, 0.9), bevel=0)
+    else:
+        # An open floor: a column, rows of desks, lights all along.
+        thing((0.02, 0.14), (0.2, 0.32), (low, high), (0.66, 0.66, 0.68), bevel=0.006)
+        for row in range(2):
+            y = 0.3 + row * 0.32
+            thing((0.24, 0.94), (y, y + 0.14), (low + 0.2, low + 0.225), (0.8, 0.8, 0.82), bevel=0.004)
+            for k in range(3):
+                x = 0.3 + k * 0.22
+                thing((x, x + 0.12), (y + 0.09, y + 0.1), (low + 0.24, low + 0.36), (0.3, 0.55, 0.9), bevel=0)
+        for k in range(2):
+            thing((0.1 + k * 0.5, 0.4 + k * 0.5), (0.3, 0.38), (high - 0.015, high), (1.0, 1.0, 0.92), bevel=0)
+        m.box((0, 1), (slab - 0.03, slab), (-0.014, 0.0), STEEL, bevel=0.004)
+    return m
+
+
 def house(row):
+    if row == 3:
+        return inside(0)
     m = Module()
     teal = (0.16, 0.42, 0.4)
     if row == 0:  # a door, up two steps
@@ -118,6 +218,8 @@ def house(row):
 
 
 def office(row):
+    if row == 3:
+        return inside(1)
     m = Module()
     red = (0.82, 0.24, 0.2)
     if row == 0:  # a shop front under its awning
@@ -144,6 +246,8 @@ def office(row):
 
 
 def tower(row):
+    if row == 3:
+        return inside(2)
     m = Module()
     pane = (0.86, 0.9, 0.94)
     if row == 0:  # the lobby
@@ -334,14 +438,15 @@ def main(out):
     with tempfile.TemporaryDirectory() as scratch:
         for col, make in enumerate((house, office, tower, scattered)):
             for row in range(4):
-                if col < 3 and row == 3:
-                    continue
                 bpy.ops.wm.read_factory_settings(use_empty=True)
                 got = bake(make(row), scratch)
                 colour = np.asarray(got["colour"], dtype=np.float32) / 255.0
                 shade = np.asarray(got["shade"].convert("L"), dtype=np.float32) / 255.0
                 # As light as the open wall is: only what is in a corner goes darker.
                 lit = (0.25 + 0.75 * np.clip(shade / np.percentile(shade, 90), 0.0, 1.0)) ** 0.6
+                if col < 3 and row == 3:
+                    # A room is as dark as it is deep: little of the sky gets in.
+                    lit = 0.16 + 0.84 * np.clip(shade / np.percentile(shade, 99), 0.0, 1.0) ** 1.15
                 rgb = np.round(colour * lit[..., None] * 255.0).astype(np.uint8)
                 paint = np.asarray(got["paint"].convert("L"))
                 tile = Image.fromarray(np.dstack([rgb, paint]), "RGBA")

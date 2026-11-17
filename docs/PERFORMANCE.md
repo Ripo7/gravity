@@ -74,6 +74,29 @@ ms, at most 471 to 595 pieces. A 40 s fight on the square of city 49 (the
 other brute attacking): 0.7 ms in the worst second, 0.16 at the median.
 CI runs the tour on city 49.
 
+The ground (`shaders/ground.gdshader`) is worked out for each pixel
+instead of being one flat colour. Where every pixel is computed on the
+processor (software rendering, 1280 x 720, city 29, the first three cases
+of `--mode=bench`, three runs each): 3.6 to 3.7, 5.8 to 6.0 and 6.5 to 6.8
+frames a second before; 3.4 to 3.6, 5.7 to 5.8 and 6.4 to 6.6 after. So
+0 to 5 % of the picture there; not measured on the phone.
+
+A face of a box is drawn as a fan round its middle (for the scars of a
+shard that has taken blows): one vertex more a face. City 49 goes from
+114 501 to 119 529 vertices (4 %), cut and built in 0.56 to 0.70 s
+instead of 0.54 to 0.64 (three runs each, headless).
+
+Offices and towers are cut into plates, a floor thick, instead of
+stones. City 49: 1869 shards and 5480 bonds become 1727 and 3290, 119 529
+vertices become 101 983, built in 0.42 to 0.54 s instead of 0.54 to 0.70
+(headless, three runs). The showcase tour on it: 0.9 to 1.0 ms a step on
+average while things move (three runs; 1.2 to 1.6 on the same machine
+just before), at most 583 pieces. Punching at one place (scripted, city
+29): an office loses 4.0 m3 in sixteen punches (3.0 before) and a tower
+comes down at the eighth (the eighth before). The bits that fly are six
+draw calls instead of one, for the same number of bits; the dust is a
+512 px sheet instead of a 64 px disc, the same number of puffs.
+
 ### The house
 
 Headless on a 2-core cloud machine, one physics step per frame

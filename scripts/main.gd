@@ -12,6 +12,11 @@ const TEXTURES := "res://addons/kenney_prototype_textures/"
 ## and over how long it is told (s). See keep_pace.
 const SLOW := 40.0
 const PACE_OVER := 3.0
+## The dust of what breaks: concrete, bricks and tiles, the frame of a
+## tower.
+const DUST_CONCRETE := Color(0.78, 0.77, 0.74)
+const DUST_BRICK := Color(0.84, 0.64, 0.52)
+const DUST_GLASS := Color(0.8, 0.82, 0.85)
 
 var structure: Structure
 var player: Player
@@ -241,22 +246,56 @@ func rebuild() -> void:
 		get_tree().reload_current_scene()
 
 
-## Something came off or broke up: dust, and bits thrown out.
-func _on_released(at: Vector3, volume: float, velocity: Vector3) -> void:
+## Something came off or broke up: dust, and bits thrown out, of what it
+## was made of. A house is bricks and tiles, an office concrete and a
+## little glass, a tower glass above all; a tree sheds leaves, a car bits
+## of its paint.
+func _on_released(at: Vector3, volume: float, velocity: Vector3, of: int) -> void:
 	var size := pow(volume, 0.33)
+	var count := clampi(int(volume * 30.0), 2, 10)
+	var thrown := velocity * 0.6
+	var spread := 1.0 + size
+	var look := structure.look_of(of)
+	var tint := structure.tint_of(of)
+	var cloud := DUST_CONCRETE
 	chips.disturb(at, 1.0 + size * 1.5)
-	chips.burst(at, clampi(int(volume * 30.0), 2, 10), velocity * 0.6, 1.0 + size)
+	match look:
+		ShardMesh.Look.HOUSE:
+			chips.burst(at, count, thrown, spread, Chips.Kind.BRICK)
+			chips.burst(at, count / 4, thrown, spread, Chips.Kind.LUMP, tint)
+			cloud = DUST_BRICK
+		ShardMesh.Look.TILES:
+			chips.burst(at, count, thrown, spread, Chips.Kind.TILE, tint)
+			cloud = DUST_BRICK
+		ShardMesh.Look.OFFICE:
+			chips.burst(at, count, thrown, spread, Chips.Kind.LUMP)
+			chips.burst(at, count / 3, thrown, spread * 1.3, Chips.Kind.GLASS)
+		ShardMesh.Look.TOWER:
+			chips.burst(at, count * 2, thrown, spread * 1.5, Chips.Kind.GLASS)
+			chips.burst(at, count / 3, thrown, spread, Chips.Kind.LUMP)
+			cloud = DUST_GLASS
+		ShardMesh.Look.CROWN:
+			chips.burst(at, count * 2, thrown, spread * 1.5, Chips.Kind.LEAF, tint)
+			return
+		ShardMesh.Look.TRUNK:
+			chips.burst(at, count, thrown, spread, Chips.Kind.SPLINTER)
+			return
+		ShardMesh.Look.CAR, ShardMesh.Look.VAN, ShardMesh.Look.COACH:
+			chips.burst(at, count, thrown, spread, Chips.Kind.LUMP, tint)
+			chips.burst(at, count / 2, thrown, spread, Chips.Kind.GLASS)
+			return
+		_:
+			chips.burst(at, count, thrown, spread)
 	if volume > 0.03:
-		dust.puff(at, clampf(size * 2.2, 0.8, 3.5), velocity * 0.15)
+		dust.puff(at, clampf(size * 2.8, 1.1, 4.0), velocity * 0.15, cloud)
 
 
-## The pavements of the city: a light pad under each block and under the
-## square, a finger above the road (only to look at).
+## The ground of the city: its road, and a slab under each block and under
+## the square, a finger above the road (only to look at). What is drawn on
+## them is told by shaders/ground.gdshader, from where the blocks are.
 func _pave() -> void:
-	var shade := city.ground_shade()
-	var area := city.bounds()
-	var mat := _ground(Color(0.5, 0.48, 0.44), shade, area)
-	_floor.material = _ground(Color(0.25, 0.24, 0.25), shade, area)
+	var mat := _ground()
+	_floor.material = mat
 	for pad: Array in city.pads():
 		var size: Vector2 = pad[1]
 		var slab := BoxMesh.new()
@@ -269,14 +308,38 @@ func _pave() -> void:
 		add_child(look)
 
 
-## The ground of the city in `colour`, darker where `shade` says something
-## stands (a picture of `area` from above).
-func _ground(colour: Color, shade: Texture2D, area: Rect2) -> ShaderMaterial:
+## What the ground of the city is drawn with: told where its blocks and
+## its streets are, what each block is, and where things stand on it.
+func _ground() -> ShaderMaterial:
+	var area := city.bounds()
+	# (Those there are none of are put far away.)
+	var blocks := PackedVector4Array()
+	var streets := PackedVector4Array()
+	var districts := PackedVector4Array()
+	blocks.resize(4)
+	blocks.fill(Vector4(1e4, 0, 1e4, 0))
+	streets.resize(3)
+	streets.fill(Vector4(1e4, 0, 1e4, 0))
+	districts.resize(4)
+	for way in 2:
+		var beside := city.columns if way == 0 else city.rows
+		var between := city.avenues(way)
+		for k in beside.size():
+			blocks[k][way * 2] = beside[k].x
+			blocks[k][way * 2 + 1] = beside[k].y
+		for k in between.size():
+			streets[k][way * 2] = between[k].x
+			streets[k][way * 2 + 1] = between[k].y
+	for k in city.kinds.size():
+		districts[k / city.columns.size()][k % city.columns.size()] = city.kinds[k]
 	var mat := ShaderMaterial.new()
 	mat.shader = preload("res://shaders/ground.gdshader")
-	mat.set_shader_parameter("colour", colour)
-	mat.set_shader_parameter("shade", shade)
+	mat.set_shader_parameter("shade", city.ground_shade())
 	mat.set_shader_parameter("area", Vector4(area.position.x, area.position.y, area.size.x, area.size.y))
+	mat.set_shader_parameter("blocks", blocks)
+	mat.set_shader_parameter("streets", streets)
+	mat.set_shader_parameter("districts", districts)
+	mat.set_shader_parameter("ring", minf(city.square.size.x, city.square.size.y) * 0.5 - 1.0)
 	return mat
 
 

@@ -40,13 +40,26 @@ class Shard:
 
 ## The shards of a box of `size`. `fine` is the share of grid cells that
 ## hold several small shards instead of one (0: never, not even in a beam;
-## a box smaller than `grain` every way is then one shard).
-static func cut(size: Vector3, grain: float, rng_seed: int, fine := 0.25) -> Array[Shard]:
+## a box smaller than `grain` every way is then one shard). With `floors`
+## (how many shards across, up and along) the box is cut as what is built
+## in floors breaks, not into stones: into that many layers, level, each
+## cut the same way from top to bottom by planes that stand upright.
+static func cut(
+	size: Vector3, grain: float, rng_seed: int, fine := 0.25, floors := Vector3i.ZERO
+) -> Array[Shard]:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = rng_seed
 	var n := Vector3i(
 		maxi(1, roundi(size.x / grain)), maxi(1, roundi(size.y / grain)), maxi(1, roundi(size.z / grain))
 	)
+	# In floors: one seed to a cell, at mid-height of its layer, and across
+	# at the same place in every layer.
+	var columns := PackedVector3Array()
+	if floors != Vector3i.ZERO:
+		n = floors
+		fine = 0.0
+		for k in n.x * n.z:
+			columns.append(Vector3(rng.randf_range(0.3, 0.7), 0.5, rng.randf_range(0.3, 0.7)))
 	var cell := size / Vector3(n)
 	var half := size * 0.5
 	if fine > 0.0 and int(n.x == 1) + int(n.y == 1) + int(n.z == 1) >= 2:
@@ -62,6 +75,9 @@ static func cut(size: Vector3, grain: float, rng_seed: int, fine := 0.25) -> Arr
 		for y in n.y:
 			for x in n.x:
 				first.append(seeds.size())
+				if not columns.is_empty():
+					seeds.append((Vector3(x, y, z) + columns[z * n.x + x]) * cell - half)
+					continue
 				var k := rng.randi_range(2, 4) if rng.randf() < fine else 1
 				_scatter(seeds, k, Vector3(x, y, z) * cell - half, cell, rng)
 	first.append(seeds.size())

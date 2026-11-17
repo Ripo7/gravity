@@ -10,6 +10,24 @@ Seen in third person.
   (`tools/blender/facades.py`, see `assets/city/SOURCE.md`): windows set
   back in the wall, shutters, shop fronts under awnings, cornices, glass
   towers; bricks or concrete show where a wall is broken.
+- **Its small things.** Cars, vans, trees and the train are small models
+  made in Blender (`tools/blender/props.py`), each standing for one box:
+  kicked, they fly off as they are.
+- **Its ground.** Dashes down the middle of the avenues, a line along the
+  parked cars, bars to cross on at every corner, kerbs, paving stones,
+  lawns under the houses and in the parks, a square of two stones with a
+  ring on it, and fields round the city that the avenues run out into.
+  None of it is a picture: `shaders/ground.gdshader` works it out from
+  where the blocks are, so it is sharp from any distance.
+- **Each thing breaks as what it is.** A house breaks into stones, with
+  bricks, bits of tile and brick dust; an office and a tower break along
+  their floors, into plates a floor thick, and where they are open the
+  rooms show, one above the other, on their slabs (rooms modelled and
+  baked in Blender like the walls); the glass of a tower shatters and
+  what comes down is its frame; a tree sheds leaves. The bits that fly
+  are little models and the dust is a real cloud, both made in Blender
+  (`tools/blender/rubble.py`, `tools/blender/dust.py`, see
+  `assets/fx/SOURCE.md`).
 - **The city.** The brutes keep their size and the city is small around
   them (`scripts/game/city.gd`): houses up to their knees, offices up to
   their heads, towers three times their height, around a square to fight
@@ -21,9 +39,10 @@ Seen in third person.
   command line) brings the same city back. Not everything gives way: cars and trees are
   kicked aside at a walk, but a house is a wall until it is run into (a
   sprint or a charge goes through, and is slowed by it), punched, or
-  landed on. Offices and towers stand up to blows: each one takes a bite
-  out of them, chips flying the rest of the time, and a tower comes down
-  at about the third combo, tipping over away from the side that went.
+  landed on. Offices and towers stand up to blows: what a blow lands on
+  cracks, more at each one, the rooms showing behind what has come off
+  the wall, then bursts out in rubble, and a tower comes down at about
+  the third combo, tipping over away from the side that went.
   Only a brute that is thrown goes straight through them. Light rubble
   does not stop a brute. The house of
   earlier versions is still there, as a test bench (`--level=house`).

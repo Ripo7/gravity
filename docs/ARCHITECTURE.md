@@ -297,13 +297,70 @@ its shards and what holds are the same everywhere.
   `SOLID`, `Structure.thick`, `wear`). How solid a box is, is how thick it
   is the way it is thinnest, in units of 0.7 m, from 1 to 3: a wall, a
   slab or a house is 1 and gives as before; an office or a tower is 2 or
-  3. A blow or a charge makes a hole that many times smaller in it, and
-  each shard in the hole gives only at that many blows; a blow that
+  3. Each shard a blow or a charge lands on gives only at that many
+  blows (see below, what a blow knocks off something solid); a blow that
   breaks nothing throws chips and dust off the face (the `released`
   signal). In a scripted run a tower hit at its foot comes down during
   the third four-blow combo (the first, before). A brute that is thrown,
   and the scripted blows of the showcase and the tests (`Main.blow`), are
   not held back.
+- **A blow that is stood up to shows** (`ShardMesh.set_worn`, the scars in
+  `shaders/shards.gdshader`). The texture that tells each shard's body
+  carries a second number: the share the shard has taken of the blows it
+  can take (`Structure.wear` sets it). Where it is above 0, the shader
+  cracks the face of the shard into chips (points scattered 5.5 to the
+  metre, the nearest two looked for among nine squares) and takes off the
+  chips whose own number is under a threshold that rises with the share:
+  what the wall is made of shows there, bricks or concrete. So the second
+  blow at the same place widens what the first began, and the third goes
+  through. It fades towards the edge of the shard, whose neighbours took
+  nothing: for that, a face of the box is a fan round its middle, which
+  is marked (one vertex more a face). Only the pixels of a worn shard pay
+  for it. A shard that comes off keeps its scars as a piece.
+- **What is built in floors breaks along them** (`Structure.plates`,
+  `PLATE`, `Fracture.cut(..., floors)`). A box dressed as an office or a
+  tower is not cut into stones: it is cut into as many level layers as
+  its walls have floors, each layer into plates about 0.85 m across
+  (three across at most), by upright planes that are the same from top
+  to bottom. So what comes off is a piece of a floor, with its windows
+  on its edge, and a hole is a floor high. Houses and everything else
+  are cut as before. The cut is also lighter: no small shards mixed in,
+  and half as many bonds.
+- **Rooms behind the walls** (the faces made by the break, in
+  `shaders/shards.gdshader`; `ShardMesh.add_shard` tells each of them how
+  far inside its box it is and how high among its floors). Within
+  `WALL` (7 cm) of the outside a broken face shows what the wall is made
+  of, as before. Deeper it shows the room of that floor, seen from where
+  the wall was: the fourth tile of each column of the façade pictures,
+  modelled like a stage (back wall smaller than the front, so that floor,
+  ceiling and side walls show from straight ahead) and baked by Cycles;
+  the slab it stands on is part of the tile. A face that looks up is the
+  floor, one that looks down the ceiling. The same room shows through a
+  wall whose face has come off under blows (a scar). A crumb is rubble
+  all through.
+- **What a blow knocks off something solid** (`Fighter.smash`, tough;
+  `Structure.shatter(..., to_dust)`; `Fighter._spalled`). Every solid
+  shard the blow lands on takes it (its middle may be `DEEP`, 0.35 m,
+  farther in than the blow reaches); it gives at its `solid`th blow, up
+  to two and a half times as many at the edge of the blow. A shard that
+  gives cannot leave whole, there is more of the building behind it and
+  it would stay wedged: it leaves in crumbs thrown back out, fast enough
+  to be clear of the wall, or, when there is no room for crumbs, in
+  nothing but dust and bits. For the same reason what is solid does not
+  crack round the blow. A storey of a column now gives when less than
+  `FOOT` (0.55) of it stands: the two plates in front, of four, are half.
+- **What flies and what hangs in the air says what broke**
+  (`Structure.released` now tells a shard of what came off;
+  `Main._on_released`). `Chips` has six kinds of bits, each a model made
+  in Blender (`tools/blender/rubble.py`: a broken brick, a lump of
+  concrete with a bar in it, a shard of glass, a piece of tile, leaves,
+  a splinter) and one draw call, sharing the room there was for bits:
+  bricks and brick dust from a house, concrete and a little glass from an
+  office, glass above all from a tower, leaves from a tree. `Dust` plays
+  a cloud rendered in Blender (`tools/blender/dust.py`: a volume lit
+  from above, sixteen frames on one sheet) instead of a soft disc, in
+  the colour of what broke. A tower's shard that comes off loses its
+  glass (it is drawn worn through).
 - **Litter** (`Pieces.LITTER`, `Structure.LAYER_LITTER`). A loose piece
   of 500 kg or less is on a layer of its own that the brutes neither
   collide with nor are pushed by; heavier pieces still block and can be
@@ -360,4 +417,28 @@ its shards and what holds are the same everywhere.
   what faces down or sideways gets less light than what faces the sky,
   which gives rubble its shape. The bricks and the concrete of broken
   faces are laid finer (5 tiles to the metre).
+- **Models** (`ShardMesh.add_model`, `Look.CAR` and after). A box that is
+  left in one piece (a car, the crown and the trunk of a tree, a coach of
+  the train) can be drawn as a small model instead of its six faces: the
+  model's triangles carry the shard's number like any other, so they move
+  with its body and vanish with it, in the same draw call; its physics is
+  still the box. A car is now one box, not two (106 shards fewer in city
+  49), but its 80 triangles are more than a box's twelve: city 49 goes
+  from 84 107 to 114 501 vertices, built in 0.45 s instead of 0.42.
+- **The ground** (`shaders/ground.gdshader`, one material for the floor
+  and for the slabs under the blocks). Nothing on it is a picture: the
+  shader is told where the blocks are (`City.columns`, `City.rows`: four
+  each way at most), the avenues between them (`City.avenues`) and what
+  each block is, and works out for each pixel how far it is inside a
+  block or from the middle of a street. From that: on the road, dashes
+  down the middle, a line along the parked cars, bars across at each
+  corner, a darker gutter; on a slab, a kerb, paving stones, then a lawn
+  (houses, parks), plain paving (downtown) or the square's two stones and
+  its ring; past the last blocks, fields in plots, with the avenues
+  running on. A picture sharp enough for a line 4 cm wide over 50 m of
+  city would be 4096 px across; this takes no memory and stays sharp
+  under the camera. Lines are smoothed over the width of a pixel and
+  what repeats (dashes, bars, joints) turns to its mean from far, so
+  nothing flickers. The same look-up as before darkens it where things
+  stand.
 

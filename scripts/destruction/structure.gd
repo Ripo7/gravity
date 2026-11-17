@@ -9,8 +9,9 @@ extends Node3D
 ## is cut once more, there and then, and leaves in crumbs. Nothing is ever
 ## deleted: a shard stands, is part of a piece, or is in crumbs.
 
-## Something came off: where, how much (m3) and how fast.
-signal released(at: Vector3, volume: float, velocity: Vector3)
+## Something came off: where, how much (m3), how fast, and a shard of it
+## (for what it is made of, see look_of; -1 if that is not known).
+signal released(at: Vector3, volume: float, velocity: Vector3, of: int)
 
 const LAYER_WORLD := 1
 const LAYER_STRUCTURE := 2
@@ -62,7 +63,10 @@ const FALL_PER_STEP := 28
 ## turning at TOPPLE rad/s about the edge of that storey on the side that
 ## holds, so it tips over away from the side that gave way.
 const SLENDER := 2.0
-const FOOT := 0.5
+## What is built in floors (an office, a tower) breaks into plates, a floor
+## thick and about this far across (m), three across at most.
+const PLATE := 0.85
+const FOOT := 0.55
 const TOPPLE := 2.0
 
 # The cuts already made, by size and seed: rebuilding does not cut again.
@@ -183,17 +187,42 @@ func _exit_tree() -> void:
 		PhysicsServer3D.free_rid(rid)
 
 
+## What shard `i` is dressed as (a ShardMesh.Look; its paint alone for a
+## crumb or for what is not known), and its paint.
+func look_of(i: int) -> int:
+	return _box_look[element[i]] if i >= 0 and i < count else ShardMesh.Look.PLAIN
+
+
+func tint_of(i: int) -> Color:
+	return _box_tint[element[i]] if i >= 0 and i < count else Color(0.6, 0.6, 0.62)
+
+
+## How a box of `size` dressed as `look` is cut if it is built in floors (an
+## office, a tower): how many plates across, up (one to a floor of its
+## walls) and along. Zero for what breaks into stones.
+static func plates(size: Vector3, look: int) -> Vector3i:
+	if look != ShardMesh.Look.OFFICE and look != ShardMesh.Look.TOWER:
+		return Vector3i.ZERO
+	return Vector3i(
+		clampi(roundi(size.x / PLATE), 1, 3),
+		maxi(1, roundi(size.y / ShardMesh.FLOOR[look])),
+		clampi(roundi(size.z / PLATE), 1, 3)
+	)
+
+
 ## Adds a box of `size` at `xf` and cuts it into shards about `grain`
 ## across (`plain`: one to a cell of the cut, never several small ones; a
 ## box smaller than `grain` is then a single shard). `look` is what it is
-## dressed as (a ShardMesh.Look). Call build() once every box is in.
+## dressed as (a ShardMesh.Look; a model takes the place of a box left in
+## one piece). Call build() once every box is in.
 func add_box(
 	xf: Transform3D, size: Vector3, tint := Color.WHITE, grain := GRAIN, plain := false, look := 0
 ) -> int:
 	var box := _box_shards.size()
-	var cut_key := [size, grain, cut_seed * 7919 + box * 104729, plain]
+	var floors := plates(size, look)
+	var cut_key := [size, grain, cut_seed * 7919 + box * 104729, plain, floors]
 	if not _cuts.has(cut_key):
-		_cuts[cut_key] = Fracture.cut(size, grain, cut_key[2], 0.0 if plain else 0.25)
+		_cuts[cut_key] = Fracture.cut(size, grain, cut_key[2], 0.0 if plain else 0.25, floors)
 	var cut: Array[Fracture.Shard] = _cuts[cut_key]
 	_box_xf.append(xf)
 	_box_tint.append(tint)
@@ -266,7 +295,10 @@ func add_box(
 		box_lo = box_lo.min(lo)
 		box_hi = box_hi.max(hi)
 		total_volume += sh.volume
-		mesh.add_shard(i, base, world, sh, xf.basis, tint, -1, look, xf, size)
+		if look > ShardMesh.Look.PLAIN and cut.size() == 1:
+			mesh.add_model(i, look, xf, size, tint)
+		else:
+			mesh.add_shard(i, base, world, sh, xf.basis, tint, -1, look, xf, size)
 	_box_shards.append(mine)
 	_box_lo.append(box_lo)
 	_box_hi.append(box_hi)
@@ -390,14 +422,21 @@ func blow(i: int, velocity: Vector3) -> void:
 
 ## Standing shard `i` is hit hard enough to break up: it leaves in crumbs,
 ## thrown at about `velocity`. (Whole, if it cannot crumble or too much is
-## going on, see Pieces.can_crumble.)
-func shatter(i: int, velocity: Vector3) -> void:
+## going on, see Pieces.can_crumble; or, `to_dust`, not at all: nothing of
+## it is left but the dust and the bits that `released` asks for. That is
+## for what is knocked off the face of something solid, which a whole
+## shard could not leave: it would stay wedged where it was.)
+func shatter(i: int, velocity: Vector3, to_dust := false) -> void:
 	if held[i] == 0:
 		return
-	if not pieces.can_crumble(i):
+	var torn := velocity.length() > TORN_SPEED
+	if pieces.can_crumble(i):
+		_release(PackedInt32Array([i]), velocity, Vector3.ZERO, true, torn, to_dust)
+	elif to_dust:
+		_release(PackedInt32Array([i]), velocity, Vector3.ZERO, false, torn, true)
+	else:
 		blow(i, velocity)
 		return
-	_release(PackedInt32Array([i]), velocity, Vector3.ZERO, true, velocity.length() > TORN_SPEED)
 	_dirty = true
 
 
@@ -462,11 +501,13 @@ func thick(i: int) -> float:
 
 
 ## A blow lands on standing shard `i`, which gives at the `blows`th one.
-## Returns true if this is it.
+## Returns true if this is it. Until then it shows: it is drawn cracked,
+## the more so the nearer it is to giving.
 func wear(i: int, blows: int) -> bool:
 	if _worn.size() < count:
 		_worn.resize(count)
 	_worn[i] = mini(_worn[i] + 1, 255)
+	mesh.set_worn(i, minf(float(_worn[i]) / blows, 1.0))
 	return _worn[i] >= blows
 
 
@@ -800,7 +841,12 @@ func _chunks(group: PackedInt32Array, check := false) -> Array[PackedInt32Array]
 ## the one shard of the group breaks into its crumbs. `torn`: knocked out
 ## fast (see Pieces.CLEAR_STEPS).
 func _release(
-	group: PackedInt32Array, velocity: Vector3, spin := Vector3.ZERO, in_crumbs := false, torn := false
+	group: PackedInt32Array,
+	velocity: Vector3,
+	spin := Vector3.ZERO,
+	in_crumbs := false,
+	torn := false,
+	to_dust := false
 ) -> void:
 	_stamp += 1
 	var lo := Vector3.INF
@@ -839,9 +885,13 @@ func _release(
 		for k in range(adj_first[i], adj_first[i + 1]):
 			if _mark[adj_other[k]] != _stamp:
 				bond_health[adj_bond[k]] = 0.0
+		# The glass of a tower does not come down in one piece: what falls
+		# is its frame (see the shader: a shard worn through).
+		if _box_look[element[i]] == ShardMesh.Look.TOWER:
+			mesh.set_worn(i, 1.0)
 		if _own[i].is_valid():
 			_rid_shard.erase(_own[i])
-			if group.size() == 1 and not in_crumbs:
+			if group.size() == 1 and not in_crumbs and not to_dust:
 				reuse = _own[i]
 			else:
 				PhysicsServer3D.free_rid(_own[i])
@@ -849,10 +899,13 @@ func _release(
 	# What was resting on it has to move again.
 	pieces.thaw_box(lo - Vector3.ONE * 0.3, hi + Vector3(0.3, 0.6, 0.3))
 	if in_crumbs:
-		pieces.crumble(group[0], Transform3D.IDENTITY, velocity, spin, torn)
+		pieces.crumble(group[0], Transform3D.IDENTITY, velocity, spin, torn, to_dust)
+	elif to_dust:
+		for i in group:
+			mesh.set_slot(i, -1)
 	else:
 		pieces.spawn(group, Transform3D.IDENTITY, velocity, spin, reuse, torn)
-	released.emit(at / size, size, velocity)
+	released.emit(at / size, size, velocity, group[0])
 
 
 ## A whole block takes its first damage: from now on each of its standing

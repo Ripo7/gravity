@@ -2,31 +2,41 @@ class_name ShardMesh
 extends MeshInstance3D
 ## Draws every shard of a Structure in one draw call (see shards.gdshader).
 ## The mesh never changes: breaking only changes two small textures, which
-## shard belongs to which rigid body, and where each body is. Crumbs, cut
+## shard belongs to which rigid body (and how worn it is by the blows it
+## has stood up to), and where each body is. Crumbs, cut
 ## while the game runs, are a second, small mesh drawn the same way; it is
 ## made again whenever some are added.
 
 ## What a box is dressed as. GRID is the test ground's squares, PLAIN its
 ## colour alone; the others are the walls baked by tools/blender/facades.py,
-## laid bay by bay and floor by floor (TILES: the tiles of a roof).
-enum Look { GRID, HOUSE, OFFICE, TOWER, TILES, PLAIN }
+## laid bay by bay and floor by floor (TILES: the tiles of a roof). After
+## PLAIN come the models (tools/blender/props.py), each drawn in place of a
+## box that is left in one piece.
+enum Look { GRID, HOUSE, OFFICE, TOWER, TILES, PLAIN, CAR, VAN, COACH, CROWN, TRUNK }
 
 const SHADER := preload("res://shaders/shards.gdshader")
 const TEXTURES := "res://addons/kenney_prototype_textures/"
 const FACADES := "res://assets/city/facades_"
+const PROPS := "res://assets/city/props.json"
+const MODELS := {
+	Look.CAR: "car", Look.VAN: "van", Look.COACH: "coach", Look.CROWN: "crown", Look.TRUNK: "trunk"
+}
 ## How wide a bay is and how high a floor, per look (m).
 const BAY: Array[float] = [1.0, 0.42, 0.5, 0.42, 1.0, 1.0]
 const FLOOR: Array[float] = [1.0, 0.36, 0.4, 0.36, 1.0, 1.0]
 ## Texels per row of the two data textures.
 const WIDTH := 256
+## Floats per shard: the body it moves with, and how worn it is.
+const SHARD_FLOATS := 2
 ## Floats per body: where rest-space points go (xyz, pad) and a rotation.
 const BODY_FLOATS := 8
 ## A face made by a cut is not left flat: its middle is pushed in or out by
 ## up to this share of its size, so it catches the light like broken stone.
 const ROUGH := 0.14
 
-# The pictures already cut into layers, by path.
+# The pictures already cut into layers, by path; and the models, by name.
 static var _made := {}
+static var _props := {}
 
 var vertex_count := 0
 
@@ -72,8 +82,10 @@ func add_shard(
 	size := Vector3.ONE
 ) -> void:
 	_crumbs_changed = _crumbs != null
-	# The look goes with the colour, in its alpha.
-	tint.a = 1.0 - look * 0.2
+	# The look goes with the colour, in its alpha. (The bits of a model that
+	# has been broken up are its paint alone.)
+	var dress := mini(look, Look.PLAIN)
+	tint.a = 1.0 - dress * 0.2
 	var into := box.affine_inverse()
 	for f in cut.faces.size():
 		var ring := cut.faces[f]
@@ -82,8 +94,8 @@ func add_shard(
 		# shader): bays across, floors up, and how many of each.
 		var across := Vector3.UP.cross(cut.normals[f])
 		var wide := absf(across.x) * size.x + absf(across.z) * size.z
-		var bays := maxf(1.0, roundf(wide / BAY[look]))
-		var floors := maxf(1.0, roundf(size.y / FLOOR[look]))
+		var bays := maxf(1.0, roundf(wide / BAY[dress]))
+		var floors := maxf(1.0, roundf(size.y / FLOOR[dress]))
 		var from := _verts.size()
 		var broken := cut.others[f] >= 0
 		# Which shard, and for a face made by the cut, 1 + the shard on its
@@ -91,36 +103,40 @@ func add_shard(
 		var uv := Vector2(id, 0)
 		if broken:
 			uv.y = (alone if alone >= 0 else base + cut.others[f]) + 1
+		# A fan round the middle of the face. On a broken face the middle is
+		# pushed in or out; on a face of the box it is marked as the middle
+		# (-1): cracks run along the edge of a shard that has taken blows.
+		var n := ring.size()
 		var middle := Vector3.ZERO
 		for c in ring:
-			_verts.append(points[c])
+			middle += points[c]
+		middle /= n
+		if broken and dress != Look.OFFICE and dress != Look.TOWER:
+			middle += normal * sqrt(cut.areas[f]) * ROUGH * _rng.randf_range(-1.0, 0.7)
+		for k in n + 1:
+			var point := points[ring[k]] if k < n else middle
+			_verts.append(point)
 			_normals.append(normal)
 			_colors.append(tint)
-			_uvs.append(uv)
-			middle += points[c]
+			_uvs.append(uv if k < n or broken else Vector2(id, -1))
 			var place := Vector4.ZERO
-			if not broken and wide > 0.0:
-				var local := into * points[c]
+			var local := into * point
+			if broken and alone < 0:
+				# Inside the box: how far in from its nearest wall and down
+				# from its top (m), and how high among its floors (see the
+				# shader: the rooms behind a broken wall). A crumb is
+				# rubble: what the walls are made of, all through.
+				place.x = minf(size.x * 0.5 - absf(local.x), size.z * 0.5 - absf(local.z))
+				place.y = (local.y / size.y + 0.5) * floors
+				place.z = size.y * 0.5 - local.y
+				place.w = floors
+			elif not broken and wide > 0.0:
 				place.x = (local.dot(across) / wide + 0.5) * bays
 				place.y = (local.y / size.y + 0.5) * floors
 				place.z = bays
 				place.w = floors
 			_skins.append_array([place.x, place.y, place.z, place.w])
 		# The ring runs anticlockwise seen from outside; triangles go clockwise.
-		if not broken:
-			for t in range(1, ring.size() - 1):
-				_indices.append(from)
-				_indices.append(from + t + 1)
-				_indices.append(from + t)
-			continue
-		# A broken face: a fan round its middle, which is pushed in or out.
-		var n := ring.size()
-		middle = middle / n + normal * sqrt(cut.areas[f]) * ROUGH * _rng.randf_range(-1.0, 0.7)
-		_verts.append(middle)
-		_normals.append(normal)
-		_colors.append(tint)
-		_uvs.append(uv)
-		_skins.append_array([0.0, 0.0, 0.0, 0.0])
 		for t in n:
 			_indices.append(from + n)
 			_indices.append(from + (t + 1) % n)
@@ -135,11 +151,11 @@ func build(shards: int, bodies: int, hidden_from: int) -> void:
 	custom_aabb = AABB(Vector3.ONE * -500.0, Vector3.ONE * 1000.0)
 	vertex_count = _verts.size()
 	var rows := maxi(ceili(float(shards) / WIDTH), 1)
-	_slots.resize(WIDTH * rows)
+	_slots.resize(WIDTH * rows * SHARD_FLOATS)
 	_slots.fill(0.0)
-	for k in range(hidden_from, _slots.size()):
-		_slots[k] = -1.0
-	_slot_image = Image.create_from_data(WIDTH, rows, false, Image.FORMAT_RF, _slots.to_byte_array())
+	for k in range(hidden_from, WIDTH * rows):
+		_slots[k * SHARD_FLOATS] = -1.0
+	_slot_image = Image.create_from_data(WIDTH, rows, false, Image.FORMAT_RGF, _slots.to_byte_array())
 	_slot_texture = ImageTexture.create_from_image(_slot_image)
 	var body_rows := maxi(ceili(bodies * 2.0 / WIDTH), 1)
 	_bodies.resize(WIDTH * body_rows * 4)
@@ -170,8 +186,20 @@ func build(shards: int, bodies: int, hidden_from: int) -> void:
 
 ## Shard `shard` now moves with body `slot` (0: the world, -1: hidden).
 func set_slot(shard: int, slot: int) -> void:
-	_slots[shard] = slot
+	_slots[shard * SHARD_FLOATS] = slot
 	_slots_changed = true
+
+
+## Shard `shard` has taken `share` of the blows it can stand up to (0: none,
+## it shows nothing).
+func set_worn(shard: int, share: float) -> void:
+	_slots[shard * SHARD_FLOATS + 1] = share
+	_slots_changed = true
+
+
+## The share shard `shard` is drawn worn by.
+func worn(shard: int) -> float:
+	return _slots[shard * SHARD_FLOATS + 1]
 
 
 ## Body `slot` is at `xf`; `origin` is where its own origin was in the whole
@@ -196,7 +224,7 @@ func _process(_delta: float) -> void:
 		_crumbs.mesh = _surface()
 	if _slots_changed:
 		_slots_changed = false
-		_slot_image.set_data(WIDTH, _slot_image.get_height(), false, Image.FORMAT_RF, _slots.to_byte_array())
+		_slot_image.set_data(WIDTH, _slot_image.get_height(), false, Image.FORMAT_RGF, _slots.to_byte_array())
 		_slot_texture.update(_slot_image)
 	if _bodies_changed:
 		_bodies_changed = false
@@ -220,6 +248,31 @@ func _surface() -> ArrayMesh:
 	var floats := Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM0_SHIFT
 	m.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays, [], {}, floats)
 	return m
+
+
+## Adds the model of `look` in place of shard `id`, a box of `size` at
+## `box` left in one piece, painted `tint` where the model takes paint.
+func add_model(id: int, look: int, box: Transform3D, size: Vector3, tint: Color) -> void:
+	if _props.is_empty():
+		_props = (load(PROPS) as JSON).data
+	var model: Dictionary = _props[MODELS[look]]
+	var places: Array = model["v"]
+	var facings: Array = model["n"]
+	var colours: Array = model["c"]
+	var plain := 1.0 - Look.PLAIN * 0.2
+	var from := _verts.size()
+	for k in places.size() / 3:
+		var place := Vector3(places[3 * k], places[3 * k + 1], places[3 * k + 2]) * size
+		var facing := Vector3(facings[3 * k], facings[3 * k + 1], facings[3 * k + 2])
+		var colour := Color(colours[4 * k], colours[4 * k + 1], colours[4 * k + 2], plain)
+		if colours[4 * k + 3] > 0.5:
+			colour = Color(colour.r * tint.r, colour.g * tint.g, colour.b * tint.b, plain)
+		_verts.append(box * place)
+		_normals.append(box.basis * facing)
+		_colors.append(colour)
+		_uvs.append(Vector2(id, 0))
+		_skins.append_array([0.0, 0.0, 0.0, 0.0])
+		_indices.append(from + k)
 
 
 ## The sixteen tiles of a picture made by tools/blender/facades.py, as the
