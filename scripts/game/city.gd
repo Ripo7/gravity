@@ -152,6 +152,10 @@ func weight() -> int:
 	for box in _boxes:
 		var size: Vector3 = box[1]
 		var grain: float = box[4]
+		var floors := Structure.plates(size, box[5])
+		if floors != Vector3i.ZERO:
+			shards += floors.x * floors.y * floors.z
+			continue
 		var cells := 1.0
 		for axis in 3:
 			cells *= maxf(1.0, roundf(size[axis] / grain))

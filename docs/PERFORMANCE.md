@@ -86,6 +86,17 @@ shard that has taken blows): one vertex more a face. City 49 goes from
 114 501 to 119 529 vertices (4 %), cut and built in 0.56 to 0.70 s
 instead of 0.54 to 0.64 (three runs each, headless).
 
+Offices and towers are cut into plates, a floor thick, instead of
+stones. City 49: 1869 shards and 5480 bonds become 1727 and 3290, 119 529
+vertices become 101 983, built in 0.42 to 0.54 s instead of 0.54 to 0.70
+(headless, three runs). The showcase tour on it: 0.9 to 1.0 ms a step on
+average while things move (three runs; 1.2 to 1.6 on the same machine
+just before), at most 583 pieces. Punching at one place (scripted, city
+29): an office loses 4.0 m3 in sixteen punches (3.0 before) and a tower
+comes down at the eighth (the eighth before). The bits that fly are six
+draw calls instead of one, for the same number of bits; the dust is a
+512 px sheet instead of a 64 px disc, the same number of puffs.
+
 ### The house
 
 Headless on a 2-core cloud machine, one physics step per frame

@@ -12,6 +12,11 @@ const TEXTURES := "res://addons/kenney_prototype_textures/"
 ## and over how long it is told (s). See keep_pace.
 const SLOW := 40.0
 const PACE_OVER := 3.0
+## The dust of what breaks: concrete, bricks and tiles, the frame of a
+## tower.
+const DUST_CONCRETE := Color(0.78, 0.77, 0.74)
+const DUST_BRICK := Color(0.84, 0.64, 0.52)
+const DUST_GLASS := Color(0.8, 0.82, 0.85)
 
 var structure: Structure
 var player: Player
@@ -241,13 +246,48 @@ func rebuild() -> void:
 		get_tree().reload_current_scene()
 
 
-## Something came off or broke up: dust, and bits thrown out.
-func _on_released(at: Vector3, volume: float, velocity: Vector3) -> void:
+## Something came off or broke up: dust, and bits thrown out, of what it
+## was made of. A house is bricks and tiles, an office concrete and a
+## little glass, a tower glass above all; a tree sheds leaves, a car bits
+## of its paint.
+func _on_released(at: Vector3, volume: float, velocity: Vector3, of: int) -> void:
 	var size := pow(volume, 0.33)
+	var count := clampi(int(volume * 30.0), 2, 10)
+	var thrown := velocity * 0.6
+	var spread := 1.0 + size
+	var look := structure.look_of(of)
+	var tint := structure.tint_of(of)
+	var cloud := DUST_CONCRETE
 	chips.disturb(at, 1.0 + size * 1.5)
-	chips.burst(at, clampi(int(volume * 30.0), 2, 10), velocity * 0.6, 1.0 + size)
+	match look:
+		ShardMesh.Look.HOUSE:
+			chips.burst(at, count, thrown, spread, Chips.Kind.BRICK)
+			chips.burst(at, count / 4, thrown, spread, Chips.Kind.LUMP, tint)
+			cloud = DUST_BRICK
+		ShardMesh.Look.TILES:
+			chips.burst(at, count, thrown, spread, Chips.Kind.TILE, tint)
+			cloud = DUST_BRICK
+		ShardMesh.Look.OFFICE:
+			chips.burst(at, count, thrown, spread, Chips.Kind.LUMP)
+			chips.burst(at, count / 3, thrown, spread * 1.3, Chips.Kind.GLASS)
+		ShardMesh.Look.TOWER:
+			chips.burst(at, count * 2, thrown, spread * 1.5, Chips.Kind.GLASS)
+			chips.burst(at, count / 3, thrown, spread, Chips.Kind.LUMP)
+			cloud = DUST_GLASS
+		ShardMesh.Look.CROWN:
+			chips.burst(at, count * 2, thrown, spread * 1.5, Chips.Kind.LEAF, tint)
+			return
+		ShardMesh.Look.TRUNK:
+			chips.burst(at, count, thrown, spread, Chips.Kind.SPLINTER)
+			return
+		ShardMesh.Look.CAR, ShardMesh.Look.VAN, ShardMesh.Look.COACH:
+			chips.burst(at, count, thrown, spread, Chips.Kind.LUMP, tint)
+			chips.burst(at, count / 2, thrown, spread, Chips.Kind.GLASS)
+			return
+		_:
+			chips.burst(at, count, thrown, spread)
 	if volume > 0.03:
-		dust.puff(at, clampf(size * 2.2, 0.8, 3.5), velocity * 0.15)
+		dust.puff(at, clampf(size * 2.8, 1.1, 4.0), velocity * 0.15, cloud)
 
 
 ## The ground of the city: its road, and a slab under each block and under

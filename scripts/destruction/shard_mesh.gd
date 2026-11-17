@@ -111,7 +111,7 @@ func add_shard(
 		for c in ring:
 			middle += points[c]
 		middle /= n
-		if broken:
+		if broken and dress != Look.OFFICE and dress != Look.TOWER:
 			middle += normal * sqrt(cut.areas[f]) * ROUGH * _rng.randf_range(-1.0, 0.7)
 		for k in n + 1:
 			var point := points[ring[k]] if k < n else middle
@@ -120,8 +120,17 @@ func add_shard(
 			_colors.append(tint)
 			_uvs.append(uv if k < n or broken else Vector2(id, -1))
 			var place := Vector4.ZERO
-			if not broken and wide > 0.0:
-				var local := into * point
+			var local := into * point
+			if broken and alone < 0:
+				# Inside the box: how far in from its nearest wall and down
+				# from its top (m), and how high among its floors (see the
+				# shader: the rooms behind a broken wall). A crumb is
+				# rubble: what the walls are made of, all through.
+				place.x = minf(size.x * 0.5 - absf(local.x), size.z * 0.5 - absf(local.z))
+				place.y = (local.y / size.y + 0.5) * floors
+				place.z = size.y * 0.5 - local.y
+				place.w = floors
+			elif not broken and wide > 0.0:
 				place.x = (local.dot(across) / wide + 0.5) * bays
 				place.y = (local.y / size.y + 0.5) * floors
 				place.z = bays

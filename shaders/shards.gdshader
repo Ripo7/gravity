@@ -26,6 +26,10 @@ uniform vec3 core : source_color = vec3(0.46, 0.45, 0.45);  // the inside of a w
 uniform sampler2DArray facade : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2DArray facade_relief : hint_normal, filter_linear_mipmap, repeat_enable;
 
+// How thick the walls and the roof of a building are (m): what shows of
+// them where it is broken open, before the rooms.
+const float WALL = 0.07;
+
 // How many chips to the metre the face of a shard that has taken blows is
 // cracked into.
 const float CHIPS = 5.5;
@@ -33,7 +37,10 @@ const float CHIPS = 5.5;
 varying vec3 stood;    // where this point was in the whole building
 varying vec3 facing;   // and which way its face looked
 varying float inside;  // 1 on a face made by the break
-varying vec4 skin;     // on a wall: bays across, floors up, how many of each
+// On a wall: bays across, floors up, how many of each. On a face made by
+// the break: how far inside the box it is from the nearest wall and from
+// the top (m), in y how high among the floors, in w how many floors.
+varying vec4 skin;
 varying float look;    // what the box is dressed as (ShardMesh.Look)
 varying float edge;    // on a face of the box: 0 in its middle, 1 on its edge
 varying float worn;    // the share of the blows its shard can take, taken
@@ -166,9 +173,33 @@ void fragment() {
 	// plain and darker, with a coarse grain and a finer one.
 	float grain = hash(floor(stood * 14.0)) * 0.6 + hash(floor(stood * 47.0)) * 0.4;
 	vec3 broken = core * COLOR.rgb * (0.78 + 0.4 * grain);
+	// What is behind the face of a wall, for where it has come off.
+	vec3 behind = broken;
 	if (built) {
 		broken = texture(facade, vec3(uv * 5.0, kind == 3 ? 14.0 : 13.0)).rgb;
 		broken *= (kind == 3 ? 0.6 : 0.95) + 0.15 * grain;
+		behind = broken;
+		if (inside > 0.5 || worn > 0.0) {
+			// That is the thickness of the wall, and of the roof. Behind
+			// it a building is not full: a room on each floor, seen from
+			// where the wall was (the last tile of its column, baked like
+			// the walls), its floor from above, its ceiling from below.
+			float along = (n.x > n.z ? stood.z : stood.x) / (kind == 2 ? 0.5 : 0.42);
+			vec3 at = vec3(along, 1.0 - fract(skin.y), float(kind - 1) * 4.0 + 3.0);
+			vec2 across_x = vec2(dFdx(along), -dFdx(skin.y));
+			vec2 across_y = vec2(dFdy(along), -dFdy(skin.y));
+			vec4 room = textureGrad(facade, at, across_x, across_y);
+			vec3 seen = room.rgb * mix(vec3(1.0), paint, room.a * 0.6);
+			if (flat_top) {
+				vec3 ground = kind == 1 ? vec3(0.3, 0.17, 0.08) : (kind == 2 ? vec3(0.13, 0.17, 0.25) : vec3(0.09, 0.1, 0.13));
+				seen = (facing.y > 0.0 ? ground : vec3(0.42)) * (0.9 + 0.2 * grain);
+			}
+			if (inside > 0.5) {
+				broken = mix(broken, seen, smoothstep(WALL - 0.015, WALL + 0.015, min(skin.x, skin.z)));
+			} else if (kind > 1 && !flat_top) {
+				behind = seen;
+			}
+		}
 	}
 	if (worn > 0.0 && inside < 0.5) {
 		// A shard that has taken blows and stands: what it is faced with
@@ -177,11 +208,19 @@ void fragment() {
 		// of the shard: its neighbours took nothing.
 		vec2 chipped = chip(uv * CHIPS);
 		float blur = max(fwidth(uv.x), fwidth(uv.y)) * CHIPS;
-		float reach = smoothstep(0.0, 0.35, 1.0 - edge);
-		float off = step(chipped.y, (0.12 + 0.5 * worn) * reach);
+		// (Worn right through, it is a shard that came down: all of it.)
+		float reach = mix(smoothstep(0.0, 0.35, 1.0 - edge), 1.0, step(0.99, worn));
+		float off = step(chipped.y, (0.67 * worn) * reach);
 		float crack = (1.0 - smoothstep(0.02, 0.045 + blur, chipped.x)) * clamp(1.4 - blur * 3.0, 0.0, 1.0);
-		face = mix(face, broken * 0.8, off);
-		face *= 1.0 - 0.7 * crack * reach * (0.6 + 0.4 * worn);
+		// (Faint on what the blow only brushed, plain on what is about to give.)
+		float deep_in = clamp(worn * 2.4, 0.0, 1.0);
+		face = mix(face, behind * 0.8, off);
+		if (kind == 3) {
+			// Glass cracks white.
+			face = mix(face, vec3(0.85, 0.93, 1.0), 0.7 * crack * reach * (1.0 - off) * deep_in);
+		} else {
+			face *= 1.0 - 0.7 * crack * reach * deep_in;
+		}
 		relief = mix(relief, vec3(0.5, 0.5, 1.0), off);
 	}
 	ALBEDO = mix(face, broken, inside);

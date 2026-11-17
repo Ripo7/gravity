@@ -297,8 +297,8 @@ its shards and what holds are the same everywhere.
   `SOLID`, `Structure.thick`, `wear`). How solid a box is, is how thick it
   is the way it is thinnest, in units of 0.7 m, from 1 to 3: a wall, a
   slab or a house is 1 and gives as before; an office or a tower is 2 or
-  3. A blow or a charge makes a hole that many times smaller in it, and
-  each shard in the hole gives only at that many blows; a blow that
+  3. Each shard a blow or a charge lands on gives only at that many
+  blows (see below, what a blow knocks off something solid); a blow that
   breaks nothing throws chips and dust off the face (the `released`
   signal). In a scripted run a tower hit at its foot comes down during
   the third four-blow combo (the first, before). A brute that is thrown,
@@ -317,6 +317,50 @@ its shards and what holds are the same everywhere.
   nothing: for that, a face of the box is a fan round its middle, which
   is marked (one vertex more a face). Only the pixels of a worn shard pay
   for it. A shard that comes off keeps its scars as a piece.
+- **What is built in floors breaks along them** (`Structure.plates`,
+  `PLATE`, `Fracture.cut(..., floors)`). A box dressed as an office or a
+  tower is not cut into stones: it is cut into as many level layers as
+  its walls have floors, each layer into plates about 0.85 m across
+  (three across at most), by upright planes that are the same from top
+  to bottom. So what comes off is a piece of a floor, with its windows
+  on its edge, and a hole is a floor high. Houses and everything else
+  are cut as before. The cut is also lighter: no small shards mixed in,
+  and half as many bonds.
+- **Rooms behind the walls** (the faces made by the break, in
+  `shaders/shards.gdshader`; `ShardMesh.add_shard` tells each of them how
+  far inside its box it is and how high among its floors). Within
+  `WALL` (7 cm) of the outside a broken face shows what the wall is made
+  of, as before. Deeper it shows the room of that floor, seen from where
+  the wall was: the fourth tile of each column of the façade pictures,
+  modelled like a stage (back wall smaller than the front, so that floor,
+  ceiling and side walls show from straight ahead) and baked by Cycles;
+  the slab it stands on is part of the tile. A face that looks up is the
+  floor, one that looks down the ceiling. The same room shows through a
+  wall whose face has come off under blows (a scar). A crumb is rubble
+  all through.
+- **What a blow knocks off something solid** (`Fighter.smash`, tough;
+  `Structure.shatter(..., to_dust)`; `Fighter._spalled`). Every solid
+  shard the blow lands on takes it (its middle may be `DEEP`, 0.35 m,
+  farther in than the blow reaches); it gives at its `solid`th blow, up
+  to two and a half times as many at the edge of the blow. A shard that
+  gives cannot leave whole, there is more of the building behind it and
+  it would stay wedged: it leaves in crumbs thrown back out, fast enough
+  to be clear of the wall, or, when there is no room for crumbs, in
+  nothing but dust and bits. For the same reason what is solid does not
+  crack round the blow. A storey of a column now gives when less than
+  `FOOT` (0.55) of it stands: the two plates in front, of four, are half.
+- **What flies and what hangs in the air says what broke**
+  (`Structure.released` now tells a shard of what came off;
+  `Main._on_released`). `Chips` has six kinds of bits, each a model made
+  in Blender (`tools/blender/rubble.py`: a broken brick, a lump of
+  concrete with a bar in it, a shard of glass, a piece of tile, leaves,
+  a splinter) and one draw call, sharing the room there was for bits:
+  bricks and brick dust from a house, concrete and a little glass from an
+  office, glass above all from a tower, leaves from a tree. `Dust` plays
+  a cloud rendered in Blender (`tools/blender/dust.py`: a volume lit
+  from above, sixteen frames on one sheet) instead of a soft disc, in
+  the colour of what broke. A tower's shard that comes off loses its
+  glass (it is drawn worn through).
 - **Litter** (`Pieces.LITTER`, `Structure.LAYER_LITTER`). A loose piece
   of 500 kg or less is on a layer of its own that the brutes neither
   collide with nor are pushed by; heavier pieces still block and can be

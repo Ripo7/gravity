@@ -5,7 +5,7 @@
 elsewhere.
 
     pip install bpy numpy pillow
-    python3 tools/blender/facades.py assets/city     # about 75 s
+    python3 tools/blender/facades.py assets/city     # about two minutes
 
 Each tile is one bay of one floor of a wall, modelled in Blender (bmesh
 boxes with bevels: windows set back in the wall, frames, sills, shutters,
@@ -19,8 +19,12 @@ store the pictures lossy (WebP, quality 0.9), a quarter of the size, with
 nothing to see for it at the size they are shown.
 
 Four columns of four 256 px tiles: a house, an office, a tower (ground
-floor, a floor in between, top floor), then roof tiles, bricks, concrete
-and gravel. `ShardMesh` cuts them into the layers of a texture and
+floor, a floor in between, top floor, and what is inside: a room on its
+slab, seen from where the wall was, which shows where the building is
+broken open), then roof tiles, bricks, concrete and gravel. A room is
+modelled like a stage, its back wall smaller than its front, so that its
+floor, its ceiling and its side walls show from straight ahead; it is as
+dark as it is deep. `ShardMesh` cuts them into the layers of a texture and
 `shaders/shards.gdshader` lays them on the boxes, bay by bay and floor by
 floor.
 

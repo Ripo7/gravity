@@ -150,10 +150,66 @@ func test_a_blow_takes_less_out_of_what_is_solid() -> void:
 		most = maxi(most, bite)
 	check(more >= 2, "then gives (%d shards in eight more blows)" % more)
 	check(most < of_wall, "a bite at a time (%d at most)" % most)
+	# What it gave came back out in crumbs, or went in dust: no shard is
+	# left whole, wedged where it stood.
+	await frames(60)
+	var wedged := 0
+	var gone := 0
+	for i in s.count:
+		if s.held[i] == 0 and s.centroid[i].x > 6.0:
+			gone += 1
+			wedged += int(s.piece_of[i] >= 0)
+	check_eq(wedged, 0, "no shard of the block is left whole in the hole (%d gave)" % gone)
 	# Something thrown goes through all the same.
 	var plain := Fighter.smash(s, Vector3(8.0, 1.2, -1.2), 0.7, Vector3(0, 0, 6))
 	check(plain >= 3, "what is not held back takes a full hole (%d)" % plain)
 	check(block == 1, "")
+	await _end()
+
+
+func test_what_is_built_in_floors_breaks_into_plates() -> void:
+	await _begin()
+	# An office of five floors, and a house: the same blow at each.
+	var size := Vector3(2.6, 2.0, 2.6)
+	s.add_box(Transform3D(Basis(), Vector3(0, 1.0, 0)), size, Color.WHITE, 0.75, false, ShardMesh.Look.OFFICE)
+	var plates := s.count
+	s.add_box(
+		Transform3D(Basis(), Vector3(8, 0.4, 0)),
+		Vector3(1.2, 0.8, 1.8),
+		Color.WHITE,
+		0.6,
+		true,
+		ShardMesh.Look.HOUSE
+	)
+	s.build()
+	s.recheck()
+	await frames(10)
+	check_eq(
+		Structure.plates(size, ShardMesh.Look.OFFICE), Vector3i(3, 5, 3), "three plates across, five floors"
+	)
+	check_eq(plates, 45, "one shard to a plate")
+	check_eq(Structure.plates(size, ShardMesh.Look.HOUSE), Vector3i.ZERO, "a house breaks into stones")
+	var level := 0
+	for i in plates:
+		# A floor thick, its top and its bottom level.
+		level += int(absf(s.top(i) - s.centroid[i].y - 0.2) < 0.002)
+	check_eq(level, plates, "each a floor thick, level")
+	var uneven := 0
+	for i in range(plates, s.count):
+		uneven += int(absf(s.top(i) - s.centroid[i].y - 0.2) > 0.02)
+	check(uneven > 0, "the stones of the house are of any shape")
+	# What comes off says what it was made of, for the dust and the bits.
+	var seen: Array[int] = []
+	s.released.connect(
+		func(_at: Vector3, _volume: float, _velocity: Vector3, of: int) -> void: seen.append(s.look_of(of))
+	)
+	Fighter.smash(s, Vector3(0, 1.0, 1.3), 0.7, Vector3(0, 0, -6))
+	Fighter.smash(s, Vector3(8, 0.4, 0.9), 0.7, Vector3(0, 0, -6))
+	await frames(5)
+	check(
+		seen.has(ShardMesh.Look.OFFICE) and seen.has(ShardMesh.Look.HOUSE),
+		"what came off is told (%s)" % [seen]
+	)
 	await _end()
 
 
