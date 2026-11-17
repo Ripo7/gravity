@@ -335,6 +335,12 @@ its shards and what holds are the same everywhere.
   one draw call. The two pictures are stored lossy (their `.import`
   files): 0.23 MB in the web package instead of 1.04, which is 2.6 MB in
   all.
+- **The camera, hemmed in** (`Player.TIGHT`). The camera sits behind the
+  brute's shoulder. When there is less than 1.4 m of room behind the
+  shoulder (the brute is in the hole it has punched in a tower: the wall
+  is right beside it), it goes straight behind the head instead, the way
+  the brute came in, if there is more room there; it used to be pulled
+  right up to the head, the brute hidden and the wall filling the screen.
 - **The camera and rubble** (`Player.in_the_way`). The camera stays in
   front of what stands, and of rubble that has come to rest and is big
   enough to hide the fight (`HIDES`, 0.35 m); pieces still moving and

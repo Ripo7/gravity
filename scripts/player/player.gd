@@ -25,6 +25,9 @@ const SIDE := -1.0
 const BACK := 3.2
 const RAISED := 0.2
 const ROOM := 0.2
+## With less room than this behind its shoulder (m), the camera goes
+## behind its head instead.
+const TIGHT := 1.4
 ## Rubble the camera stays in front of: at rest, and this big (m) at least.
 const HIDES := 0.35
 ## Pushed in closer than this (m), the camera would see nothing but the
@@ -499,6 +502,16 @@ func _track(delta: float) -> void:
 
 ## Puts the camera behind the shoulder, nearer when something is in
 ## the way (it goes in at once and eases back out over `delta`).
+## How far back the camera can go from `from` along `reach` (as a length
+## of the boom, BACK at most).
+func _room_behind(space: PhysicsDirectSpaceState3D, from: Vector3, reach: Vector3) -> float:
+	var length := Vector2(BACK, RAISED).length()
+	var hit := in_the_way(space, from, from + reach * (length + ROOM))
+	if hit.is_empty():
+		return BACK
+	return maxf(from.distance_to(hit["position"]) - ROOM, 0.0) / length * BACK
+
+
 ## The first thing between `from` and `to` that the camera has to stay in
 ## front of: what stands, and rubble that has come to rest (what flies past
 ## is not worth a lurch, nor are small bits). Empty if there is nothing.
@@ -536,13 +549,16 @@ func _pose_camera(delta := 0.0) -> void:
 		var hit := in_the_way(space, head, head + side * (SHOULDER + ROOM))
 		if not hit.is_empty():
 			shoulder = maxf(head.distance_to(hit["position"]) - ROOM, 0.0)
-		var from := head + side * shoulder
-		var away := BACK
 		var reach := (back * BACK + up * RAISED).normalized()
-		var length := Vector2(BACK, RAISED).length()
-		hit = in_the_way(space, from, from + reach * (length + ROOM))
-		if not hit.is_empty():
-			away = maxf(from.distance_to(hit["position"]) - ROOM, 0.0) / length * BACK
+		var away := _room_behind(space, head + side * shoulder, reach)
+		if away < TIGHT:
+			# Hemmed in (in the hole it has punched in a tower, say): straight
+			# behind its head instead, the way it came in, if there is more
+			# room there.
+			var behind := _room_behind(space, head, reach)
+			if behind > away:
+				away = behind
+				shoulder = 0.0
 		_shoulder = minf(shoulder, move_toward(_shoulder, shoulder, EASE_OUT * delta))
 		_back = minf(away, move_toward(_back, away, EASE_OUT * delta))
 	camera.position = Vector3(_shoulder * SIDE, RAISED * _back / BACK, _back)

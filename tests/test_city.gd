@@ -369,6 +369,44 @@ func test_the_camera_stays_in_front_of_rubble_at_rest() -> void:
 	await _unload()
 
 
+func test_the_camera_goes_behind_the_head_of_a_brute_that_is_hemmed_in() -> void:
+	await _load(1)
+	# Out of town, a wall with a gap a brute's width in it, and the brute in
+	# the gap, its back to the way it came in (as in the hole it has punched
+	# in a tower).
+	var middle := Vector3(60, 0, 60)
+	for side: int in [-1, 1]:
+		var wall := StaticBody3D.new()
+		var shape := CollisionShape3D.new()
+		var box := BoxShape3D.new()
+		box.size = Vector3(3.0, 4.0, 0.5)
+		shape.shape = box
+		wall.add_child(shape)
+		wall.collision_layer = Structure.LAYER_WORLD
+		wall.position = middle + Vector3(side * 2.0, 2.0, 0)
+		main.add_child(wall)
+	_stand(middle + Vector3(0, 0.05, -0.45), middle + Vector3(0, 1.4, -10.0))
+	await frames(90)
+	var seen := p.camera.global_position
+	check(
+		seen.z > middle.z + 0.6, "the camera is out behind it, through the gap (%.1f m)" % (seen.z - middle.z)
+	)
+	check(
+		absf(seen.x - middle.x) < 0.35,
+		"behind its head, not its shoulder (%.2f m aside)" % absf(seen.x - middle.x)
+	)
+	check(p.character.visible, "and the brute is in the picture")
+	# In the open again, it is back over the shoulder.
+	_stand(middle + Vector3(0, 0.05, -6.0), middle + Vector3(0, 1.4, -20.0))
+	await frames(90)
+	seen = p.camera.global_position
+	check(
+		absf(seen.x - middle.x) > 0.4,
+		"in the open, over the shoulder again (%.2f m aside)" % absf(seen.x - middle.x)
+	)
+	await _unload()
+
+
 ## How high the thing that shard `i` is part of stands (m): the top of its
 ## box.
 func _high(i: int) -> float:
