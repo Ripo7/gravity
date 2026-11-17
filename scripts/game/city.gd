@@ -473,8 +473,9 @@ func _tree(at: Vector3, grown: float) -> void:
 		if other.distance_to(at) < 0.65:
 			return
 	_trees.append(at)
-	_add(at, Vector3(0.09, 0.32, 0.09) * grown, 0.0, TRUNK, WHOLE)
-	_add(at + Vector3(0, 0.32 * grown, 0), Vector3(0.42, 0.4, 0.42) * grown, 0.0, LEAVES, WHOLE)
+	_add(at, Vector3(0.09, 0.32, 0.09) * grown, 0.0, TRUNK, WHOLE, ShardMesh.Look.TRUNK)
+	var crown := Vector3(0.46, 0.44, 0.46) * grown
+	_add(at + Vector3(0, 0.32 * grown, 0), crown, 0.0, LEAVES, WHOLE, ShardMesh.Look.CROWN)
 
 
 ## Cars on every avenue: parked along the kerbs, and a few on the road.
@@ -523,10 +524,12 @@ func _street(way: int, lane: float, at: float) -> Vector3:
 	return Vector3(lane, 0, at) if way == 0 else Vector3(at, 0, lane)
 
 
+## A car, or one time in four a van (which, from where it is: the city of
+## a number stays the same).
 func _car(at: Vector3, turn: float, tint: Color) -> void:
 	cars.append(at)
-	_add(at, Vector3(0.24, 0.13, 0.5), turn, tint, WHOLE)
-	_add(at + Vector3(0, 0.13, 0), Vector3(0.21, 0.09, 0.26), turn, tint.lightened(0.25), WHOLE)
+	var van := int(absf(at.x * 7.0 + at.z * 13.0)) % 4 == 0
+	_add(at, Vector3(0.24, 0.2, 0.5), turn, tint, WHOLE, ShardMesh.Look.VAN if van else ShardMesh.Look.CAR)
 
 
 ## A railway on stilts down the middle (`lane`) of the avenue that runs
@@ -547,7 +550,7 @@ func _railway(way: int, lane: float, from: float, to: float, rng: RandomNumberGe
 	var head := rng.randf_range(from + 1.0, to - 1.0 - coaches)
 	for k in coaches:
 		var coach := _street(way, lane, head + k) + Vector3.UP * (RAIL_HIGH + 0.16)
-		_add(coach, Vector3(0.92, 0.26, 0.34), turn, TRAIN, WHOLE)
+		_add(coach, Vector3(0.92, 0.26, 0.34), turn, TRAIN, WHOLE, ShardMesh.Look.COACH)
 
 
 ## Trees round the square.
