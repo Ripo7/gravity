@@ -79,6 +79,9 @@ toute sa largeur. Corrigé :
   n'est plus portée, et se plie en tombant : elle ne reste pas raide.
 - Couché, le métal garde la forme qu'il a prise : les coups ne le
   déforment plus.
+- Ce qui tombe sur la brute la pousse de côté : elle ne le porte pas sur
+  la tête. (Les dégâts que la ville fait à la brute restent pour plus
+  tard, avec le combat.)
 - Verre et bois : inchangés.
 
 Note sur le béton (étape 2) : la page disait d'abord que ses blocs
