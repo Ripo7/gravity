@@ -28,7 +28,12 @@ extends Node3D
 
 ## A strike starts: one of COMBO, or "kick".
 signal swung(move: String)
-## Its fist or foot is there: what is in the way takes it.
+## The fist or foot of the strike under way is thrown: `limb` is where it
+## is drawn in this step (see limb()). `there`: this is the pose in which
+## its clip has it land. Said every step from SWING before that pose to
+## that pose, or until the blow has landed (see landed()).
+signal reached(limb: PackedVector3Array, there: bool)
+## The clip of the strike under way has its fist or foot there.
 signal struck(move: String)
 
 const SCENE := "res://assets/mannequin/AnimationLibrary_Godot_Standard.gltf"
@@ -61,6 +66,13 @@ const COMBO: Array[String] = ["hook", "upswing", "backhand", "slam"]
 ## Steps of a sixtieth add up to a hair under the frame a clip says its
 ## blow lands on: this much (s) short still counts as there.
 const LATE := 0.002
+## A fist or a foot is thrown this long (s) before its clip has it land:
+## from then on, what it touches takes the blow.
+const SWING := 0.1
+## The limbs that strike, from the body out: where the limb leaves the
+## body, its middle joint, and what lands (the knuckles, the toes).
+const ARM: Array[String] = ["DEF-upper_arm.R", "DEF-forearm.R", "DEF-f_middle.01.R"]
+const LEG: Array[String] = ["DEF-thigh.R", "DEF-shin.R", "DEF-toe.R"]
 ## The bone the steps of the moves are given to.
 const ROOT := "Rig/Skeleton3D:root"
 ## What the body can be doing (see `state`), in the order of the tree's
@@ -80,7 +92,10 @@ var _left := 0.0  # s before the state gives way to "ground" (0: it stays)
 var _fade_back := 0.3  # s that takes
 var _move_for := 0.0  # s of its clip the move under way has played
 var _move_from := 0  # the physics step that took it up
-var _move_out := false  # its fist or foot has been there
+var _move_out := false  # its clip has had its fist or foot there
+var _spent := false  # its blow has landed, or has had its time
+var _arm := PackedInt32Array()  # the bones of ARM
+var _leg := PackedInt32Array()
 var _then := ""  # the move asked for next: "punch" or "kick"
 
 
@@ -103,6 +118,13 @@ func _ready() -> void:
 	tree.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_PHYSICS
 	tree.root_motion_track = NodePath(ROOT)
 	tree.active = true
+	# The pose of a step is set after this node has had its turn in it:
+	# where a limb is drawn is read then.
+	tree.mixer_applied.connect(_posed)
+	for bone in ARM:
+		_arm.append(skeleton.find_bone(bone))
+	for bone in LEG:
+		_leg.append(skeleton.find_bone(bone))
 	tree.set("parameters/land_pace/scale", LAND_PACE)
 	move(0.0)
 
@@ -170,6 +192,21 @@ func height() -> float:
 	return _about("height") if striking() else 0.0
 
 
+## The limb that strikes in the move under way, where it is drawn now (in
+## the world): where it leaves the body (the shoulder, the hip), its middle
+## joint (the elbow, the knee) and what lands (the knuckles, the toes).
+func limb() -> PackedVector3Array:
+	var at := PackedVector3Array()
+	for bone in _leg if state == "kick" else _arm:
+		at.append(skeleton.global_transform * skeleton.get_bone_global_pose(bone).origin)
+	return at
+
+
+## The blow of the strike under way has landed: it lands no more.
+func landed() -> void:
+	_spent = true
+
+
 ## How far the clips carried the body in the last physics step (m, in the
 ## world): the steps the blows take.
 func root_motion() -> Vector3:
@@ -214,6 +251,7 @@ func _start(named: String, fade: float) -> void:
 	# (Asked between two steps, by a key: the next one takes it up.)
 	_move_from = Engine.get_physics_frames() + (0 if Engine.is_in_physics_frame() else 1)
 	_move_out = false
+	_spent = false
 	_then = ""
 	_go(named, fade)
 	swung.emit(named)
@@ -248,6 +286,16 @@ func _move(delta: float) -> void:
 			_start(_then, 0.12)
 	elif _move_for >= length:
 		_go("ground", 0.25)
+
+
+## The pose of this step is set. While a fist or a foot is thrown, says
+## where it is.
+func _posed() -> void:
+	if not striking() or _spent or _move_for < _about("hit") - SWING - LATE:
+		return
+	# (Its last say is in the pose in which the clip has it land.)
+	_spent = _move_out
+	reached.emit(limb(), _move_out)
 
 
 ## Into state `to` over `fade` s. With `lasts`, it gives way to "ground"

@@ -142,6 +142,148 @@ func test_a_blow_is_thrown_where_the_stick_pushes() -> void:
 	await _unload()
 
 
+func test_a_blow_lands_where_its_fist_first_touches() -> void:
+	await _load()
+	var c := p.character
+	var s := main.structure
+	# Right up against the wall, the arms go through it. Each blow lands
+	# where its fist goes in, when it does: [move, where, on which piece,
+	# steps since it was thrown, how far that is from where the fist and
+	# the arm went in that step].
+	_stand(Main.WALL_AT + Vector3(0, 0.05, 0.6), Main.WALL_AT + Vector3.UP)
+	await frames(10)
+	var landed: Array[Array] = []
+	var step := [0]
+	var began := [0]
+	var fist_was := [Vector3.ZERO]
+	c.swung.connect(func(_move: String) -> void: began[0] = step[0])
+	p.blow.connect(
+		func(at: Vector3, _way: Vector3, _power: int, on: RID) -> void:
+			var limb := c.limb()
+			var off := minf(
+				_off(at, fist_was[0], limb[2]), minf(_off(at, limb[1], limb[2]), _off(at, limb[0], limb[1]))
+			)
+			landed.append([c.state, at, s.standing(on), step[0] - began[0], off])
+	)
+	for k in 400:
+		if k % 6 == 0 and landed.size() < 4:
+			p.punch()
+		await frames(1)
+		step[0] += 1
+		fist_was[0] = c.limb()[2]
+		if landed.size() == 4:
+			break
+	var named: Array[String] = []
+	for blow in landed:
+		named.append(blow[0])
+	check_eq(named, Character.COMBO, "each blow of the combination lands, once and in order")
+	if landed.size() == 4:
+		var face := Main.WALL_AT.z + Main.WALL.z * 0.5
+		for blow in landed:
+			var at: Vector3 = blow[1]
+			check_eq(blow[2], main.wall, "%s lands on the wall" % blow[0])
+			check(absf(at.z - face) < 0.03, "%s: on its face (z %.2f for %.2f)" % [blow[0], at.z, face])
+			check(
+				blow[4] < Player.FIST + 0.03,
+				"%s: where the fist went in that step (%.2f m off)" % [blow[0], blow[4]]
+			)
+			var hit: float = c._clips.get_animation("fight/" + blow[0]).get_meta("hit")
+			check(
+				blow[3] <= roundi(hit * 60.0) + 1,
+				"%s: no later than its move has it land (step %d)" % [blow[0], blow[3]]
+			)
+		var hook: Vector3 = landed[0][1] - p.global_position
+		var back: Vector3 = landed[2][1] - p.global_position
+		var slam: Vector3 = landed[3][1] - p.global_position
+		check(hook.y > 1.0, "the hook goes in high (%.2f m up): not where it ends in the open" % hook.y)
+		check(hook.x > 0.4, "and on the right (%.2f m)" % hook.x)
+		check(back.x < -0.3, "the blow back across goes in on the left (%.2f m)" % back.x)
+		check(slam.y > 1.7, "the fist from above goes in over the brute's head (%.2f m up)" % slam.y)
+		check(slam.y - hook.y > 0.5 and hook.x - back.x > 0.7, "they land apart")
+	await _unload()
+	# A thin column, the brute a little to one side of it: the arms run
+	# into it all the same.
+	for side: float in [0.3, -0.3]:
+		await _load()
+		s = main.structure
+		_stand(Main.COLUMN_AT + Vector3(side, 0.05, 1.0), Main.COLUMN_AT + Vector3(side, 1, 0))
+		await frames(10)
+		var on_it: Array[Vector3] = []
+		var thrown := [0]
+		p.blow.connect(
+			func(at: Vector3, _way: Vector3, _power: int, on: RID) -> void:
+				thrown[0] += 1
+				if on.is_valid() and s.standing(on) == main.column:
+					on_it.append(at)
+		)
+		for k in 400:
+			if k % 6 == 0 and thrown[0] < 4:
+				p.punch()
+			await frames(1)
+			if thrown[0] >= 4:
+				break
+		check(
+			on_it.size() >= 2,
+			"%.1f m to one side of a column, blows land on it (%d of 4)" % [side, on_it.size()]
+		)
+		for at in on_it:
+			var off := Vector2(at.x - Main.COLUMN_AT.x, at.z - Main.COLUMN_AT.z)
+			check(maxf(absf(off.x), absf(off.y)) < 0.23, "on the column itself (%s)" % at.snappedf(0.01))
+		await _unload()
+
+
+func test_a_blow_that_touches_nothing_says_where_its_fist_ended() -> void:
+	await _load()
+	var c := p.character
+	var landed: Array[Array] = []
+	var step := [0]
+	var began := [0]
+	c.swung.connect(func(_move: String) -> void: began[0] = step[0])
+	p.blow.connect(
+		func(at: Vector3, way: Vector3, power: int, on: RID) -> void:
+			landed.append(
+				[c.state, at.distance_to(c.limb()[2]), on.is_valid(), step[0] - began[0], way, power]
+			)
+	)
+	for k in 400:
+		if k % 6 == 0 and landed.size() < 4:
+			p.punch()
+		await frames(1)
+		step[0] += 1
+		if landed.size() == 4:
+			break
+	check_eq(landed.size(), 4, "each blow of the combination says so once")
+	var ahead := Basis(Vector3.UP, p.facing) * Vector3.FORWARD
+	for blow in landed:
+		var hit: float = c._clips.get_animation("fight/" + blow[0]).get_meta("hit")
+		check(not blow[2], "%s: on nothing" % blow[0])
+		check(blow[1] < 0.01, "%s: where its fist is (%.2f m off)" % [blow[0], blow[1]])
+		check(
+			absi(blow[3] - roundi(hit * 60.0)) <= 1,
+			"%s: when its move has it land (step %d)" % [blow[0], blow[3]]
+		)
+		check((blow[4] as Vector3).dot(ahead) > 0.9, "%s: thrown ahead" % blow[0])
+		check_eq(blow[5], 3 if blow[0] == "slam" else 2, "%s: as hard as it is" % blow[0])
+	check_eq(main.structure.standing_count, main.structure.pieces, "nothing on the bench took anything")
+	await _unload()
+
+
+## How far `at` is from the stretch between `from` and `to`.
+func _off(at: Vector3, from: Vector3, to: Vector3) -> float:
+	var along := to - from
+	if along.length_squared() < 0.000001:
+		return at.distance_to(from)
+	return at.distance_to(from + along * clampf((at - from).dot(along) / along.length_squared(), 0.0, 1.0))
+
+
+## Puts the brute at `at`, facing `target`.
+func _stand(at: Vector3, target: Vector3) -> void:
+	p.global_position = at
+	p.velocity = Vector3.ZERO
+	p.facing = atan2(at.x - target.x, at.z - target.z)
+	p.look(Vector2(angle_difference(p.yaw, p.facing), 0.0))
+
+
 ## Where bone `named` of the character is, in the world.
 func _bone(named: String) -> Vector3:
 	var sk := p.character.skeleton

@@ -1,7 +1,7 @@
 // Loads the web export in headless Chromium (software WebGL2), plays a short
-// scripted run on the bench (the brute runs, breaks the concrete column
-// where it strikes it with its four blows, bends the metal post, dents a sheet
-// twice, then brings down a post under the deck) and checks that the bench
+// scripted run on the bench (the brute runs, cuts the concrete column
+// where its fists land on it, bends the metal post, dents a sheet twice,
+// then brings down a post under the deck) and checks that the bench
 // was built, that the brute went where it was sent, that the column was
 // cut, that the post and the sheet stand marked, that the deck came loose
 // in its triangles, and that nothing failed on the way (a
@@ -40,14 +40,16 @@ page.on("console", (m) => {
 });
 page.on("pageerror", (e) => console.log("PAGE ERROR " + e.message));
 // Run forward a second, then stand in front of the concrete column and
-// throw the four blows of the combination at it; then the same at the
-// metal post; two blows at a sheet of the fence; seven at a post under the
-// deck.
+// keep striking for two combinations (its blows land apart: it is cut at
+// the sixth); the four blows of one at the metal post; two blows at a
+// sheet of the fence; three combinations at a post under the deck (it
+// lies down at the ninth blow).
 const blows = "w0.3;h;w0.4;h;w0.4;h;w0.4;h";
+const mash = (seconds) => Array(Math.round(seconds / 0.25)).fill("h;w0.25").join(";");
 const steps =
-  `f1;w0.3;s1.5,0.05,-4.55,1.5,1,-6;${blows};w4;s-1.5,0.05,-4.6,-1.5,1,-6;${blows};w2;` +
+  `f1;w0.3;s1.5,0.05,-4.55,1.5,1,-6;${mash(4.5)};w4;s-1.5,0.05,-4.6,-1.5,1,-6;${blows};w2;` +
   `s-4.5,0.05,-6.55,-4.5,1,-8;w0.3;h;w0.4;h;w1.5;` +
-  `s-7.4,0.05,-4.5,-7.4,1,-5.9;${blows};w0.8;h;w0.4;h;w0.4;h;w0.4;h;w3`;
+  `s-7.4,0.05,-4.5,-7.4,1,-5.9;${mash(7)};w3`;
 // Software WebGL is slow: loading alone can take a while.
 await page.goto(`http://localhost:8061/index.html?mode=play&prof&steps=${encodeURIComponent(steps)}`, { timeout: 180000 });
 // And a few seconds of game time can take a minute.
@@ -74,7 +76,7 @@ if (!done) failures.push("the run did not finish");
 else if (!m) failures.push("the brute did not report where it went");
 else if (Number(m[3]) > -2 || m[4] !== "true") failures.push(`the brute did not run forward on the ground: ${walked}`);
 // "PLAY_DONE at=... standing=14/16 marked=3 loose=16 ...": the column is
-// cut where it was struck (its foot stands, the rest is down, in blocks);
+// cut where the fists landed (its foot stands, the rest is down, in blocks);
 // the post and the sheet stand, marked; a post under the deck has lain
 // down in its two limbs, and the deck has come loose in its eight
 // triangles.

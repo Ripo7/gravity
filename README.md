@@ -11,7 +11,10 @@ on the bench in front of it the same three things twice: a column, a
 wall, a slab on four columns. In concrete on its right, in metal on its
 left.
 
-A blow harms the place it lands on, not the whole piece. Concrete cracks
+A blow lands where its fist or foot first touches something, and harms
+that place, not the whole piece: the blows of a combination land apart
+(a hook high on the right, one back across on the left, a fist from
+above over the brute's head). Concrete cracks
 round the blow, for all to see, then lets go there: the few big blocks
 round the fist are knocked out, away from the blow, and a wall keeps a
 hole. What they held up comes down, breaks into its blocks when it lands

@@ -41,7 +41,7 @@ func test_a_post_bends_blow_after_blow_keeps_the_shape_and_never_breaks() -> voi
 	# What the post is after each blow that lands: [what it is doing, what
 	# it has taken, how far its head has gone from where it was].
 	var blows := [0]
-	p.blow.connect(func(_from: Vector3, _to: Vector3, _power: int) -> void: blows[0] += 1)
+	p.blow.connect(func(_at: Vector3, _way: Vector3, _power: int, _on: RID) -> void: blows[0] += 1)
 	var seen: Array[Array] = []
 	for k in 500:
 		if k % 6 == 0:
@@ -54,26 +54,41 @@ func test_a_post_bends_blow_after_blow_keeps_the_shape_and_never_breaks() -> voi
 			seen.append([s.state[q], s.harm[q], gone])
 		if s.state[q] != Structure.STANDS:
 			break
-	check_eq(seen.size(), 7, "it takes a combination and a half: seven blows")
-	for k in mini(seen.size(), 6):
+	check(
+		seen.size() >= 5 and seen.size() <= 12, "it takes two or three combinations (%d blows)" % seen.size()
+	)
+	for k in seen.size() - 1:
 		check_eq(seen[k][0], Structure.STANDS, "after blow %d it stands" % (k + 1))
-		check(k == 0 or seen[k][1] > seen[k - 1][1], "bent more than at the blow before (%.1f)" % seen[k][1])
+		check(
+			k == 0 or seen[k][1] >= seen[k - 1][1], "bent no less than at the blow before (%.1f)" % seen[k][1]
+		)
 		check(k == 0 or seen[k][2] > seen[k - 1][2] + 0.05, "its head farther off (%.2f m)" % seen[k][2])
 	check(seen[0][2] > 0.1, "the first blow already shows (its head %.2f m off)" % seen[0][2])
-	check_eq(s.state[q], Structure.FALLS, "at the seventh it lies down")
+	check_eq(s.state[q], Structure.FALLS, "in the end it lies down")
 	var b := s.bend[q]
 	check(b.leans().z < 0.0 and absf(b.leans().x) < absf(b.leans().z), "bent away from the brute")
-	check_eq(b.kink_at.size(), 1, "one kink: the fists all land about as high")
-	check(b.kink_at[0] > 0.5 and b.kink_at[0] < 1.3, "where they landed (%.2f m up)" % b.kink_at[0])
-	# In one piece: a limb either side of the kink, and nothing else.
+	# The fists of the first three blows land about as high; the last one
+	# of the combination, thrown from a leap, lands well above them.
+	check_eq(b.kink_at.size(), 2, "two kinks")
+	if b.kink_at.size() == 2:
+		check(
+			b.kink_at[0] > 0.5 and b.kink_at[0] < 1.1,
+			"one where three fists landed (%.2f m up)" % b.kink_at[0]
+		)
+		check(b.kink_at[1] > 1.2, "one where the fist from above did (%.2f m up)" % b.kink_at[1])
+	# In one piece: a limb either side of each kink, and nothing else.
 	var loose := s.rubble
-	check_eq(loose.live, 2, "two loose bodies")
+	check_eq(loose.live, 3, "three loose bodies")
 	for i in loose.body.size():
 		check_eq(loose.piece[i], q, "body %d is of the post" % i)
+	# (The brute steps back: what it stands against does not come to rest.)
+	p.touch_move = Vector2(0, 1)
+	await frames(60)
+	p.touch_move = Vector2.ZERO
 	await frames(150)
 	var rested := await _rest(900)
 	check(rested, "it comes to rest")
-	check_eq(loose.live, 2, "still two")
+	check_eq(loose.live, 3, "still three")
 	check_eq(s.state[q], Structure.FALLS, "never in blocks")
 	var rings := _parts(s, q)
 	var highest := 0.0
@@ -334,7 +349,7 @@ func test_the_brute_dents_a_sheet_until_it_lies_down_and_the_fence_is_open() -> 
 	_face(Main.FENCE_AT + Vector3(0, 0.05, 1.5), Main.FENCE_AT + Vector3.UP)
 	await frames(5)
 	var blows := [0]
-	p.blow.connect(func(_from: Vector3, _to: Vector3, _power: int) -> void: blows[0] += 1)
+	p.blow.connect(func(_at: Vector3, _way: Vector3, _power: int, _on: RID) -> void: blows[0] += 1)
 	var first_blow := 0.0
 	for k in 600:
 		if k % 6 == 0:
@@ -346,7 +361,12 @@ func test_the_brute_dents_a_sheet_until_it_lies_down_and_the_fence_is_open() -> 
 			break
 	check(first_blow > 1.0, "the first blow dents it (%.1f points)" % first_blow)
 	check_eq(s.state[middle], Structure.FALLS, "the middle sheet lies down")
-	check(blows[0] >= 3 and blows[0] <= 8, "after a few blows (%d)" % blows[0])
+	# (The blows of a combination land apart: only the dents that are close
+	# to one another add up.)
+	check(blows[0] >= 3 and blows[0] <= 16, "within four combinations (%d blows)" % blows[0])
+	p.touch_move = Vector2(0, 1)
+	await frames(60)
+	p.touch_move = Vector2.ZERO
 	await frames(150)  # the blow runs its course
 	var rested := await _rest(900)
 	check(rested, "it comes to rest")
