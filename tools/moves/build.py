@@ -61,6 +61,10 @@ CLIPS = [
     # A karateka's front kick, stepping in.
     dict(name="kick", take="135_04", t0=2.62, t1=3.30, hit=3.11, limb="RightFoot", next=3.26, power=3,
          slow=(1.2, 1.3), steps=True),
+    # A boxer's left uppercut: the fist dips to the hip and comes up to the
+    # chin, with a short step in.
+    dict(name="uppercut", take="15_13", t0=59.77, t1=60.72, hit=60.15, limb="LeftHand", next=60.33, power=2,
+         slow=(1.0, 1.1), steps=True),
 ]
 
 
@@ -226,6 +230,8 @@ def build(cap, spec):
     reach = float(np.hypot(at[0], at[2])) + (FOOT if spec["limb"].endswith("Foot") else 0.0)
     meta = dict(hit=slowed(fh - f0) / FPS, next=slowed(cap.frame(spec["next"]) - f0) / FPS,
                 power=spec["power"], reach=reach, height=float(at[1]), aside=float(at[0]))
+    if spec["limb"].startswith("Left"):
+        meta.update(left=1.0)
     return {"name": spec["name"], "dt": 1.0 / FPS, "tracks": tracks, "meta": meta, "loop": False}, heading, (f0, f1), walk
 
 

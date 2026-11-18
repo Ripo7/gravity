@@ -337,8 +337,8 @@ func test_on_trial_a_boxers_blows_are_thrown_standing_at_the_height_of_the_shoul
 	main.hud.blows_pressed.emit()
 	check_eq(c.combo, Character.BOXING, "the button gives it a boxer's")
 	check_eq(main.hud._blows.text, "Coups : boxe", "and says so")
-	# A step from the wall: a straight left, a straight right, then the
-	# hook and the leap. [move, where from the brute, on which piece, how
+	# A step from the wall: a straight left, a straight right, a left
+	# uppercut, then the leap. [move, where from the brute, on which piece, how
 	# far the body has gone, how far the fist that struck is from there]
 	_stand(Main.WALL_AT + Vector3(0, 0.05, 0.9), Main.WALL_AT + Vector3.UP)
 	await frames(10)
@@ -347,7 +347,7 @@ func test_on_trial_a_boxers_blows_are_thrown_standing_at_the_height_of_the_shoul
 	var inside := 0
 	p.blow.connect(
 		func(at: Vector3, _way: Vector3, power: int, on: RID) -> void:
-			var fist := _bone("f_middle.01.L" if c.state == "jab" else "f_middle.01.R")
+			var fist := _bone("f_middle.01.R" if c.state in ["cross", "slam"] else "f_middle.01.L")
 			landed.append(
 				[
 					c.state,
@@ -380,6 +380,18 @@ func test_on_trial_a_boxers_blows_are_thrown_standing_at_the_height_of_the_shoul
 		check(blow[3] < 0.1, "%s: thrown standing (the body has gone %.2f m)" % [blow[0], blow[3]])
 		check_eq(blow[4], 2, "%s: a blow of 2" % blow[0])
 		check(blow[5] < 0.01, "%s: it is the fist of that hand that is followed" % blow[0])
+	# The third is a left uppercut: the fist comes up from the hip, so it
+	# goes into the wall lower than the straights did, and the body stays
+	# upright behind it.
+	if landed.size() == 4:
+		var upper := landed[2]
+		check_eq(upper[2], main.wall, "the uppercut lands on the wall")
+		check(
+			(upper[1] as Vector3).y < (landed[0][1] as Vector3).y - 0.2,
+			"on its way up (%.2f m up)" % (upper[1] as Vector3).y
+		)
+		check(upper[5] < 0.01, "it is the left fist that is followed")
+		check(upper[3] < 0.5, "with a short step at most (the body has gone %.2f m)" % upper[3])
 	check_eq(inside, 0, "nothing of the body but the arm that strikes goes into the wall")
 	main.hud.blows_pressed.emit()
 	check_eq(c.combo, Character.COMBO, "the button gives it its blows back")

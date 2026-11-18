@@ -357,8 +357,11 @@ it jumps, lands, strikes or kicks.
   the four are sword strokes thrown without the sword, and all four
   dive). `Character.BOXING` is a second combination: a straight left
   and a straight right from the first animation pack, made as punches
-  and thrown standing (the fist 1.4 m up, the body going nowhere), then
-  the hook and the leap of the other. A button of the bench ("Coups :
+  and thrown standing (the fist 1.4 m up, the body going nowhere); a
+  left uppercut, the owner's choice for the third, taken from a boxing
+  capture (CMU 15_13) and put on the mannequin like the kick (the fist
+  dips to 0.75 m and comes up to 1.5 m, the body upright); then the leap
+  of the other. A button of the bench ("Coups :
   épée" / "Coups : boxe", `Hud.blows_pressed`, `Main.set_boxing`) goes
   from one to the other; `--blows=boxing` starts with it. A clip thrown
   with the left hand says so (`left` in its metadata): the fist that is
