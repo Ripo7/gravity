@@ -138,7 +138,8 @@ func test_the_brute_snaps_the_planks_its_fists_land_on_and_kicks_its_way_through
 	await frames(150)
 	# The fists land at the height of the shoulder: the planks they snap
 	# keep a foot too high to step over. A kick at each of three planks
-	# side by side, from a step back, cuts them low; then it walks through.
+	# side by side, from a step back, cuts them at the ground; then it
+	# walks through.
 	var tall := 0
 	for q in main.planks:
 		var top := 0.0

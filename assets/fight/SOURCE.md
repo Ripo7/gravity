@@ -60,18 +60,23 @@ mirrored at <https://github.com/una-dinosauria/cmu-mocap> (commit
 
 | Clip | Take (as the database names it) | Seconds of the take | What it is in the game |
 | --- | --- | --- | --- |
-| `kick` | 135_04 (front kick) | 2.62 to 3.31 | straight ahead with the right leg, stepping in |
+| `kick` | 74_03 (kick) | 1.49 to 2.24 | a kick at something low, as at a ball: a short step with the left foot, and the right swings through close to the ground |
 
 It is put on the mannequin's skeleton by the tool and retimed: its
-wind-up and its recovery take 1.2 and 1.3 times as long as performed, the
-last 0.12 s before it lands 0.65 of their time, and the 0.06 s after it
-2.5 times theirs.
+wind-up takes 0.8 of the time it was performed in, the last 0.12 s before
+it lands 0.65 of theirs, and the 0.06 s after it 2.5 times theirs. Only
+its steps straight ahead are kept (the performer drifts 0.25 m to one
+side).
+
+The kick before this one was take 135_04, a karateka's front kick: it
+landed 0.5 s after it was asked for, the leg going back first, the foot
+1.1 m up. The owner asked for one that is low and quick.
 
 ## Making it again
 
 ```sh
 git clone --depth 1 --filter=blob:none --sparse https://github.com/una-dinosauria/cmu-mocap /tmp/cmu
-git -C /tmp/cmu sparse-checkout set --no-cone /data/135/135_04.bvh
+git -C /tmp/cmu sparse-checkout set --no-cone /data/074/74_03.bvh
 # /tmp/ual2: UAL2_Standard.glb and UAL2_Standard_RM.glb, from the pack's "Unreal-Godot" folder,
 # and beside them the first pack as distributed: AnimationLibrary_Godot_Standard.gltf and .bin
 python3 tools/moves/build.py /tmp/cmu/data /tmp/ual2        # needs numpy

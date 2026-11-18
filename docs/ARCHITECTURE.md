@@ -362,10 +362,14 @@ it jumps, lands, strikes or kicks.
   four the brute had (a lunging hook and three sword strokes, which all
   dived: fists 0.7 to 0.85 m up) and an uppercut from motion capture.
 - **What is motion capture.** The kick is what a real person did (CMU
-  motion capture database, free to use): the free library has none. The
-  tool puts it on the mannequin's skeleton and retimes it (a slow
+  motion capture database, free to use): the free libraries have none.
+  It is a kick at something low, as at a ball: a short step with the
+  left foot, and the right swings through close to the ground (0.1 to
+  0.2 m up where it meets a wall), 0.25 s after it is asked for. The
+  tool puts it on the mannequin's skeleton and retimes it (a quicker
   wind-up, the last 0.12 s in two thirds of their time, the pose all but
-  held for an instant after).
+  held for an instant after). It is what breaks what is low: the fists
+  land at the height of the shoulder.
 - **The combination.** A straight left, a straight right, a leap that
   comes down fist first, then round again. The next blow starts when the
   one before lets it (`next` in its clip).
@@ -402,7 +406,7 @@ it jumps, lands, strikes or kicks.
   What this does: a step from a wall, the two straights go in 1.4 m up,
   straight ahead, and the fist of the leap 1.9 m up, over the brute's
   head: the fists land high. What is below the shoulder (the foot of a
-  wall, of a plank) is for the kick, which goes in 0.4 to 0.8 m up.
+  wall, of a plank) is for the kick, which goes in 0.1 to 0.2 m up.
   Before, a blow was a thin line from the body's axis straight ahead to
   where the fist ends in the open, at that height: 0.3 m to one side of
   a column 0.4 m wide, every blow missed it.

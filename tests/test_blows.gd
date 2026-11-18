@@ -117,8 +117,9 @@ func test_each_blow_says_when_it_lands_how_far_and_how_hard() -> void:
 	if landed.size() == 1:
 		var foot: Vector3 = landed[0][5]
 		check_eq(landed[0][3], 3, "as hard as the last blow")
-		check(foot.y > 0.8, "the foot is up when it counts (%.2f m)" % foot.y)
-		check(landed[0][2] > 0.8, "and reaches farther than a fist (%.2f m)" % landed[0][2])
+		check(foot.y < 0.4, "the foot is low when it counts (%.2f m up)" % foot.y)
+		check(landed[0][2] > 0.5, "out in front of the brute (%.2f m)" % landed[0][2])
+		check(landed[0][1] < 0.3, "within a third of a second (%.2f s)" % landed[0][1])
 	await frames(70)
 	check_eq(c.state, "ground", "then it stands again")
 	check(_bone("foot.R").y < 0.25, "both feet on the ground")
