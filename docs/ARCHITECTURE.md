@@ -125,19 +125,24 @@ bends.
 ### Concrete: it cracks where it is struck, then lets go there
 
 1. **Cut once, when it is made** (`Fracture`, `Matter.grain`). Each piece
-   is cut into a few irregular convex blocks, about 0.7 m across (about
-   what a blow knocks out), bigger if that would make more than sixteen:
-   4 for the column, 15 for the wall, 16 for the slab.
+   is cut into irregular convex blocks. A wall or a column takes blows:
+   its blocks are about 0.4 m across, small enough for what a blow
+   knocks out to be round the fist (6 for the column, 54 for the wall).
+   A slab only comes down: about 0.9 m (16). Bigger, both, if that would
+   make more than sixty. (With blocks 0.7 m across, the block a fist
+   landed on went whole: the hole was under the fist, down to the
+   ground.)
 2. **Places** (`Structure.hit`, `_wound`). A blow lands on a place: one
-   the piece has been struck at within 0.6 m of there, or a new one.
+   the piece has been struck at within 0.45 m of there, or a new one.
    What the place has taken is what counts, not what the piece has taken
    in all. The blocks round it (the nearest, and those whose middle is
-   within 0.6 m) show cracks (`_crack`): each is drawn a little smaller
+   within 0.45 m) show cracks (`_crack`): each is drawn a little smaller
    and askew, the gaps dark, wider from half the strength on. The others
    show nothing.
 3. **Letting go** (`Structure._expel`). When the place has taken what the
    piece can take, those blocks are knocked out, away from the blow, at
-   4.5 m/s as at real gravity: loose bodies, and a hole. For half a
+   3.5 m/s as at real gravity: loose bodies, and a hole about 0.9 m
+   across where the fist landed. For half a
    second what is left of the piece does not stop them (`Rubble.
    let_through`): cut every which way, a block would stay caught in its
    hole. From under something the piece carried, they hardly rub on
@@ -146,13 +151,12 @@ bends.
    it is (`_refresh`).
 4. **What holds** (`Structure._unheld`, for a wall or a column). A block
    holds if it sits on something: the ground or what stands under the
-   piece, or a block right under it that sits. Or if it is between two
-   blocks that sit, right beside it on each side and no more than a
-   metre apart: the lintel over a hole one block wide. Over a wider hole
-   what is left comes down: two holes side by side at the foot of a wall
-   open it to the top. Which blocks are right under and right beside
-   which is worked out once, when the piece is cut (`_lay_courses`), so
-   that it does not hang on the luck of the cut.
+   piece, or the block right under it, if that one sits. Or if it is in
+   a row of blocks, side by side, between two that sit no more than
+   1.25 m apart: the lintel over the hole of one blow. Over a wider hole
+   what is left comes down: holes side by side open a wall to the top.
+   Which block is right under and which are right beside which is worked
+   out once, when the piece is cut (`_lay_courses`).
 5. **Coming down in one** (`Structure._fall`, `break_up`). What no
    longer holds comes down as one loose body, the blocks that hold
    together through their cuts. Cut off by a blow, it starts off going
@@ -220,9 +224,11 @@ piece (`Bend`): a post, a sheet or a plate.
 Not there: what falls does nothing to the brute but push it (a deck that
 comes down round a brute that cannot get out stays on its head); blocks
 that lie in one come apart under blows only once they have taken the
-strength of their piece in all; a hole is as big as the blocks round it,
-one to three of them, not a fist's exact shape; what holds over a hole
-goes by which block is over which, not by weight; a slab that tips onto
+strength of their piece in all; a hole is the blocks round the fist, two
+to five of them, not a fist's exact shape; what holds over a hole goes
+by which block is over which, not by weight, so how many holes it takes
+to open a wall to the top depends on how the wall was cut (two or three
+side by side); a slab that tips onto
 what is left under it can stay whole, leaning; metal that lies there no
 longer takes a mark; a sheet that stands dented is
 still a flat wall to the brute; a plate takes nothing from a blow; the

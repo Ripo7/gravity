@@ -29,11 +29,14 @@ const DENSITY: Array[float] = [2400.0, 7800.0]
 const STRENGTH: Array[float] = [22.5, 70.0]
 ## Does it bend (and never break), or break into blocks?
 const BENDS: Array[bool] = [false, true]
-## What breaks is cut into blocks about this big (m): about what a blow
-## knocks out. Bigger if that would make more than MOST_BLOCKS of them: a
-## few big blocks, whatever the piece.
-const BLOCK := 0.7
-const MOST_BLOCKS := 16
+## What breaks is cut into blocks. An upright piece (a wall, a column)
+## takes blows: its blocks are about BLOCK m across, small enough for what
+## a blow knocks out to be round the fist. A piece that lies flat (a slab)
+## only comes down: its blocks are about SLAB_BLOCK m across. Bigger, both,
+## if that would make more than MOST_BLOCKS of them.
+const BLOCK := 0.4
+const SLAB_BLOCK := 0.9
+const MOST_BLOCKS := 60
 ## A post that bends is drawn as rings across it, RING m apart at most,
 ## that a kink moves. It kinks at the height it is struck at, over KINK m
 ## of its length; a blow nearer than KINK_APART m to a kink it has already
@@ -73,7 +76,7 @@ static func strength(of: int, size: Vector3) -> float:
 
 ## How big (m) the blocks of a piece that breaks, `size` across, are cut.
 static func grain(size: Vector3) -> float:
-	var across := BLOCK
+	var across := BLOCK if upright(size) else SLAB_BLOCK
 	while _cells(size, across) > MOST_BLOCKS:
 		across *= 1.1
 	return across

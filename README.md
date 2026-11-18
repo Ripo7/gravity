@@ -64,9 +64,10 @@ character faces.
 
 A place of a concrete piece 0.4 m thick takes one whole combination:
 three blows crack it, wider each time, and the fourth, the heavy one,
-knocks out the blocks round it. A column is cut there. A wall keeps a
-hole; a second one beside it, and what was over the two comes down: the
-way is open.
+knocks out the blocks round it. A column is cut there: its foot stays,
+its top comes down. A wall keeps a hole about 0.9 m across where the
+fist landed; another one or two beside it, and what was over them comes
+down: the way is open.
 A metal post 0.2 m thick takes a combination and a half where the fists
 land: it leans more at each blow and lies down at the seventh. A sheet
 takes a dent at each blow and lies down at the third in the same place;
@@ -118,12 +119,12 @@ Add `--write-movie out.avi --fixed-fps 30` before `--path` to record a run.
   jumping break nothing; a column cracks where it is struck, then is cut
   there; struck half way up, its foot stays and its top comes down in one
   and breaks when it lands; a wall struck in the middle keeps a hole;
-  over a hole one block wide what is left holds, over a wider one it
-  comes down; a piece, and a place of it, take what its matter and its
+  over the hole of one blow the wall holds, over a wider one it comes
+  down; a piece, and a place of it, take what its matter and its
   size say however it is cut; a slab holds on three columns and comes
   down without two; what lands on a piece is a blow to it; things fall
   as slowly as they are set to; the brute knocks a hole in the wall,
-  then a way through); metal (walking
+  round its fist, then a way through); metal (walking
   bends nothing; a post bends blow after blow, keeps the shape and never
   breaks; a blow from the other side straightens it; it kinks at each
   height it is struck at; a post that carries bows and keeps its head

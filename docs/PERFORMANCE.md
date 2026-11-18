@@ -38,8 +38,9 @@ bare bench of step 1 (pull request #56), the brute alone on the ground,
 49 to 56 frames a second. That is what every later number on that phone
 starts from.
 
-Not measured yet on a phone: the bench with concrete and metal on it,
-standing or broken. The measure above is there for that.
+Since then, on that phone, with concrete and metal on the bench: 48 to
+53 frames a second while it is broken (see below). The measure above is
+still the way to compare two builds.
 
 ### Concrete and metal, where the blow lands (step 3)
 
@@ -55,24 +56,41 @@ The run at the top of this page (both sides of the bench taken apart:
 | metal marked where the blow lands (dents, kinks, folds, the deck in triangles) | 0.14 ms | 0.35 to 0.46 ms | 2.2 to 8.3 ms |
 | the same again, later | 0.14 to 0.16 ms | 0.35 to 0.44 ms | 2.4 to 4.2 ms |
 | and concrete broken where the blow lands (holes, what holds over them) | 0.13 to 0.16 ms | 0.34 to 0.58 ms | 3.2 to 11.8 ms |
+| walls and columns cut finer (blocks 0.4 m across: a hole round the fist) | 0.13 to 0.15 ms | 0.34 to 0.48 ms | 2.5 to 3.3 ms |
+| the same, things falling at real gravity (1.0) | 0.14 ms | 0.35 to 0.40 ms | 2.4 to 2.9 ms |
 
-The four cannot be told apart at the median on this machine. The slowest
-step is not better, and once in three runs it is worse (8.3 ms, 11.8 ms).
+The rows cannot be told apart at the median on this machine. The slowest
+step is not better, and once in three runs it was worse (8.3 ms, 11.8 ms;
+24 ms once with the finer cut, before a wall that loses blocks stopped
+being made again whole).
 In a run of 1000 steps made three times with the clock on every step, the
 slowest steps (2 to 8 ms) were not the ones in which a hole was knocked,
 a slab came down or the deck came loose: on this machine they come from
 elsewhere. That is not a measure of a phone.
 
 At the end of the run 25 to 41 bodies lie loose, 21 at most having moved
-at once.
+at once; 48 to 50 with the finer cut, 22 at most at once.
+
+The first hole knocked in the wall costs 2.2 to 3.1 ms by itself in the
+step it happens in (timed three times): the wall stops being one box and
+becomes its 54 blocks, less those knocked out. The next ones cost 0.4 to
+0.7 ms.
 
 Not measured: what a fold costs on a phone. A piece of metal that has
 come loose is up to 8 bodies and as many folds while it moves (the deck),
 frozen like the rest once it lies still.
 
-The bench is 16 pieces: 7 in concrete, cut into 47 blocks, and 9 in
-metal, drawn with 46 rings (the posts) and 282 nodes (the sheets, the
-deck): 375 parts.
+The bench is 16 pieces: 7 in concrete, cut into 100 blocks (6 for the
+column, 54 for the wall, 6 for each column under the slab, 16 for the
+slab), and 9 in metal, drawn with 46 rings (the posts) and 282 nodes
+(the sheets, the deck): 428 parts.
+
+On the owner's phone (iPhone, Safari), read off a screen recording of 38
+s of play on the build before the finer cut (47 blocks), things falling
+at real gravity: 48 to 53 frames a second from start to end, 51 while
+the slab broke up (28 loose bodies, 20 moving), 51 with 39 lying at the
+end; the physics 0.4 to 1.0 ms a step. Recording the screen costs
+something too. Not measured on the phone: the finer cut.
 
 ### Concrete alone (step 2)
 

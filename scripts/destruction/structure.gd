@@ -58,14 +58,12 @@ const REACH := 0.7
 ## and when the place gives, the blocks whose middle is within this of it
 ## go (the nearest, at least).
 ## They are knocked out at KNOCK m/s, as at real gravity.
-const HOLE := 0.6
-const KNOCK := 4.5
-## A block of a wall is right under another if it is under this share of
-## it at least, along the wall. A block with nothing under it holds
-## between two that sit, if they are no farther apart than LINTEL m: over
-## a hole one block wide.
-const UNDER := 0.6
-const LINTEL := 1.0
+const HOLE := 0.45
+const KNOCK := 3.5
+## Blocks of a wall with nothing under them hold, side by side, between
+## two that sit, if those are no farther apart than LINTEL m: over the
+## hole one blow makes, not over two side by side.
+const LINTEL := 1.25
 ## What a blow cuts off from below goes over: it starts off turning about
 ## its foot at TOPPLE rad/s, away from the blow. (Left to drop straight,
 ## it lands on what it stood on and stays there, a cut column still
@@ -134,6 +132,7 @@ var _box: Array[RID] = []  # per piece: its collision shape as it was built
 var _limbs: Array[Array] = []  # per post that has been kinked: the shapes of its limbs
 var _made: Array[RID] = []  # the shapes of metal that has lain down: sheets, the triangles of plates
 var _body: Array[RID] = []  # per piece: its static body while it stands
+var _in_body: Array[PackedInt32Array] = []  # per piece: the blocks its body is made of, once not its box
 var _loose: Array[PackedInt32Array] = []  # per piece: its bodies in the rubble once it has come down
 var _ties: Array[Array] = []  # per piece that stands: what ties to it a plate that has come loose
 var _by_body := {}  # RID -> piece that stands
@@ -187,6 +186,7 @@ func add_piece(of: int, xf: Transform3D, box: Vector3) -> int:
 	_loose.append(PackedInt32Array())
 	_limbs.append([])
 	_ties.append([])
+	_in_body.append(PackedInt32Array())
 	if Matter.BENDS[of]:
 		blocks.append(_add_skin(p))
 	else:
@@ -416,10 +416,11 @@ func _add_blocks(p: int) -> int:
 
 
 ## Works out, for each block of upright piece `p` (its blocks numbered
-## from `base`, as `cut`), which blocks are right under it and which right
-## beside it, on each side. Under: cut from it, lower, and under UNDER of
-## its length along the piece at least. Beside: cut from it, and level
-## with at least half of it (of the lower of the two).
+## from `base`, as `cut`), which block is right under it and which are
+## right beside it, on each side. Under: of the blocks cut from it that
+## are lower, the one that is under the most of it, along the piece.
+## Beside: cut from it, and level with at least half of it (of the lower
+## of the two).
 func _lay_courses(p: int, base: int, cut: Array[Fracture.Shard]) -> void:
 	var along := 0 if size[p].x >= size[p].z else 2
 	var reach: Array[Vector2] = []  # per block: from where to where it goes along the piece
@@ -442,19 +443,15 @@ func _lay_courses(p: int, base: int, cut: Array[Fracture.Shard]) -> void:
 			var over := minf(reach[k].y, reach[o].y) - maxf(reach[k].x, reach[o].x)
 			var level := minf(rise[k].y, rise[o].y) - maxf(rise[k].x, rise[o].x)
 			var lower := minf(rise[k].y - rise[k].x, rise[o].y - rise[o].x)
-			if cut[o].centroid.y < cut[k].centroid.y:
-				if over >= (reach[k].y - reach[k].x) * UNDER:
-					_sits_on[i].append(other)
-				if over > best_over:
-					best = other
-					best_over = over
+			if cut[o].centroid.y < cut[k].centroid.y and over > best_over:
+				best = other
+				best_over = over
 			if level >= lower * 0.5:
 				if cut[o].centroid[along] < cut[k].centroid[along]:
 					_beside[i].append(other)
 				else:
 					_other_side[i].append(other)
-		# (A block that is not at the foot of the piece sits on something.)
-		if _sits_on[i].is_empty() and not _foot[i].has_area() and best >= 0:
+		if best >= 0 and not _foot[i].has_area():
 			_sits_on[i].append(best)
 
 
@@ -652,9 +649,9 @@ func _standing_of(p: int) -> PackedInt32Array:
 ## The blocks of piece `p`, an upright piece that breaks (a wall, a
 ## column), that nothing holds any more. A block holds if it sits on
 ## something: the ground or what stands under the piece, or a block right
-## under it that sits. Or if it is between two blocks that sit, one right
-## beside it on each side and no more than LINTEL apart: the lintel over
-## a hole one block wide. Over a wider hole, what is left comes down.
+## under it that sits. Or if it is in a row of blocks, side by side,
+## between two that sit no more than LINTEL apart: the lintel over the
+## hole of one blow. Over a wider hole, what is left comes down.
 func _unheld(p: int) -> PackedInt32Array:
 	var up: Array = Array(_standing_of(p))
 	up.sort_custom(func(a: int, b: int) -> bool: return centroid[a].y < centroid[b].y)
@@ -672,18 +669,32 @@ func _unheld(p: int) -> PackedInt32Array:
 	for i: int in up:
 		if sits.has(i):
 			continue
-		# How far apart the nearest that sit are, on each side of it.
-		var from := -INF
-		for other in _beside[i]:
-			if sits.has(other):
-				from = maxf(from, _reach[other].y)
-		var to := INF
-		for other in _other_side[i]:
-			if sits.has(other):
-				to = minf(to, _reach[other].x)
-		if to - from > LINTEL:
+		# How far apart the nearest that sit are, on each side of it, along
+		# the blocks level with it that stand.
+		var from := _nearest_seat(i, _beside, sits)
+		var to := _nearest_seat(i, _other_side, sits)
+		if from < 0 or to < 0 or _reach[to].x - _reach[from].y > LINTEL:
 			loose.append(i)
 	return loose
+
+
+## The block that sits (is in `sits`) nearest block `i` on one side, going
+## from block to block level with it (`side`: `_beside` or `_other_side`)
+## through those that stand; -1 if there is none.
+func _nearest_seat(i: int, side: Array[PackedInt32Array], sits: Dictionary) -> int:
+	var seen := {i: true}
+	var row := PackedInt32Array([i])
+	var next := 0
+	while next < row.size():
+		for other in side[row[next]]:
+			if seen.has(other) or stands[other] == 0:
+				continue
+			if sits.has(other):
+				return other
+			seen[other] = true
+			row.append(other)
+		next += 1
+	return -1
 
 
 ## Is one of `these` in `among`?
@@ -757,11 +768,21 @@ func _refresh(p: int) -> void:
 			_leave(p)
 		state[p] = BROKEN if _loose[p].is_empty() else FALLS
 		return
-	PhysicsServer3D.body_clear_shapes(_body[p])
-	var here := place[p].affine_inverse()
-	for i in range(first[p], first[p] + blocks[p]):
-		if stands[i] == 1:
-			PhysicsServer3D.body_add_shape(_body[p], _shape_of(i), here * Transform3D(Basis(), centroid[i]))
+	if _in_body[p].is_empty():
+		# Until now it was its box: from now on, the blocks that are left.
+		PhysicsServer3D.body_clear_shapes(_body[p])
+		var here := place[p].affine_inverse()
+		for i in range(first[p], first[p] + blocks[p]):
+			if stands[i] == 1:
+				PhysicsServer3D.body_add_shape(
+					_body[p], _shape_of(i), here * Transform3D(Basis(), centroid[i])
+				)
+				_in_body[p].append(i)
+		return
+	for k in range(_in_body[p].size() - 1, -1, -1):
+		if stands[_in_body[p][k]] == 0:
+			PhysicsServer3D.body_remove_shape(_body[p], k)
+			_in_body[p].remove_at(k)
 
 
 ## Piece `p` has lost something, or something under it has: what of it is

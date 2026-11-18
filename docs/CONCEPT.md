@@ -64,9 +64,12 @@ toute sa largeur. Corrigé :
   est coupé là : le bas reste debout, le haut tombe.
 - Ce qui n'est plus tenu, ou plus en équilibre, tombe d'un bloc et se
   disloque en touchant le sol.
-- Au-dessus d'un trou large d'un bloc, ce qui reste tient entre ses deux
-  voisins. Au-dessus d'un trou plus large, ça tombe : deux trous côte à
-  côte au pied d'un mur ouvrent un passage jusqu'en haut.
+- Le trou est centré sur le poing : environ 0,9 m de large, à la hauteur
+  où le poing touche. (Retour du 18 novembre : le trou partait du sol,
+  sous le poing.)
+- Au-dessus du trou d'un seul coup, ce qui reste tient. Au-dessus d'un
+  trou plus large, ça tombe : des trous côte à côte ouvrent le mur
+  jusqu'en haut.
 - Métal : une tôle se creuse sous le poing, le reste reste plat, les
   bosses s'ajoutent. Un poteau plie à chaque hauteur frappée. Un coup venu
   de l'autre côté redresse d'autant.
