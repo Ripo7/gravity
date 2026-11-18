@@ -132,7 +132,8 @@ Add `--write-movie out.avi --fixed-fps 30` before `--path` to record a run.
   from high lands whole; what lands on metal bends it; a sheet takes a
   dent under the fist and the rest stays flat; dented deep enough in one
   place it lies down and opens the fence; the brute does not hold up
-  what comes down on it); the character
+  what comes down on it, and does not throw what it walks into); the
+  character
   (where the camera sits and how it comes in at a wall, the character
   turning to where it goes, its planted foot not sliding from a slow walk
   to a sprint, jumps and landings, stepping onto what is low); the blows

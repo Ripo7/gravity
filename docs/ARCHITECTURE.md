@@ -112,7 +112,11 @@ bends.
    stays put, and the brute steps onto it. It moves again when a piece
    near it breaks or when a blow lands by it. Nothing rests on the brute
    itself: what comes down on it pushes it out from under
-   (`Rubble.bears_down`, `Player.give_way`).
+   (`Rubble.bears_down`, `Player.give_way`). And its body throws
+   nothing: near it, no loose body goes sideways faster than 6.5 m/s nor
+   up faster than 1.5 (`Rubble.PUSH`, `LIFT`). A sheet propped against
+   the brute and pushed at its foot left for the sky at 17 m/s before
+   that.
 6. **One draw call** (`ShardMesh`, `shaders/shards.gdshader`). Everything
    is in one mesh that never changes; a small texture says which body
    each part goes with (and how far it is pushed in, for a dent) and

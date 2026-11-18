@@ -41,6 +41,14 @@ const FOLD_MOST := 2.4
 ## face that looks up by OVER at least.
 const NEAR := 1.6
 const OVER := 0.5
+## The brute's body throws nothing: what it walks or lunges into is
+## shoved along, not sent flying. Near it, no loose body goes sideways
+## faster than PUSH m/s, up faster than LIFT, nor turns faster than SPIN
+## rad/s. (A plate propped against it, pushed at its foot, left for the
+## sky at 17 m/s.)
+const PUSH := 6.5
+const LIFT := 1.5
+const SPIN := 5.0
 ## What is tied to a piece that stands can shift this far (m) from where
 ## it is tied, each way: enough to fold over the edge of what holds it.
 const SLACK := 0.15
@@ -435,13 +443,20 @@ func _moved(state: PhysicsDirectBodyState3D, i: int) -> void:
 	var ang := state.angular_velocity
 	var was := _lin[i]
 	_xf[i] = state.transform
+	var near := _brute_id != 0 and _xf[i].origin.distance_to(_brute_at) < reach[i] + NEAR
+	if near and (lin.y > LIFT or Vector2(lin.x, lin.z).length() > PUSH or ang.length() > SPIN):
+		var along := Vector2(lin.x, lin.z).limit_length(PUSH)
+		lin = Vector3(along.x, minf(lin.y, LIFT), along.y)
+		ang = ang.limit_length(SPIN)
+		state.linear_velocity = lin
+		state.angular_velocity = ang
 	_lin[i] = lin
 	_ang[i] = ang
 	_draw(i)
 	var touching := state.get_contact_count()
 	var slow := _slow()
 	var on_brute := false
-	if touching > 0 and _brute_id != 0 and _xf[i].origin.distance_to(_brute_at) < reach[i] + NEAR:
+	if touching > 0 and near:
 		for k in touching:
 			if state.get_contact_collider_id(k) == _brute_id:
 				on_brute = true
