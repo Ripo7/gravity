@@ -9,22 +9,23 @@ extends Node3D
 const START := Vector3(0, 0.05, 0)
 ## The ground is this wide (m).
 const GROUND := 400.0
-## What stands on the bench, in concrete. A column on its own; a wall of
-## WALL_PANELS panels side by side; a slab on four columns, SPAN m apart.
+## What stands on the bench, in concrete. A column on its own; a wall, in
+## one piece (wide enough to have a hole knocked in it); a slab on four
+## columns, SPAN m apart.
 const COLUMN := Vector3(0.4, 2.6, 0.4)
 const COLUMN_AT := Vector3(1.5, 0, -6)
-const PANEL := Vector3(1.2, 2.4, 0.35)
+const WALL := Vector3(3.6, 2.4, 0.35)
 const WALL_AT := Vector3(4.5, 0, -8)
-const WALL_PANELS := 3
 const POST := Vector3(0.4, 2.2, 0.4)
 const SLAB := Vector3(3.6, 0.3, 3.6)
 const SLAB_AT := Vector3(9, 0, -7.5)
 const SPAN := 3.2
-## And in metal, the same three things: a post on its own; a fence of as
-## many sheets; a deck on four posts.
+## And in metal, the same three things: a post on its own; a fence of
+## SHEETS sheets side by side; a deck on four posts.
 const METAL_POST := Vector3(0.2, 2.6, 0.2)
 const METAL_POST_AT := Vector3(-1.5, 0, -6)
 const SHEET := Vector3(1.2, 2.4, 0.08)
+const SHEETS := 3
 const FENCE_AT := Vector3(-4.5, 0, -8)
 const PIER := Vector3(0.2, 2.2, 0.2)
 const DECK := Vector3(3.6, 0.12, 3.6)
@@ -38,11 +39,10 @@ var hud: Hud
 ## set on the screen, kept when the bench is put back.
 var fall := Rubble.FALL:
 	set = set_fall
-## On the bench, in concrete: the column that stands alone, the panels of
-## the wall, the four columns under the slab, the slab (the numbers of
-## their pieces).
+## On the bench, in concrete: the column that stands alone, the wall, the
+## four columns under the slab, the slab (the numbers of their pieces).
 var column := -1
-var panels := PackedInt32Array()
+var wall := -1
 var posts := PackedInt32Array()
 var slab := -1
 ## And in metal: the post that stands alone, the sheets of the fence, the
@@ -117,11 +117,10 @@ func _lay_bench() -> void:
 	var corners: Array[Vector2] = [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]
 	column = _stand(Matter.CONCRETE, COLUMN, COLUMN_AT)
 	metal_post = _stand(Matter.METAL, METAL_POST, METAL_POST_AT)
-	panels.clear()
+	wall = _stand(Matter.CONCRETE, WALL, WALL_AT)
 	sheets.clear()
-	for k in WALL_PANELS:
-		var along := Vector3((k - (WALL_PANELS - 1) * 0.5) * PANEL.x, 0, 0)
-		panels.append(_stand(Matter.CONCRETE, PANEL, WALL_AT + along))
+	for k in SHEETS:
+		var along := Vector3((k - (SHEETS - 1) * 0.5) * SHEET.x, 0, 0)
 		sheets.append(_stand(Matter.METAL, SHEET, FENCE_AT + along))
 	posts.clear()
 	piers.clear()

@@ -1,6 +1,6 @@
 // Loads the web export in headless Chromium (software WebGL2), plays a short
 // scripted run on the bench (the brute runs, breaks the concrete column
-// with its four blows, bends the metal post with four more, dents a sheet
+// where it strikes it with its four blows, bends the metal post, dents a sheet
 // twice, then brings down a post under the deck) and checks that the bench
 // was built, that the brute went where it was sent, that the column came
 // down in blocks, that the post and the sheet stand marked, that the deck
@@ -73,10 +73,10 @@ const m = walked && walked.match(/\(([-\d.]+), ([-\d.]+), ([-\d.]+)\) \(on floor
 if (!done) failures.push("the run did not finish");
 else if (!m) failures.push("the brute did not report where it went");
 else if (Number(m[3]) > -2 || m[4] !== "true") failures.push(`the brute did not run forward on the ground: ${walked}`);
-// "PLAY_DONE at=... standing=15/18 marked=2 loose=14 ...": the column is
-// down, in blocks; the post and the sheet stand, marked; a post under the
-// deck has lain down in its two limbs, and the deck has come loose in its
-// eight triangles.
+// "PLAY_DONE at=... standing=13/16 marked=2 loose=14 ...": the column is
+// cut where it was struck, and down; the post and the sheet stand,
+// marked; a post under the deck has lain down in its two limbs, and the
+// deck has come loose in its eight triangles.
 const end = done && done.match(/standing=(\d+)\/(\d+) marked=(\d+) loose=(\d+)/);
 if (done && (!end || Number(end[1]) >= Number(end[2]) || Number(end[4]) < 2)) failures.push(`the column did not come down in blocks: ${done}`);
 if (end && Number(end[3]) < 2) failures.push(`the post and the sheet were not both marked: ${done}`);
