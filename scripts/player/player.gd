@@ -8,9 +8,13 @@ extends CharacterBody3D
 ## there is a kick too. While such a move plays, the body goes where the
 ## move steps (Character.root_motion).
 ##
-## What a blow does to what it reaches is not decided here: the character
-## says when a fist or a foot gets there (Character.struck), where, how hard
-## and which way.
+## What a blow does to what it reaches is not decided here: when a fist or
+## a foot gets there, the brute says where it went and how hard (`blow`),
+## and whoever stands there takes it.
+
+## A fist or a foot gets there: it went from `from` (in the body, at its
+## height) to `to`, `power` hard (2 a blow, 3 a heavy one).
+signal blow(from: Vector3, to: Vector3, power: int)
 
 const FOV := 70.0
 ## Something up to this high (m) is stepped onto instead of stopping you.
@@ -39,6 +43,8 @@ const EASE_OUT := 6.0
 const TURN := 12.0
 ## In the air this long (s) without having jumped: it is a fall.
 const FALL_AFTER := 0.12
+## A blow reaches this much farther than the wrist (m): the fist.
+const FIST := 0.1
 
 ## Full tilt of the stick, or the keys: a jog. The clips' feet do not slide
 ## at these speeds (see Character).
@@ -82,8 +88,10 @@ var _sight := PhysicsRayQueryParameters3D.new()  # what the camera stays in fron
 
 func _init() -> void:
 	collision_layer = Layers.PLAYER
-	collision_mask = Layers.WORLD
+	collision_mask = Layers.WORLD | Layers.STRUCTURE | Layers.RUBBLE
 	floor_snap_length = 0.3
+	# A block that goes off under its feet does not take it along.
+	platform_floor_layers = 0
 	var capsule := CapsuleShape3D.new()
 	capsule.radius = 0.35
 	capsule.height = 1.8
@@ -104,8 +112,10 @@ func _init() -> void:
 	camera.far = 400.0
 	camera.current = true
 	_arm.add_child(camera)
-	_sight.collision_mask = Layers.WORLD
+	# The camera stays in front of what stands, not of what lies about.
+	_sight.collision_mask = Layers.WORLD | Layers.STRUCTURE
 	character.swung.connect(_on_swung)
+	character.struck.connect(_on_struck)
 	_pose_camera()
 
 
@@ -233,6 +243,13 @@ func _animate(wish: Vector3, delta: float) -> void:
 ## character faces.
 func _on_swung(_move: String) -> void:
 	_punch_to = atan2(-_wish.x, -_wish.z) if _wish.length() > 0.1 else facing
+
+
+## The fist or the foot of the strike under way gets there.
+func _on_struck(_move: String) -> void:
+	var ahead := Basis(Vector3.UP, facing) * Vector3.FORWARD
+	var from := global_position + Vector3.UP * character.height()
+	blow.emit(from, from + ahead * (character.reach() + FIST), character.power())
 
 
 ## How far back the camera can go from `from` along `reach` (as a length

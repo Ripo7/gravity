@@ -49,9 +49,11 @@ func test_the_camera_sits_behind_the_left_shoulder_and_comes_in_at_walls() -> vo
 
 func test_it_steps_onto_what_is_low_and_is_stopped_by_what_is_not() -> void:
 	await _load()
-	# A kerb 0.4 m high across its way, then a wall.
-	_wall(Vector3(0, 0.2, -6), Vector3(8, 0.4, 4))
-	_wall(Vector3(0, 1.5, -12), Vector3(8, 3, 1))
+	# In the open, away from what stands on the bench: a kerb 0.4 m high
+	# across its way, then a wall.
+	_stand(Vector3(40, 0.05, 0), Vector3(40, 1.5, -20))
+	_wall(Vector3(40, 0.2, -6), Vector3(8, 0.4, 4))
+	_wall(Vector3(40, 1.5, -12), Vector3(8, 3, 1))
 	await frames(2)
 	p.touch_move = Vector2(0, -1)
 	await frames(90)
@@ -112,6 +114,8 @@ func test_the_legs_keep_pace_with_the_ground() -> void:
 
 func test_jumping_falling_and_landing_show() -> void:
 	await _load()
+	_stand(Vector3(-30, 0.05, 30), Vector3(-30, 1.5, 0))
+	await frames(5)
 	var c := p.character
 	check_eq(c.state, "ground", "on the ground to begin with")
 	p.touch_jump = true

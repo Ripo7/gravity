@@ -5,12 +5,19 @@ is being rebuilt from its concept, one step at a time, in greybox:
 [docs/CONCEPT.md](docs/CONCEPT.md) (in French) says what it is to be, and
 comes before the code.
 
-**Where it is now: step 1 of 7, the bare bench.** A bare ground and one
-brute that walks, runs, sprints, jumps, throws a four-blow combination and
-kicks. Nothing stands on the bench yet. What breaks comes next, one
-material at a time, each on this bench and each tried on a phone before
-the next: concrete, metal, wood, glass; then a house, an office and a
-tower made of them; then the city, made up from a number as before.
+**Where it is now: step 2 of 7, concrete.** A bare ground, one brute that
+walks, runs, sprints, jumps, throws a four-blow combination and kicks, and
+on the bench in front of it, in concrete: a column, a wall of three
+panels, a slab on four columns. Concrete cracks blow after blow, for all
+to see, then lets go: the piece goes over away from the blow and comes
+apart into a few big blocks, which come down slowly (that is what makes
+the brute a giant) and lie low. What a piece carried comes down when the
+piece is gone. Walking breaks nothing.
+
+What breaks is worked out one material at a time, each on this bench and
+each tried on a phone before the next: concrete, then metal, wood, glass;
+then a house, an office and a tower made of them; then the city, made up
+from a number as before.
 
 Godot 4.7, GDScript, Jolt physics, Compatibility renderer (WebGL2), so it
 can be played in Safari on an iPhone from each pull request's preview.
@@ -32,6 +39,7 @@ the concept. The project before that is on
 | Kick | right click or E | orange button |
 | Jump | space | small button |
 | Put the bench back | R | "Reconstruire" |
+| How fast things fall | the slider at the top | the slider at the top |
 
 The camera sits behind the character's left shoulder and turns about its
 head; it comes closer when a wall is behind (and the character is not
@@ -44,15 +52,24 @@ back across from the left, then a leap that comes down fist first, then
 round again. A blow is thrown where the stick pushes, or where the
 character faces.
 
+A column 0.4 m thick takes one whole combination: three blows crack it,
+wider each time, and the fourth, the heavy one, brings it down. A kick is
+as heavy as that fourth blow.
+
+The slider ("Chute") sets how fast what has come off falls, as a share of
+real gravity: 0.30 to begin with, 1 as things really fall, less for a
+bigger giant. It is there to be tried on a phone and settled.
+
 The line at the top left shows frames per second, the cost of one physics
-step and which build this is (it ends with the commit).
+step, how many pieces still stand, how many loose bodies there are (and
+how many are moving) and which build this is (it ends with the commit).
 
 ## Run
 
 ```sh
 godot --path .                                                # play
 godot --headless --fixed-fps 60 --path . res://tests/test_runner.tscn   # tests
-godot --headless --fixed-fps 60 --path . res://tests/test_runner.tscn -- --only=blows
+godot --headless --fixed-fps 60 --path . res://tests/test_runner.tscn -- --only=concrete
 pip install "gdtoolkit==4.5.0" && gdlint scripts tests && gdformat --check scripts tests
 ```
 
@@ -63,12 +80,14 @@ Scripted runs (`scripts/core/director.gd`), on desktop after `--`, in a
 browser as `index.html?mode=...`:
 
 ```sh
-# Run, jump, the combination, a kick, then a sprint to the right.
-godot --path . -- --mode=play --steps="p0,-1,1.5;j;p0,-1,1;h;w0.5;h;w0.5;h;w0.5;h;w2.2;k;w1.5;p1,0,1.2,1"
+# Stand in front of the column and throw the four blows at it.
+godot --path . -- --mode=play --steps="s-3.5,0.05,-4.55,-3.5,1,-6;w0.3;h;w0.4;h;w0.4;h;w0.4;h;w5"
 # The same without a screen, with the cost of the physics.
-godot --headless --fixed-fps 60 --path . -- --mode=play --prof --steps="p0,-1,2;j;w1;h;w1;k;w1"
+godot --headless --fixed-fps 60 --path . -- --mode=play --prof --steps="s-3.5,0.05,-4.55,-3.5,1,-6;w0.3;h;w0.4;h;w0.4;h;w0.4;h;w5"
 # Just look, from somewhere at something.
-godot --path . -- --mode=still --pos=3,0.05,4 --at=0,1,0 --wait=2
+godot --path . -- --mode=still --pos=3,0.05,4 --at=0,1,-8 --wait=2
+# What the picture costs here while the bench is broken (see docs/PERFORMANCE.md).
+godot --path . -- --mode=mesure
 ```
 
 Add `--write-movie out.avi --fixed-fps 30` before `--path` to record a run.
@@ -77,15 +96,22 @@ Add `--write-movie out.avi --fixed-fps 30` before `--path` to record a run.
 
 - `tests/`: a small headless runner; files `tests/test_*.gd`, methods
   `test_*` (they may `await`). They play the real scene: the bench (one
-  brute, no sun shadow, a round shadow that stays on the ground); the
-  character (where the camera sits and how it comes in at a wall, the
-  character turning to where it goes, its planted foot not sliding from a
-  slow walk to a sprint, jumps and landings, stepping onto what is low);
-  the blows (the four in order then standing again, each one saying when
-  it lands, how far, how hard and which way, the kick); the controls, keys
-  and thumbs; and the cut of a box into shards (volumes, shared faces).
-- `tools/web_probe.mjs`: loads the web export in headless Chromium, plays
-  a scripted run and fails on any error (`npm install playwright`, then
+  brute, what stands on it, no sun shadow, a round shadow that stays on
+  the ground, putting it all back); concrete (walking, running and
+  jumping break nothing; a column cracks blow after blow then lets go in
+  a few blocks that lie low, away from the brute; a piece takes what its
+  matter and its size say, however it is cut; a slab holds on three
+  columns and comes down without two; what lands on a piece is a blow to
+  it; things fall as slowly as they are set to; a broken panel opens the
+  wall, and the brute walks through over its rubble); the character
+  (where the camera sits and how it comes in at a wall, the character
+  turning to where it goes, its planted foot not sliding from a slow walk
+  to a sprint, jumps and landings, stepping onto what is low); the blows
+  (the four in order then standing again, each one saying when it lands,
+  how far and how hard, the kick); the controls, keys and thumbs; and the
+  cut of a box into blocks (volumes, shared faces).
+- `tools/web_probe.mjs`: loads the web export in headless Chromium, has
+  the brute break the column and fails on any error (`npm install playwright`, then
   `node tools/web_probe.mjs build/web shot.png`). WebGL2 is stricter than
   desktop OpenGL: two bugs only showed there.
 - `.github/workflows/ci.yml` runs lint, tests, the web export and the

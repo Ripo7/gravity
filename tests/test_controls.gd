@@ -24,16 +24,16 @@ func test_touch_controls_move_look_and_strike() -> void:
 	tc.player = p
 	main.add_child(tc)
 	await frames(3)
-	# The buttons do not sit on each other, nor on the rebuild button.
+	# The buttons do not sit on each other, nor on what the HUD has for
+	# thumbs (the rebuild button, the slider).
 	var buttons := {
 		"punch": [tc.punch_center(), tc.punch_radius() * 1.3],
 		"jump": [tc.jump_center(), tc.jump_radius() * 1.4],
 		"kick": [tc.kick_center(), tc.small_radius() * 1.3],
 	}
-	var rebuild := Hud.rebuild_rect(tc.size).grow(10)
 	for a: String in buttons:
 		var top: Vector2 = (buttons[a][0] as Vector2) - Vector2(0, buttons[a][1])
-		check(not rebuild.has_point(top), "%s is clear of the rebuild button" % a)
+		check(not Hud.takes(top, tc.size), "%s is clear of the HUD" % a)
 		for b: String in buttons:
 			var apart: float = (
 				(buttons[a][0] as Vector2).distance_to(buttons[b][0]) - buttons[a][1] - buttons[b][1]
@@ -67,6 +67,13 @@ func test_touch_controls_move_look_and_strike() -> void:
 	tc._on_touch(_touch(4, tc.kick_center(), true))
 	await frames(2)
 	check_eq(p.character.state, "kick", "the orange button kicks")
+	# A thumb on the slider of the HUD is the slider's: the camera stays.
+	var on_slider := Hud.fall_rect(tc.size).get_center()
+	yaw = p.yaw
+	tc._on_touch(_touch(5, on_slider, true))
+	tc._on_drag(_drag(5, on_slider - Vector2(60, 0)))
+	check_eq(p.yaw, yaw, "a thumb on the slider does not turn the camera")
+	tc._on_touch(_touch(5, on_slider - Vector2(60, 0), false))
 	await _unload()
 
 
@@ -91,6 +98,9 @@ func _load() -> void:
 	get_tree().root.add_child.call_deferred(main)
 	await get_tree().process_frame
 	await frames(20)
+	# In the open, away from what stands on the bench.
+	main.player.global_position = Vector3(-30, 0.05, 30)
+	await frames(5)
 
 
 func _unload() -> void:

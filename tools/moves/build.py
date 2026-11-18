@@ -21,8 +21,7 @@ Every clip starts with the pelvis over the origin, the opponent along +Z
 put); what is left is the pose. Each strike carries, as metadata, the
 moment its fist or foot gets there ("hit"), the moment the next move may
 start ("next"), how far from the body that fist or foot is then
-("reach"), how high ("height"), which way it is going ("way_x", "way_y",
-"way_z") and how hard it is ("power").
+("reach"), how high ("height") and how hard it is ("power").
 """
 import os
 import sys
@@ -112,11 +111,8 @@ def made(lib, skel, spec):
             return np.array([np.interp(t * MADE_FPS, frames, limb[:, k]) for k in range(3)])
 
         at = where(spec["hit"])
-        going = where(spec["hit"] + 0.5 / MADE_FPS) - where(spec["hit"] - 0.5 / MADE_FPS)
-        going /= max(np.linalg.norm(going), 1e-6)
         meta.update(hit=spec["hit"], next=spec["next"], power=spec["power"],
-                    reach=float(np.hypot(at[0], at[2])), height=float(at[1]), aside=float(at[0]),
-                    way_x=float(going[0]), way_y=float(going[1]), way_z=float(going[2]))
+                    reach=float(np.hypot(at[0], at[2])), height=float(at[1]), aside=float(at[0]))
     clip = {"name": spec["name"], "dt": 1.0 / MADE_FPS, "tracks": tracks, "meta": meta, "loop": False}
     return clip, walk
 
@@ -215,12 +211,8 @@ def build(cap, spec):
     at = (cap.pos[fh, s.index(bone)] - cap.walk[fh]) @ turn.T
     # (to the wrist; for a kick, to the ball of the foot: FOOT past the ankle)
     reach = float(np.hypot(at[0], at[2])) + (FOOT if spec["limb"].endswith("Foot") else 0.0)
-    # Which way the fist or foot is going when it gets there (x aside, y up, z ahead).
-    going = (cap.pos[fh, s.index(bone)] - cap.pos[max(fh - 3, 0), s.index(bone)]) @ turn.T
-    going /= max(np.linalg.norm(going), 1e-6)
     meta = dict(hit=slowed(fh - f0) / FPS, next=slowed(cap.frame(spec["next"]) - f0) / FPS,
-                power=spec["power"], reach=reach, height=float(at[1]), aside=float(at[0]),
-                way_x=float(going[0]), way_y=float(going[1]), way_z=float(going[2]))
+                power=spec["power"], reach=reach, height=float(at[1]), aside=float(at[0]))
     return {"name": spec["name"], "dt": 1.0 / FPS, "tracks": tracks, "meta": meta, "loop": False}, heading, (f0, f1), walk
 
 
