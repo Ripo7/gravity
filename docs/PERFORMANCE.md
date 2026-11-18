@@ -67,6 +67,23 @@ and more comes down (the wall opens in four places).
 
 Not measured on a phone.
 
+### The body held back from what stands
+
+Same machine, same two runs, one build after the other. Blows in the
+open (1310 steps), three times each: 0.07 to 0.15 ms at the median
+before, 0.11 to 0.12 ms with the body held back; 99% of the steps under
+0.42 to 0.48 ms before, 0.32 to 0.38 ms now; the slowest 2.3 to 3.9 ms
+before, 2.3 to 3.2 ms now. The run at the top of this page, five times
+before and seven now: 0.14 to 0.16 ms at the median before, 0.15 to
+0.17 ms now; 99% under 0.38 to 0.57 ms before, 0.39 to 0.56 ms now; the
+slowest 2.5 to 6.2 ms before, 2.5 to 9.0 ms now (a step over 6 ms in one
+run of five before, in two of seven now: this machine does that by
+itself). Not told apart; at the median it may be 0.01 ms more. Without
+the look first at whether anything stands within a lunge, it was 0.01
+to 0.02 ms more at the median in both runs.
+
+Not measured on a phone.
+
 ### Concrete and metal, where the blow lands (step 3)
 
 Headless on a 2-core cloud machine, one physics step per frame

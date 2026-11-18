@@ -224,9 +224,7 @@ piece (`Bend`): a post, a sheet or a plate.
 8. **It never breaks**, however hard it lands (`Structure.shatter`
    leaves it alone).
 
-Not there: the brute's own body goes through what it strikes (its moves
-lunge 0.8 m ahead of where it stands: up against a wall its head and
-chest are in the wall); what falls does nothing to the brute but push it (a deck that
+Not there: what falls does nothing to the brute but push it (a deck that
 comes down round a brute that cannot get out stays on its head); blocks
 that lie in one come apart under blows only once they have taken the
 strength of their piece in all; a hole is the blocks round the fist, two
@@ -329,14 +327,29 @@ it jumps, lands, strikes or kicks.
   it. Nothing at all: the blow is said where the fist ended, on nothing,
   and what a fist touches there (0.3 m round) takes it. A blow is thrown
   along the way the brute faces, wherever it lands.
-  What this does: right up against a wall, the hook goes in 1.2 m up on
+  What this does: right up against a wall, the hook goes in 1.1 m up on
   the right (in the open its fist ends 0.7 m up, straight ahead), the
-  blow back across 0.75 m up on the left, the swing up 0.45 m up on the
-  right, and the fist of the leap 2 m up, over the brute's head. The
+  blow back across 0.7 m up on the left, the swing up 0.45 m up on the
+  right, and the fist of the leap 1.9 m up, over the brute's head. The
   blows of a combination no longer land on one place: each place takes
   its own. Before, a blow was a thin line from the body's axis straight
   ahead to where the fist ends in the open, at that height: 0.3 m to one
   side of a column 0.4 m wide, every blow missed it.
+- **The body stays out of what stands.** The moves lunge well ahead of
+  where the brute stands, which is all the physics knows of it (a
+  capsule 0.35 m in radius): in the hook its head is 0.9 m ahead, its
+  front knee and foot 0.8 m. Up against a wall it dived into it to the
+  shoulders. At each step of a strike, once the pose is set
+  (`Character.posed`) and before the fist is looked at, `Player._on_posed`
+  takes the parts of the body other than the limb that strikes
+  (`Character.bulk`: head, chest, shoulders, left hand, knees, toes, each
+  as wide as it is) and moves each, as a ball, straight ahead from
+  beside the brute to where it is drawn. The farthest any of them would
+  go into a piece that stands is how far the brute is moved back, there
+  and then (`move_and_collide`: not into what is behind it). So the
+  brute backs off as it lunges, up to 0.7 m, and only the fist and the
+  arm go in. It stays where that leaves it. Not looked at: what lies
+  loose (a blow sends it off), and anything while it is not striking.
 - **Stepping up.** Stopped by something no higher than 0.6 m, with room
   above and something flat enough on top, the brute steps onto it: a
   short stride first, then one of 0.35 m if all there is under the foot

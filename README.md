@@ -14,8 +14,9 @@ left.
 A blow lands where its fist or foot first touches something, and harms
 that place, not the whole piece: the blows of a combination land apart
 (a hook high on the right, one back across on the left, a fist from
-above over the brute's head). Concrete cracks
-round the blow, for all to see, then lets go there: the few big blocks
+above over the brute's head). Its body stays out of what stands: it
+backs off as it lunges, and only the fist and the arm go in. Concrete
+cracks round the blow, for all to see, then lets go there: the few big blocks
 round the fist are knocked out, away from the blow, and a wall keeps a
 hole. What they held up comes down, breaks into its blocks when it lands
 and lies low; the rest stands.
