@@ -92,6 +92,9 @@ toute sa largeur. Corrigé :
   comme l'uppercut essayé entre-temps.
 - Conséquence : les poings touchent haut (1,4 m, et vers 1,9 m pour le
   coup sauté). Le bas d'un mur ou d'une planche revient au coup de pied.
+- Le coup de pied (retour du 19 novembre : trop lent, la jambe reculait
+  d'abord, le geste n'allait pas) : un coup bas et rapide, façon tir dans
+  un ballon. Il sert à casser ce qui est bas.
 - Au-dessus du trou d'un seul coup, ce qui reste tient. Au-dessus d'un
   trou plus large, ça tombe : des trous côte à côte ouvrent le mur
   jusqu'en haut.
