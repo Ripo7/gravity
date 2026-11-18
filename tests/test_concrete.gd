@@ -179,10 +179,14 @@ func test_things_fall_slowly_and_as_slowly_as_they_are_set_to() -> void:
 		"at real gravity, 2 m in about two thirds of a second (%d steps)" % took[0]
 	)
 	check_near(float(took[1]) / took[0], 2.0, 0.2, "at a quarter of it, twice as long (%d steps)" % took[1])
-	# The slider reaches what already lies about, and the bench when it is
-	# put back.
+	# The slider of the HUD sets it, for what already lies about too.
+	for child in main.hud.get_children():
+		if child is HSlider:
+			(child as HSlider).value = 0.6
+	check_near(main.fall, 0.6, 0.001, "moving the slider sets it")
+	check_near(s.rubble.fall, 0.6, 0.001, "and the setting reaches the rubble")
 	main.fall = 0.5
-	check_near(s.rubble.fall, 0.5, 0.001, "the setting reaches the rubble")
+	check_near(s.rubble.fall, 0.5, 0.001, "set from the code too")
 	main.fall = 5.0
 	check_near(s.rubble.fall, Rubble.FALL_MOST, 0.001, "never faster than real gravity")
 	await _unload()
