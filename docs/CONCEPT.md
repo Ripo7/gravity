@@ -69,8 +69,8 @@ toute sa largeur. Corrigé :
 - Le trou est centré sur le poing : environ 0,9 m de large, à la hauteur
   où le poing touche. (Retour du 18 novembre : le trou partait du sol,
   sous le poing.)
-- Le coup compte là où le poing ou le pied entre dans la pièce, au moment
-  où il y entre, et non là où le geste finit. (Second retour du
+- Le coup compte là où le poing entre dans la pièce, au moment où il y
+  entre, et non là où le geste finit. (Second retour du
   18 novembre : les impacts restaient plus bas que le poing. Le coup
   comptait droit devant, à la hauteur où le poing finit son geste dans le
   vide, 0,7 à 0,85 m ; collée au mur, la brute y entre le poing plus
@@ -91,7 +91,21 @@ toute sa largeur. Corrigé :
   anciens (le crochet et les deux coups d'épée sans épée) sont retirés,
   comme l'uppercut essayé entre-temps.
 - Conséquence : les poings touchent haut (1,4 m, et vers 1,9 m pour le
-  coup sauté). Le bas d'un mur ou d'une planche revient au coup de pied.
+  coup sauté). Ce qu'ils laissent debout revient au marteau.
+- Le marteau (demandé le 19 novembre) : un second bouton, pour un coup qui
+  frappe vers le bas. Les deux poings côte à côte partent d'au-dessus de
+  la tête et s'abattent devant la brute, jusqu'aux genoux. Elle ne saute
+  pas et ne fait pas de pas.
+- Comme tout coup, il compte là où les poings entrent, en descendant : sur
+  le dessus de ce qui est plus bas que la brute ; sur la face d'un mur
+  plus haut qu'elle, vers 1,5 m, puis plus bas à chaque fois que ça cède.
+  Il rabat ce qui est debout, de haut en bas.
+- Il pousse en biais, vers le bas autant que vers l'avant. Ce qu'il
+  détache tombe au pied de la pièce au lieu de partir loin.
+- Il est aussi lourd que le coup sauté. (Choix de ma part, comme la
+  poussée en biais : à valider au banc.)
+- Le coup de pied est retiré du jeu pour l'instant (19 novembre : son
+  animation ne va pas). Le marteau prend son bouton.
 - Au-dessus du trou d'un seul coup, ce qui reste tient. Au-dessus d'un
   trou plus large, ça tombe : des trous côte à côte ouvrent le mur
   jusqu'en haut.
