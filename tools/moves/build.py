@@ -56,11 +56,13 @@ LINGERS = 2.5
 #   next move may start; power: 2 a blow, 3 one that throws
 #   slow: how much longer the wind-up and the recovery take than performed
 #   (the blow itself is retimed the same way for all, see SNAP)
-#   steps: the root takes the steps (else the clip stays where it is)
+#   steps: the root takes the steps (else the clip stays where it is);
+#   straight: only those straight ahead, not what drifts to one side
 CLIPS = [
-    # A karateka's front kick, stepping in.
-    dict(name="kick", take="135_04", t0=2.62, t1=3.30, hit=3.11, limb="RightFoot", next=3.26, power=3,
-         slow=(1.2, 1.3), steps=True),
+    # A kick at something low, as at a ball: a short step with the left
+    # foot, and the right swings through close to the ground.
+    dict(name="kick", take="74_03", t0=1.49, t1=2.24, hit=1.83, limb="RightFoot", next=2.03, power=3,
+         slow=(0.8, 1.0), steps=True, straight=True),
 ]
 
 
@@ -190,6 +192,8 @@ def build(cap, spec):
     if not spec.get("steps"):
         walk = np.zeros_like(walk)
     hips = hips - walk
+    if spec.get("straight"):
+        walk[:, 0] = 0.0  # it does not drift to one side as it steps
     quats = matrix_to_quat(rt.Motion(s, world, hips).local())
     for f in range(1, len(quats)):
         flip = (quats[f] * quats[f - 1]).sum(-1) < 0
