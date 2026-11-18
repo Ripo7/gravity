@@ -1,64 +1,34 @@
 class_name Director
 extends Node
 ## Scripted runs, for clips and measurements:
-##   --mode=play --steps="a@x,y,z;o;w1.5" [--from=x,y,z]
-##        steps separated by ";": "o" a blow where the player looks ("o@x,y,z" looks there first),
-##        "a@x,y,z" look there ("a@d", "o@d": at the other brute), "m<x,y,z>" go
-##        there, "w<seconds>" wait,
-##        "f<seconds>" run forward, "r<seconds>" sprint forward,
-##        "p<x>,<y>,<seconds>[,1]" push the stick (y -1 is forward; 1: sprint),
-##        "j" jump, "h" punch, "k" kick, "g<seconds>" hold the guard,
-##        "l" lock on or let go,
-##        "x1" / "x0" the other brute attacks or stands there,
-##        "t<degrees>,<seconds>" turn the camera to the
-##        left, "d@x,y,z" put the other brute there (in the level's space),
-##        "c@x0,y0,z0,x1,y1,z1" knock out what stands in that box.
-##   --mode=showcase   a fixed tour that takes the level apart
-##   --mode=bench      what the picture costs here: frames a second with
-##        simpler shadows, no smoothing of edges, no brutes, no city
+##   --mode=play --steps="p0,-1,2;j;w1;h;w0.5;h" [--from=x,y,z]
+##        steps separated by ";": "w<seconds>" wait, "m<x,y,z>" go there,
+##        "a@x,y,z" look there, "f<seconds>" run forward, "r<seconds>"
+##        sprint forward, "p<x>,<y>,<seconds>[,1]" push the stick (y -1 is
+##        forward; 1: sprint), "j" jump, "h" punch, "k" kick,
+##        "t<degrees>,<seconds>" turn the camera to the left.
 ##   --mode=still [--pos=x,y,z --at=x,y,z --wait=S]   just look
-##   --mode=check      how loaded the building is as built
-## --level=city|house: which ground (the city unless told). --city=N: which
-## city (the one of --seed if there is one, else a new one each time).
-## --fight: as played, the other brute attacks and the player is locked on
-## it (otherwise it only stands there, and the camera is free).
-## --seed=N makes a run repeatable; --prof prints the cost of the physics
-## once a second (PROF lines, read by tools/perf_gate.py).
+## --prof prints the cost of the physics once a second (PROF lines) and
+## how the steps are spread at the end (STEPS).
 
 ## ms: a physics step longer than this on a desktop is a hitch on a phone.
 const SLOW_STEP := 6.0
-## Blows at each stop of the showcase.
-const VOLLEY := 6
-## Seconds between two blows of a scripted run.
-const BETWEEN := 0.3
 
 var options := {}
 var world: Main
 var player: Player
-var _most_awake := 0
 
 
 func _ready() -> void:
 	world = get_parent() as Main
 	player = world.player
-	world.brute.ai = options.has("fight")
-	if not options.has("fight") and player.locked != null:
-		player.lock()  # a scripted run looks where it is told
-	if options.has("seed"):
-		seed(int(options["seed"]))
 	if options.has("prof"):
 		_profile()
 	match options.get("mode", ""):
 		"play":
 			_play()
-		"showcase":
-			_showcase()
-		"bench":
-			_bench()
 		"still":
 			_still()
-		"check":
-			_check()
 
 
 func _wait(seconds: float) -> void:
@@ -68,46 +38,21 @@ func _wait(seconds: float) -> void:
 func _place(at: Vector3, target: Vector3) -> void:
 	player.global_position = at
 	player.velocity = Vector3.ZERO
-	_aim(target)
-	player.facing = player.yaw
-
-
-func _aim(target: Vector3) -> void:
 	player.look_at_point(target)
-
-
-## A blow where the player looks (see Main.blow), then a pause: BETWEEN s.
-func _blow() -> void:
-	world.blow(player.camera.global_position, -player.camera.global_basis.z)
-	await _wait(BETWEEN)
+	player.facing = player.yaw
 
 
 func _profile() -> void:
 	world.clock.keep_history = true
 	while true:
 		await _wait(1.0)
-		var p := world.structure.pieces
-		_most_awake = maxi(_most_awake, p.awake)
-		print(
-			(
-				"PROF physics %.2f ms/step (worst %.2f)  pieces %d (awake %d)  standing %d  solve %.2f ms"
-				% [
-					world.clock.avg_ms,
-					world.clock.worst_ms,
-					p.live,
-					p.awake,
-					world.structure.held_count,
-					world.structure.solve_usec / 1000.0,
-				]
-			)
-		)
+		print("PROF physics %.2f ms/step (worst %.2f)" % [world.clock.avg_ms, world.clock.worst_ms])
 
 
 func _play() -> void:
 	if options.has("from"):
 		player.global_position = _vec(options["from"])
 	await _wait(0.5)
-	var blows := 0
 	for spec: String in String(options.get("steps", "")).split(";", false):
 		var kind := spec.substr(0, 1)
 		if kind == "w":
@@ -115,7 +60,7 @@ func _play() -> void:
 		elif kind == "m":
 			player.global_position = _vec(spec.substr(1))
 		elif kind == "a":
-			_aim(_point(spec.substr(2)))
+			player.look_at_point(_vec(spec.substr(2)))
 		elif kind == "f" or kind == "r":
 			player.touch_move = Vector2(0, -1)
 			player.touch_sprint = kind == "r"
@@ -136,16 +81,6 @@ func _play() -> void:
 			player.touch_punch = true
 		elif kind == "k":
 			player.touch_kick = true
-		elif kind == "g":
-			player.touch_guard = true
-			await _wait(float(spec.substr(1)))
-			player.touch_guard = false
-		elif kind == "x":
-			world.brute.ai = spec.substr(1) == "1"
-		elif kind == "l":
-			player.lock()
-		elif kind == "d":
-			world.brute.global_position = world.level_at * _vec(spec.substr(2))
 		elif kind == "t":
 			var turn := spec.substr(1).split_floats(",")
 			var left := turn[1]
@@ -154,119 +89,7 @@ func _play() -> void:
 				var dt := get_physics_process_delta_time()
 				player.look(Vector2(deg_to_rad(turn[0]) * dt / turn[1], 0))
 				left -= dt
-		elif kind == "c":
-			var box := spec.substr(2).split_floats(",")
-			_cut(
-				AABB(
-					Vector3(box[0], box[1], box[2]),
-					Vector3(box[3] - box[0], box[4] - box[1], box[5] - box[2])
-				)
-			)
-		elif kind == "o":
-			if spec.contains("@"):
-				_aim(_point(spec.split("@")[1]))
-			await _blow()
-			blows += 1
-			await get_tree().physics_frame
-			print(
-				(
-					"BLOW %d standing=%d pieces=%d"
-					% [blows, world.structure.held_count, world.structure.pieces.live]
-				)
-			)
 	_end("PLAY_DONE")
-
-
-## Around the house, a volley at each stop: holes in the front, the porch's
-## pillars, the sides, the back, then the pillars inside through the holes,
-## until the upper floor comes down.
-func _showcase() -> void:
-	await _wait(0.5)
-	for stop in world.tour():
-		var from := (stop[0] as Vector3) + Vector3.UP * 0.05
-		var target: Vector3 = stop[1]
-		_place(from, target)
-		await _wait(0.25)
-		# Six blows, in two rows of three across what is looked at.
-		var across := (target - from).cross(Vector3.UP).normalized()
-		for k in VOLLEY:
-			_aim(target + across * (k % 3 - 1) * 0.8 + Vector3.UP * (k / 3 - 0.5) * 1.0)
-			await _blow()
-		await _wait(1.0)
-	await _wait(4.0)
-	_end("SHOWCASE_DONE")
-
-
-## Knocks out every standing shard centred in `box` (they drop where they are).
-func _cut(box: AABB) -> void:
-	var s := world.structure
-	for i in s.count:
-		if s.held[i] == 1 and box.has_point(s.centroid[i]):
-			s.blow(i, Vector3.ZERO)
-
-
-## Tells what the picture costs on this machine: the same view drawn seven
-## ways, and the frames a second of each, on the screen (to be photographed)
-## and as BENCH lines. (A first round on the phone showed that the walls'
-## dress costs nothing, that the city is not what is slow, and that either
-## dropping the shadows or halving the resolution gives 45 frames a second
-## for 32: this round tells cheaper shadows and edges from the rest.)
-func _bench() -> void:
-	world.hud.visible = false
-	var sun: DirectionalLight3D
-	for child in world.get_children():
-		if child is DirectionalLight3D:
-			sun = child
-	var board := Label.new()
-	board.position = Vector2(24, 24)
-	board.add_theme_font_size_override("font_size", 26)
-	board.add_theme_color_override("font_outline_color", Color.BLACK)
-	board.add_theme_constant_override("outline_size", 8)
-	var layer := CanvasLayer.new()
-	layer.add_child(board)
-	world.add_child(layer)
-	var size := get_viewport().get_visible_rect().size
-	var lines: Array[String] = ["Mesure en cours... (%d x %d)" % [size.x, size.y]]
-	board.text = lines[0]
-	var cases: Array[String] = [
-		"Comme en jeu",
-		"Ombres simples",
-		"Sans lissage des bords",
-		"Ombres simples, sans lissage",
-		"... et sans les brutes",
-		"... et sans ombres ni ville",
-		"Comme en jeu, de nouveau",
-	]
-	await _wait(2.0)
-	for k in cases.size():
-		# Simple shadows: one map instead of four, read once and not blurred.
-		var simple := k == 1 or (k >= 3 and k <= 5)
-		var smooth := k < 2 or k == 6
-		var shown := k < 4 or k == 6
-		sun.directional_shadow_mode = (
-			DirectionalLight3D.SHADOW_ORTHOGONAL if simple else DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
-		)
-		RenderingServer.directional_soft_shadow_filter_set_quality(
-			RenderingServer.SHADOW_QUALITY_HARD if simple else RenderingServer.SHADOW_QUALITY_SOFT_LOW
-		)
-		get_viewport().msaa_3d = Viewport.MSAA_2X if smooth else Viewport.MSAA_DISABLED
-		world.player.visible = shown
-		world.brute.visible = shown
-		sun.shadow_enabled = k != 5
-		world.structure.mesh.visible = k != 5
-		await _wait(1.0)
-		var drawn := Engine.get_frames_drawn()
-		var began := Time.get_ticks_usec()
-		await _wait(3.0)
-		var rate := (Engine.get_frames_drawn() - drawn) / ((Time.get_ticks_usec() - began) / 1e6)
-		lines.append("%s : %.0f images/s" % [cases[k], rate])
-		print("BENCH %s: %.1f" % [cases[k], rate])
-		board.text = "\n".join(lines)
-	lines[0] = "Mesure finie (%d x %d) : fais une capture." % [size.x, size.y]
-	board.text = "\n".join(lines)
-	print("BENCH_DONE")
-	if DisplayServer.get_name() == "headless":
-		get_tree().quit()
 
 
 func _still() -> void:
@@ -276,35 +99,8 @@ func _still() -> void:
 	_end("STILL_DONE")
 
 
-## How loaded the building is as built: the bond nearest its limit (1 = it
-## breaks). Used to tune Support.STRENGTH and the level.
-func _check() -> void:
-	var s := world.structure
-	s.recheck()
-	await _wait(0.3)
-	print(
-		"CHECK worst load %.2f of what a bond takes, solve %.2f ms" % [s.support.worst, s.solve_usec / 1000.0]
-	)
-	_end("CHECK_DONE")
-
-
 func _end(tag: String) -> void:
-	var s := world.structure
-	print(
-		(
-			"%s standing=%d/%d pieces=%d most_awake=%d volume=%.2f/%.2f crumbs=%d"
-			% [
-				tag,
-				s.held_count,
-				s.count,
-				s.pieces.live,
-				_most_awake,
-				s.standing_volume() + s.pieces.volume(),
-				s.total_volume,
-				s.total - s.count,
-			]
-		)
-	)
+	print("%s at=%s" % [tag, player.global_position.snappedf(0.01)])
 	if options.has("prof"):
 		# Every step of the run, sorted: the mean hides the hitches.
 		var steps := world.clock.history.duplicate()
@@ -321,11 +117,6 @@ func _end(tag: String) -> void:
 			)
 		)
 	get_tree().quit()
-
-
-## The point `text` stands for: "x,y,z", or "d" for the other brute's chest.
-func _point(text: String) -> Vector3:
-	return world.brute.global_position + Vector3.UP * 1.2 if text == "d" else _vec(text)
 
 
 static func _vec(text: String) -> Vector3:

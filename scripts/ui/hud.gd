@@ -1,10 +1,13 @@
 class_name Hud
 extends Control
-## What is drawn over the game: a dot to aim with, a line of numbers (frames
-## per second, pieces moving and at rest) and the button that puts the
-## building back up.
+## What is drawn over the game: a line of numbers (frames per second, the
+## cost of a physics step, which build this is), what the controls are, and
+## the button that puts the bench back as it was.
 
 signal rebuild_pressed
+
+## The controls are shown for this long (s), then fade.
+const HINT_FOR := 8.0
 
 var world: Main
 
@@ -12,6 +15,7 @@ var _stats: Label
 var _build: String = ProjectSettings.get_setting("application/config/version", "")
 var _hint: Label
 var _since := 0.0
+var _shown := 0.0
 
 
 ## Where the rebuild button sits on a screen of `view` size.
@@ -27,14 +31,11 @@ func _ready() -> void:
 	_hint = _label(22)
 	_hint.position = Vector2(20, 44)
 	_hint.text = (
-		"Clic ou F : frapper  ·  Clic droit ou E : coup de pied  ·  C maintenu : garde  ·  Tab : verrouiller\n"
+		"Clic ou F : frapper  ·  Clic droit ou E : coup de pied\n"
 		+ "Espace : sauter  ·  Maj : sprinter  ·  R : reconstruire"
 	)
 	if TouchControls.should_show():
-		_hint.text = (
-			"Rouge : frapper  ·  Orange : coup de pied  ·  Blanc maintenu : garde  ·  Viseur : verrouiller\n"
-			+ "Manette poussée à fond : sprint"
-		)
+		_hint.text = "Rouge : frapper  ·  Orange : coup de pied\nManette poussée à fond : sprint"
 	var button := Button.new()
 	button.text = "Reconstruire"
 	button.focus_mode = Control.FOCUS_NONE
@@ -61,16 +62,11 @@ func _label(font_size: int) -> Label:
 
 func _process(delta: float) -> void:
 	_since += delta
+	_shown += delta
 	if _since < 0.25 or world == null:
 		return
 	_since = 0.0
-	var p := world.structure.pieces
 	_stats.text = (
-		"%d i/s   physique %.1f ms   %d morceaux (%d en mouvement)   v%s"
-		% [Engine.get_frames_per_second(), world.clock.avg_ms, p.live, p.awake, _build]
+		"%d i/s   physique %.1f ms   v%s" % [Engine.get_frames_per_second(), world.clock.avg_ms, _build]
 	)
-	if world.city != null:
-		_stats.text += "   ville %d" % world.city.number
-	if world.eased > 0:
-		_stats.text += "   allege %d" % world.eased
-	_hint.modulate.a = move_toward(_hint.modulate.a, 0.0 if p.live > 0 else 1.0, 0.25)
+	_hint.modulate.a = move_toward(_hint.modulate.a, 0.0 if _shown > HINT_FOR else 1.0, 0.25)

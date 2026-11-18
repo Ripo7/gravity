@@ -1,4 +1,4 @@
-# Fighting moves
+# The brute's blows
 
 `moves.tres` is a Godot animation library for the mannequin of
 `assets/mannequin`, built by `tools/moves/build.py` from two sources:
@@ -27,9 +27,6 @@ mirror <https://github.com/NafisRayan/Animate-Rigged-Humanoid-No-Blender>
 | `upswing` | `Sword_Regular_A`, then `Sword_Regular_A_Rec` | dashing in, a swing from low on the right to high on the left |
 | `backhand` | `Sword_Regular_B`, then `Sword_Regular_B_Rec` | back across, from the left to the right |
 | `slam` | `Sword_Heavy_Combo`, 2.1 to 3.8 s | a leap, the fist straight up, and down to the ground |
-| `guard` | the last pose of `Melee_Hook_Rec` | both fists up in front of the face: one pose, held |
-| `thrown` | `Hit_Knockback` | off its feet, over backwards, onto its back |
-| `getup` | `LayToIdle` | from lying on its back to standing |
 
 The free version has one blow made as a punch (the hook). The three others
 are sword strokes thrown without the sword: the first two of the regular

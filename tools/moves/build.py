@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Builds assets/fight/moves.tres: the fighting moves of the brutes.
+"""Builds assets/fight/moves.tres: the blows of the brute.
 
     python3 tools/moves/build.py <dir of the CMU BVH files> <dir of the UAL2 .glb files> [out.tres]
 
@@ -71,7 +71,6 @@ CLIPS = [
 #   name, and from when to when (s) if not the whole of it
 #   hit, next: s into the result (hit on one of its 30 frames a second:
 #   the fist goes a long way between two); limb, power, steps: as above
-#   still: only its last pose, held
 # The blows are sword strokes, thrown without the sword: A, B and the
 # last of the heavy ones, each with the recovery that follows it when no
 # other blow does.
@@ -89,13 +88,6 @@ MADE = [
     # A leap, the fist straight up, and down to the ground.
     dict(name="slam", glb="UAL2_Standard_RM", parts=[("Sword_Heavy_Combo", 2.1, 3.8)],
          hit=15 / 30, limb="RightHand", next=1.1, power=3, steps=True),
-    # The guard: both fists up in front of the face, where the hook's
-    # recovery ends.
-    dict(name="guard", glb="UAL2_Standard", parts=[("Melee_Hook_Rec",)], still=True),
-    # Knocked off its feet: over backwards, onto its back.
-    dict(name="thrown", glb="UAL2_Standard", parts=[("Hit_Knockback",)]),
-    # From lying on its back to standing.
-    dict(name="getup", glb="UAL2_Standard", parts=[("LayToIdle",)]),
 ]
 LIMBS = {"LeftHand": "DEF-hand.L", "RightHand": "DEF-hand.R", "RightFoot": "DEF-foot.R", "LeftFoot": "DEF-foot.L"}
 
@@ -103,9 +95,6 @@ LIMBS = {"LeftHand": "DEF-hand.L", "RightHand": "DEF-hand.R", "RightFoot": "DEF-
 def made(lib, skel, spec):
     """One clip made of clips of the library: tracks and metadata."""
     turns, places = library.join([lib.clip(part[0], MADE_FPS, *part[1:]) for part in spec["parts"]])
-    if spec.get("still"):
-        turns = {bone: np.repeat(v[-1:], 2, axis=0) for bone, v in turns.items()}
-        places = {bone: np.repeat(v[-1:], 2, axis=0) for bone, v in places.items()}
     walk = places["root"] - places["root"][0]
     tracks = []
     if spec.get("steps"):
@@ -128,8 +117,7 @@ def made(lib, skel, spec):
         meta.update(hit=spec["hit"], next=spec["next"], power=spec["power"],
                     reach=float(np.hypot(at[0], at[2])), height=float(at[1]), aside=float(at[0]),
                     way_x=float(going[0]), way_y=float(going[1]), way_z=float(going[2]))
-    still = bool(spec.get("still"))
-    clip = {"name": spec["name"], "dt": 1.0 / MADE_FPS, "tracks": tracks, "meta": meta, "loop": still}
+    clip = {"name": spec["name"], "dt": 1.0 / MADE_FPS, "tracks": tracks, "meta": meta, "loop": False}
     return clip, walk
 
 

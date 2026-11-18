@@ -11,8 +11,6 @@ extends Node
 var avg_ms := 0.0
 ## Worst single step (ms) in the last full second.
 var worst_ms := 0.0
-## Steps counted in the last full second.
-var steps := 0
 ## Since the start: every step's cost, for percentiles in benchmarks.
 var history := PackedFloat32Array()
 var keep_history := false
@@ -52,7 +50,6 @@ func _process(delta: float) -> void:
 	if _t >= 1.0:
 		avg_ms = _sum / 1000.0 / maxi(_count, 1)
 		worst_ms = _worst / 1000.0
-		steps = _count
 		_sum = 0
 		_worst = 0
 		_count = 0
