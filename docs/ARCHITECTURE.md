@@ -71,8 +71,8 @@ the camera), 4 the brute.
 
 The rule is in the concept: a building is an assembly of simple pieces,
 each of one matter, and the matter alone says how a piece answers a
-blow. Two matters so far: concrete, which breaks, and metal, which
-bends.
+blow. Three matters so far: concrete, which breaks; wood, which snaps;
+and metal, which bends.
 
 ### What all matters share
 
@@ -171,6 +171,39 @@ bends.
    by the whole piece, which cracks all over and, at its strength, goes
    over and comes apart, as every piece did before places.
 
+### Wood: it snaps where it is struck
+
+Wood is cut and held like concrete (the same blocks, places, falls);
+what differs is in `Matter`, by matter:
+
+1. **Lengths** (`Matter.grain`). A piece of wood is cut across its
+   grain, the way it is longest, into lengths of about 0.4 m, whichever
+   way it lies: 6 for a plank or a post, 8 for a beam or a board. The
+   cuts lean, as they do in anything thin.
+2. **At the first blow** (`Matter.STRENGTH`). 8 points for each metre
+   it is thick: 1.6 for a post 0.2 m thick, 0.48 for a plank. A blow is
+   2.
+3. **Where the blow lands** (`Matter.PLACE`). A place of wood is 0.22 m
+   across each way: the length the blow lands on goes, knocked out at
+   6 m/s (`Matter.KNOCK`; concrete: 3.5). Each plank is a piece, and a
+   blow lands on one body: it snaps the plank it touches, not the ones
+   beside it.
+4. **Cut off, thrown** (`Matter.THROWN`). What was above the blow is no
+   longer held: it comes off in one, as a cut column does, and is thrown
+   along the blow at 5.5 m/s on top of going over (concrete only goes
+   over). A plank 13 kg lands 5 m away.
+5. **Long pieces** (`Matter.SHATTERS`, `Structure.lands`). What comes
+   down in one does not break when it lands: only concrete does. Struck
+   where it lies, with what its piece can take (one blow), it comes
+   apart into its lengths.
+6. **Light** (`Rubble.LIGHT`). What weighs 40 kg or less is flung by a
+   blow that lands near it: 6 m/s at most (2.5 for what is heavier).
+   Nothing was added for the brute to walk through small wood: its body
+   pushes what lies loose, as before.
+7. **It carries.** A beam rests on two posts, a board on two beams
+   (`_held`: its middle over what is left under it). A post cut under a
+   beam: the beam comes down, whole, then every board that lay on it.
+
 ### Metal: a blow leaves its mark where it lands
 
 Metal never breaks. What a blow does to it depends on the shape of the
@@ -235,6 +268,11 @@ side by side); a slab that tips onto
 what is left under it can stay whole, leaning; metal that lies there no
 longer takes a mark; a sheet that stands dented is
 still a flat wall to the brute; a plate takes nothing from a blow;
+wood only snaps across its grain, never splits along it, and a long
+piece struck where it lies comes apart into all its lengths at once,
+not only where it is struck; a plank that is snapped keeps its foot
+standing, however short; the brute's body goes through what lies loose,
+small wood included, as it lunges;
 pieces are upright boxes, turned about the vertical at most.
 
 ## The bench
@@ -249,11 +287,16 @@ its shadows were what cost the most. The brute has a round shadow
 (`BlobShadow`) that lies on the ground under it, found by a ray each
 physics step, and gets smaller and fainter as the brute goes up.
 
-On it, a few steps in front of the brute, the same three things twice.
+On it, a few steps in front of the brute, the same three things three
+times.
 In concrete, on its right: a column 2.6 m high on its own; a wall in one
 piece (3.6 m wide, 2.4 high, 0.35 thick: wide enough to keep a hole); a
 slab 3.6 m across on four columns 2.2 m high. In metal, on its left: a post 0.2 m thick; a
 fence of three sheets 0.08 m thick; a deck 0.12 m thick on four posts.
+In wood, straight ahead and farther off: a post 0.2 m thick (10 m
+away); a palisade of ten planks that stand side by side, each a piece
+(0.3 m wide, 2.4 high, 0.06 thick: 13 m away); a floor of eight boards
+laid across two beams on four posts 2 m high (19 m away).
 "Reconstruire" puts them back and the brute where it started, without
 loading anything again (`Main.rebuild`).
 

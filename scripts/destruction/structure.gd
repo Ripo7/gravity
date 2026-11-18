@@ -53,13 +53,8 @@ const TILT: Array[float] = [0.0, 0.012, 0.035]
 ## lies loose within REACH.
 const FIST := 0.3
 const REACH := 0.7
-## A place is this far across (m) each way from where it was first
-## struck: a blow nearer than this to a place already struck adds to it,
-## and when the place gives, the blocks whose middle is within this of it
-## go (the nearest, at least).
-## They are knocked out at KNOCK m/s, as at real gravity.
+## How far across a place of concrete is (m, see Matter.PLACE).
 const HOLE := 0.45
-const KNOCK := 3.5
 ## Blocks of a wall with nothing under them hold, side by side, between
 ## two that sit, if those are no farther apart than LINTEL m: over the
 ## hole one blow makes, not over two side by side.
@@ -344,6 +339,13 @@ func shatter(p: int, way := Vector3.ZERO) -> void:
 	_let_go(p)
 
 
+## Loose body `lying` of the rubble, blocks that came down in one, has
+## landed hard: it breaks into them, if it is of a matter that does.
+func lands(lying: int) -> void:
+	if _clumps.has(lying) and Matter.SHATTERS[matter[piece_of[_clumps[lying][0]]]]:
+		break_up(lying)
+
+
 ## Loose body `lying` of the rubble, blocks that came down in one, breaks
 ## into them where it is (it has landed hard, or been struck enough).
 func break_up(lying: int) -> void:
@@ -375,8 +377,12 @@ func break_up(lying: int) -> void:
 ## Cuts piece `p`, which breaks, into its blocks. Returns how many.
 func _add_blocks(p: int) -> int:
 	var xf := place[p]
-	var cut := Fracture.cut(size[p], Matter.grain(size[p]), cut_seed * 7919 + p * 104729, 0.0)
+	var cut := Fracture.cut(size[p], Matter.grain(matter[p], size[p]), cut_seed * 7919 + p * 104729, 0.0)
 	var base := count
+	var tint := Matter.TINT[matter[p]]
+	if matter[p] == Matter.WOOD:
+		# (Planks side by side are told apart: each its own shade.)
+		tint = tint.darkened(0.14 * float(p % 3) / 2.0)
 	for sh in cut:
 		var c := xf * sh.centroid
 		var world := PackedVector3Array()
@@ -387,7 +393,7 @@ func _add_blocks(p: int) -> int:
 			world.append(w)
 			around.append((w - c) * SHRINK)
 			far = maxf(far, w.distance_to(c))
-		mesh.add_shard(count, base, world, sh, xf.basis, Matter.TINT[matter[p]])
+		mesh.add_shard(count, base, world, sh, xf.basis, tint)
 		var i := count
 		_add_part(p, c, sh.volume, around, far)
 		for f in sh.faces.size():
@@ -562,7 +568,8 @@ func _expel(i: int, way: Vector3) -> void:
 	var slow := sqrt(rubble.fall)
 	var own := Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * 2.0 * SCATTER * slow
 	stands[i] = 0
-	var block := _free(i, Transform3D(Basis(), centroid[i]), flat.normalized() * KNOCK * slow + own, own)
+	var out := flat.normalized() * Matter.KNOCK[matter[p]] * slow + own
+	var block := _free(i, Transform3D(Basis(), centroid[i]), out, own)
 	# (Whatever its shape, it gets clear of what is left of its piece; and
 	# from under what the piece carried, it slides out.)
 	rubble.let_through(block, p, Rubble.THROUGH)
@@ -576,12 +583,13 @@ func body_of(p: int) -> RID:
 
 
 ## The place of piece `p` that a blow at `at` lands on: one it has been
-## struck at within HOLE of there, or a new one. Returns its number.
+## struck at within what a place of its matter is across (Matter.PLACE)
+## of there, or a new one. Returns its number.
 func _wound(p: int, at: Vector3) -> int:
 	var best := -1
 	for w in _wound_at[p].size():
 		var off := _wound_at[p][w].distance_to(at)
-		if off <= HOLE and (best < 0 or off < _wound_at[p][best].distance_to(at)):
+		if off <= Matter.PLACE[matter[p]] and (best < 0 or off < _wound_at[p][best].distance_to(at)):
 			best = w
 	if best < 0:
 		best = _wound_at[p].size()
@@ -591,7 +599,7 @@ func _wound(p: int, at: Vector3) -> int:
 
 
 ## The blocks of piece `p` that stand round `at`: the nearest, and those
-## whose middle is within HOLE of it.
+## whose middle is within what a place of its matter is across of it.
 func _around(p: int, at: Vector3) -> PackedInt32Array:
 	var near := PackedInt32Array()
 	var nearest := -1
@@ -601,7 +609,7 @@ func _around(p: int, at: Vector3) -> PackedInt32Array:
 		var off := centroid[i].distance_to(at)
 		if nearest < 0 or off < centroid[nearest].distance_to(at):
 			nearest = i
-		if off <= HOLE:
+		if off <= Matter.PLACE[matter[p]]:
 			near.append(i)
 	if nearest >= 0 and not near.has(nearest):
 		near.append(nearest)
@@ -726,15 +734,19 @@ func _fall(p: int, chunk: PackedInt32Array, way: Vector3) -> void:
 		# (The whole piece: its box will do.)
 		shapes = [[_box[p], Transform3D(place[p].basis, place[p].origin - middle)]]
 	var turn := Vector3.ZERO
+	var thrown := Vector3.ZERO
 	if way != Vector3.ZERO:
 		turn = _over(way) * sqrt(rubble.fall)
+		# (What is light is thrown as well, a little up.)
+		var flat := Vector3(way.x, 0.0, way.z).normalized()
+		thrown = (flat + Vector3.UP * 0.25) * Matter.THROWN[matter[p]] * sqrt(rubble.fall)
 	var lying := rubble.add(
 		shapes,
 		Transform3D(Basis(), middle),
 		middle,
 		total * Matter.DENSITY[matter[p]],
 		far,
-		turn.cross(middle - Vector3(middle.x, low, middle.z)),
+		turn.cross(middle - Vector3(middle.x, low, middle.z)) + thrown,
 		turn,
 		[[1 + chunk[0], Transform3D(Basis(), middle), middle]],
 		p

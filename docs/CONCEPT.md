@@ -105,7 +105,23 @@ toute sa largeur. Corrigé :
 - Ce qui tombe sur la brute la pousse de côté : elle ne le porte pas sur
   la tête. (Les dégâts que la ville fait à la brute restent pour plus
   tard, avec le combat.)
-- Verre et bois : inchangés.
+- Verre : inchangé.
+
+Le bois sur le banc (étape 4 ; choix de ma part, à valider au banc) :
+
+- Trois choses en bois, droit devant, plus loin que le béton et le métal :
+  un poteau, une palissade de planches debout, un plancher de planches
+  sur deux poutres et quatre poteaux.
+- Chaque planche est une pièce. Un coup casse la planche qu'il touche, pas
+  ses voisines.
+- Une planche ou un poteau casse net à la hauteur du coup, au premier
+  coup : le pied reste debout, le morceau frappé part en petit bois, tout
+  ce qui était au-dessus part d'un seul tenant, loin.
+- Le bois ne se disloque pas en tombant : il reste en longs morceaux.
+  Frappé de nouveau au sol, un long morceau part en petit bois.
+- Un poteau cassé sous le plancher : la poutre et les planches qu'il
+  portait descendent, entières.
+- La brute traverse le petit bois en le poussant : il ne l'arrête pas.
 
 Note sur le béton (étape 2) : la page disait d'abord que ses blocs
 « tombent droit ». Au banc, des blocs laissés là où ils étaient restaient
@@ -143,10 +159,10 @@ Le plan, une pull request par étape, chacune jouable sur le téléphone
 (béton d'abord : validé ; l'ordre des trois autres matières est proposé) :
 
 1. Banc vide : la brute seule sur un sol nu. (fait)
-2. Béton. (fait, validé ; repris pour casser là où le coup touche : à
-   valider sur le téléphone)
-3. Métal. (repris de même ; à valider sur le téléphone)
-4. Bois.
+2. Béton. (fait, validé ; repris pour casser là où le coup touche :
+   validé le 18 novembre)
+3. Métal. (repris de même ; validé le 18 novembre)
+4. Bois. (en cours : à valider sur le téléphone)
 5. Verre.
 6. Maison, immeuble, tour sur le banc.
 7. La ville générée revient, faite de ces bâtiments.

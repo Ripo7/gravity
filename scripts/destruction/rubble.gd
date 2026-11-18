@@ -72,6 +72,10 @@ const ON_TOP := 0.7
 ## of its power, SHOVE_MOST m/s at most (as at real gravity).
 const SHOVE := 300.0
 const SHOVE_MOST := 2.5
+## What weighs no more than LIGHT kg (a length of wood, a plank) is flung
+## instead: FLUNG m/s at most.
+const LIGHT := 40.0
+const FLUNG := 6.0
 ## Contacts looked at per body.
 const CONTACTS := 4
 ## How much a body rubs on what it touches; and how much one that is made
@@ -347,7 +351,8 @@ func shove(at: Vector3, radius: float, way: Vector3, power: int) -> void:
 		if alive[i] == 0 or _xf[i].origin.distance_to(at) > radius + reach[i]:
 			continue
 		thaw(i)
-		var speed := minf(SHOVE * power / mass[i], SHOVE_MOST) * _slow()
+		var most := SHOVE_MOST if mass[i] > LIGHT else FLUNG
+		var speed := minf(SHOVE * power / mass[i], most) * _slow()
 		var push := (flat + Vector3.UP * 0.3) * speed * mass[i]
 		PhysicsServer3D.body_apply_central_impulse(body[i], push)
 
@@ -521,4 +526,4 @@ func _land(
 		return
 	var down := _from_high[i] - _xf[i].origin.y
 	if down >= BREAKS_FROM or stopped >= sqrt(2.0 * GRAVITY * fall * BREAKS_FROM):
-		structure.break_up(i)
+		structure.lands(i)

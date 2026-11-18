@@ -1,6 +1,6 @@
 extends TestCase
 ## The bench itself: a bare ground, one brute, what stands on it to be
-## broken (concrete on one side, metal on the other), no sun shadow, a
+## broken (concrete on one side, metal on the other, wood ahead), no sun shadow, a
 ## round shadow that stays on the ground, and the button that puts it all
 ## back.
 
@@ -26,8 +26,15 @@ func test_the_bench_is_a_bare_ground_with_one_brute_and_things_to_break() -> voi
 	# What stands, in concrete and again in metal: a column, a wall (in
 	# one piece in concrete, three sheets in metal), a slab on four
 	# columns.
-	check_eq(s.pieces, 16, "sixteen pieces")
-	check_eq(s.standing_count, 16, "all standing")
+	# And in wood: a post, a palisade of ten planks, a floor of eight
+	# boards on two beams on four posts.
+	check_eq(s.pieces, 41, "forty-one pieces")
+	check_eq(s.standing_count, 41, "all standing")
+	check_eq(main.planks.size(), 10, "ten planks to the palisade")
+	for beam in main.beams:
+		check_eq(Array(s.rests_on[beam]).size(), 2, "beam %d rests on two posts" % beam)
+	for board in main.boards:
+		check_eq(Array(s.rests_on[board]), Array(main.beams), "board %d rests on the two beams" % board)
 	check(main.wall >= 0, "a wall")
 	check_eq(main.sheets.size(), 3, "three sheets to the fence")
 	check_eq(Array(s.rests_on[main.slab]).size(), 4, "the slab rests on its four columns")
@@ -38,15 +45,30 @@ func test_the_bench_is_a_bare_ground_with_one_brute_and_things_to_break() -> voi
 		check(pier in s.rests_on[main.deck], "post %d carries the deck" % pier)
 	var concrete: Array[int] = [main.column, main.slab, main.wall]
 	concrete.append_array(Array(main.posts))
+	var wood: Array[int] = [main.wood_post]
+	for group: PackedInt32Array in [main.planks, main.stilts, main.beams, main.boards]:
+		wood.append_array(Array(group))
+	var carried: Array[int] = [main.slab, main.deck]
+	carried.append_array(Array(main.beams))
+	carried.append_array(Array(main.boards))
 	for q in s.pieces:
-		var made_of := Matter.CONCRETE if q in concrete else Matter.METAL
+		var made_of := Matter.CONCRETE if q in concrete else (Matter.WOOD if q in wood else Matter.METAL)
 		check_eq(s.matter[q], made_of, "piece %d is made of what it should be" % q)
-		check(
-			q == main.slab or q == main.deck or s.rests_on[q].is_empty(), "piece %d stands on the ground" % q
-		)
-		# Concrete to the brute's right as it starts, metal to its left.
-		var side := s.place[q].origin.x * (1.0 if made_of == Matter.CONCRETE else -1.0)
-		check(side > 0.5, "piece %d is on its matter's side" % q)
+		check(q in carried or s.rests_on[q].is_empty(), "piece %d stands on the ground" % q)
+		# Concrete to the brute's right as it starts, metal to its left,
+		# wood between them and farther off.
+		var at := s.place[q].origin
+		if made_of == Matter.WOOD:
+			check(absf(at.x) < 2.0 and at.z < -9.5, "piece %d is ahead, past the others" % q)
+			check(
+				s.blocks[q] >= 5 and s.blocks[q] <= 10,
+				"piece %d is cut into a few lengths (%d)" % [q, s.blocks[q]]
+			)
+		else:
+			check(
+				at.x * (1.0 if made_of == Matter.CONCRETE else -1.0) > 0.5,
+				"piece %d is on its matter's side" % q
+			)
 		if made_of == Matter.CONCRETE:
 			check(
 				s.blocks[q] >= 2 and s.blocks[q] <= Matter.MOST_BLOCKS,
@@ -56,7 +78,7 @@ func test_the_bench_is_a_bare_ground_with_one_brute_and_things_to_break() -> voi
 	# All of it in front of the brute as it starts, a few steps away.
 	for q in s.pieces:
 		var to := s.place[q].origin - p.global_position
-		check(to.z < -4.0 and to.z > -11.0 and absf(to.x) < 11.0, "piece %d is in front of the brute" % q)
+		check(to.z < -4.0 and to.z > -21.0 and absf(to.x) < 11.0, "piece %d is in front of the brute" % q)
 	# Far from the middle the ground is still there.
 	p.global_position = Vector3(150, 0.05, -150)
 	await frames(30)
@@ -106,13 +128,14 @@ func test_rebuilding_puts_the_bench_back() -> void:
 	s.hit(main.posts[1], s.strength[main.posts[1]], Vector3.FORWARD)
 	await frames(30)
 	s.hit(main.metal_post, s.strength[main.metal_post], Vector3.FORWARD)
-	check(s.standing_count < 16 and s.rubble.live > 0, "things are down")
+	s.hit(main.planks[0], s.strength[main.planks[0]], Vector3.FORWARD)
+	check(s.standing_count < 41 - 3 and s.rubble.live > 0, "things are down")
 	main.fall = 0.6
 	main.player.global_position = Vector3(3, 0.05, 3)
 	main.rebuild()
 	await frames(5)
 	check(main.structure != s and not is_instance_valid(s), "what stood is gone")
-	check_eq(main.structure.standing_count, 16, "and stands again")
+	check_eq(main.structure.standing_count, 41, "and stands again")
 	check_eq(main.structure.harm[main.metal_post], 0.0, "what was bent is straight")
 	check_eq(main.structure.rubble.live, 0, "nothing lies loose")
 	check_near(main.structure.rubble.fall, 0.6, 0.001, "things still fall as fast as they were set to")
