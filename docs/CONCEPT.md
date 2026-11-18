@@ -69,6 +69,18 @@ toute sa largeur. Corrigé :
 - Le trou est centré sur le poing : environ 0,9 m de large, à la hauteur
   où le poing touche. (Retour du 18 novembre : le trou partait du sol,
   sous le poing.)
+- Le coup compte là où le poing ou le pied entre dans la pièce, au moment
+  où il y entre, et non là où le geste finit. (Second retour du
+  18 novembre : les impacts restaient plus bas que le poing. Le coup
+  comptait droit devant, à la hauteur où le poing finit son geste dans le
+  vide, 0,7 à 0,85 m ; collée au mur, la brute y entre le poing plus
+  haut, et ses bras passaient à travers un poteau sans le toucher.)
+- Chaque coup d'une combinaison a donc son endroit : le crochet en haut à
+  droite, le revers à gauche, le coup sauté tout en haut. Une combinaison
+  ne tape plus quatre fois au même point. (Combien de coups pour un trou :
+  à régler au banc.)
+- Si le poing n'a rien touché sur son trajet, le coup revient à ce que le
+  bras traverse, puis à ce qui se trouve entre le corps et le poing.
 - Au-dessus du trou d'un seul coup, ce qui reste tient. Au-dessus d'un
   trou plus large, ça tombe : des trous côte à côte ouvrent le mur
   jusqu'en haut.
