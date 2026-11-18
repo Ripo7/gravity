@@ -91,6 +91,9 @@ toute sa largeur. Corrigé :
   gauche, direct du droit, lancés debout, poing à hauteur d'épaule ; puis
   le crochet et le coup sauté d'aujourd'hui). Un bouton du banc passe de
   l'une à l'autre. Rien n'est remplacé tant que ce n'est pas choisi.
+- Retour du 18 novembre sur l'essai : les deux directs plaisent ; le
+  troisième coup est un uppercut (du gauche, pris dans une capture de
+  boxe). Le quatrième reste le coup sauté, pas encore décidé.
 - Au-dessus du trou d'un seul coup, ce qui reste tient. Au-dessus d'un
   trou plus large, ça tombe : des trous côte à côte ouvrent le mur
   jusqu'en haut.
