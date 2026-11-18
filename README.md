@@ -89,6 +89,12 @@ real gravity: 1 to begin with, as things really fall (what the owner
 settled on, on the phone); less, and they fall slowly, which was tried
 to make the brute a giant.
 
+On trial: the button under "Reconstruire" ("Coups : épée" / "Coups :
+boxe") gives the brute a boxer's combination of three blows instead: a
+straight left and a straight right thrown standing, then the leap that
+ends the other. It is there to
+compare; the blows the brute starts with are the ones it has had so far.
+
 The line at the top left shows frames per second, the cost of one physics
 step, how many pieces still stand, how many loose bodies there are (and
 how many are moving) and which build this is (it ends with the commit).

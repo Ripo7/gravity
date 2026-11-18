@@ -9,6 +9,8 @@ signal rebuild_pressed
 ## The slider was moved: the share of real gravity that pulls what has come
 ## off.
 signal fall_set(share: float)
+## The button that changes the brute's blows was pressed (a trial).
+signal blows_pressed
 
 ## The controls are shown for this long (s), then fade.
 const HINT_FOR := 8.0
@@ -19,6 +21,7 @@ var _stats: Label
 var _build: String = ProjectSettings.get_setting("application/config/version", "")
 var _hint: Label
 var _fall: HSlider
+var _blows: Button
 var _fall_says: Label
 var _since := 0.0
 var _shown := 0.0
@@ -29,6 +32,11 @@ static func rebuild_rect(view: Vector2) -> Rect2:
 	return Rect2(view.x - 196.0, 16.0, 180.0, 56.0)
 
 
+## Where the button that changes the brute's blows sits.
+static func blows_rect(view: Vector2) -> Rect2:
+	return Rect2(view.x - 196.0, 84.0, 180.0, 56.0)
+
+
 ## Where the slider that sets how fast things fall sits, with what it says.
 static func fall_rect(view: Vector2) -> Rect2:
 	return Rect2(view.x - 600.0, 8.0, 380.0, 84.0)
@@ -37,7 +45,16 @@ static func fall_rect(view: Vector2) -> Rect2:
 ## Is `at`, on a screen of `view` size, on something of the HUD that takes
 ## touches (so that the thumbs' controls leave it alone)?
 static func takes(at: Vector2, view: Vector2) -> bool:
-	return rebuild_rect(view).grow(10).has_point(at) or fall_rect(view).grow(10).has_point(at)
+	for r: Rect2 in [rebuild_rect(view), blows_rect(view), fall_rect(view)]:
+		if r.grow(10).has_point(at):
+			return true
+	return false
+
+
+## Says on its button which blows the brute throws: a boxer's, or the
+## ones it has had so far.
+func show_blows(boxing: bool) -> void:
+	_blows.text = "Coups : boxe" if boxing else "Coups : épée"
 
 
 func _ready() -> void:
@@ -59,6 +76,12 @@ func _ready() -> void:
 	button.add_theme_font_size_override("font_size", 22)
 	add_child(button)
 	button.pressed.connect(func() -> void: rebuild_pressed.emit())
+	_blows = Button.new()
+	_blows.focus_mode = Control.FOCUS_NONE
+	_blows.add_theme_font_size_override("font_size", 22)
+	add_child(_blows)
+	_blows.pressed.connect(func() -> void: blows_pressed.emit())
+	show_blows(false)
 	_fall_says = _label(18)
 	_fall = HSlider.new()
 	_fall.min_value = Rubble.FALL_LEAST
@@ -73,6 +96,9 @@ func _ready() -> void:
 		var r := rebuild_rect(size)
 		button.position = r.position
 		button.size = r.size
+		var b := blows_rect(size)
+		_blows.position = b.position
+		_blows.size = b.size
 		var f := fall_rect(size)
 		_fall_says.position = f.position
 		# (Tall, for a thumb.)

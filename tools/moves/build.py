@@ -88,6 +88,17 @@ MADE = [
     dict(name="slam", glb="UAL2_Standard_RM", parts=[("Sword_Heavy_Combo", 2.1, 3.8)],
          hit=15 / 30, limb="RightHand", next=1.1, power=3, steps=True),
 ]
+# Two punches made as punches, from the first library (`file`: its
+# document, kept beside the others): thrown standing, from a guard, the
+# fist at the height of the shoulder. They stay where they are.
+MADE += [
+    # A straight left.
+    dict(name="jab", file="AnimationLibrary_Godot_Standard.gltf", parts=[("Punch_Jab",)],
+         hit=6 / 30, limb="LeftHand", next=0.37, power=2, steps=False),
+    # A straight right.
+    dict(name="cross", file="AnimationLibrary_Godot_Standard.gltf", parts=[("Punch_Cross",)],
+         hit=8 / 30, limb="RightHand", next=0.43, power=2, steps=False),
+]
 LIMBS = {"LeftHand": "DEF-hand.L", "RightHand": "DEF-hand.R", "RightFoot": "DEF-foot.R", "LeftFoot": "DEF-foot.L"}
 
 
@@ -113,6 +124,8 @@ def made(lib, skel, spec):
         at = where(spec["hit"])
         meta.update(hit=spec["hit"], next=spec["next"], power=spec["power"],
                     reach=float(np.hypot(at[0], at[2])), height=float(at[1]), aside=float(at[0]))
+        if spec["limb"].startswith("Left"):
+            meta.update(left=1.0)  # (the others are thrown with the right)
     clip = {"name": spec["name"], "dt": 1.0 / MADE_FPS, "tracks": tracks, "meta": meta, "loop": False}
     return clip, walk
 
@@ -229,9 +242,10 @@ def main():
     clips = []
     libraries = {}
     for spec in MADE:
-        if spec["glb"] not in libraries:
-            libraries[spec["glb"]] = library.Library(os.path.join(games, spec["glb"] + ".glb"))
-        clip, walk = made(libraries[spec["glb"]], skel, spec)
+        source = spec.get("file") or spec["glb"] + ".glb"
+        if source not in libraries:
+            libraries[source] = library.Library(os.path.join(games, source))
+        clip, walk = made(libraries[source], skel, spec)
         clips.append(clip)
         length = (max(len(v) for _, _, v in clip["tracks"]) - 1) / MADE_FPS
         print("%-8s %s (plays %.2f s)  walks %+.2f m ahead, %+.2f aside  %s" % (

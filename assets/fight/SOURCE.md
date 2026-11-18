@@ -34,6 +34,23 @@ combination, and the last of the heavy one, cut out of the clip of the
 whole combination. Each `_Rec` is the recovery that follows a stroke when
 no other follows it; the game starts the next blow where the stroke ends.
 
+## Made for games: Universal Animation Library (the first)
+
+By **Quaternius** too, **CC0 1.0**: the pack the mannequin comes from
+(see `assets/mannequin/SOURCE.md`, which says where its two files are
+taken from and gives their hashes). Its free version has two punches
+made as punches, thrown standing from a guard, the fist at the height of
+the shoulder. They are on trial beside the blows above
+(`Character.BOXING`).
+
+| Clip | Made of | What it is in the game |
+| --- | --- | --- |
+| `jab` | `Punch_Jab` | a straight left |
+| `cross` | `Punch_Cross` | a straight right |
+
+They are read from the pack as distributed, not from the copy in
+`assets/mannequin`, which is cut down to the clips the game plays itself.
+
 ## Motion capture: CMU
 
 The CMU Graphics Lab Motion Capture Database, <http://mocap.cs.cmu.edu/>,
@@ -62,7 +79,8 @@ last 0.12 s before it lands 0.65 of their time, and the 0.06 s after it
 ```sh
 git clone --depth 1 --filter=blob:none --sparse https://github.com/una-dinosauria/cmu-mocap /tmp/cmu
 git -C /tmp/cmu sparse-checkout set --no-cone /data/135/135_04.bvh
-# /tmp/ual2: UAL2_Standard.glb and UAL2_Standard_RM.glb, from the pack's "Unreal-Godot" folder
+# /tmp/ual2: UAL2_Standard.glb and UAL2_Standard_RM.glb, from the pack's "Unreal-Godot" folder,
+# and beside them the first pack as distributed: AnimationLibrary_Godot_Standard.gltf and .bin
 python3 tools/moves/build.py /tmp/cmu/data /tmp/ual2        # needs numpy
 ```
 

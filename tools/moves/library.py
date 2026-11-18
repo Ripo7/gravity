@@ -37,6 +37,8 @@ def bone_of(joint):
     """The mannequin's bone for a joint of the library (None: it has none)."""
     if joint in PLAIN:
         return PLAIN[joint]
+    if joint.startswith("DEF-"):
+        return joint  # the first library: the mannequin's own names
     side = {"_l": ".L", "_r": ".R"}.get(joint[-2:])
     if side is None:
         return None
@@ -51,6 +53,14 @@ def bone_of(joint):
 
 class Library:
     def __init__(self, path):
+        if path.endswith(".gltf"):
+            # The first library: the document, and its data beside it.
+            import os
+            with open(path) as f:
+                self.doc = json.load(f)
+            with open(os.path.join(os.path.dirname(path), self.doc["buffers"][0]["uri"]), "rb") as f:
+                self.bin = f.read()
+            return
         with open(path, "rb") as f:
             magic, _, _ = struct.unpack("<4sII", f.read(12))
             assert magic == b"glTF", path

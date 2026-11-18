@@ -353,6 +353,18 @@ it jumps, lands, strikes or kicks.
   clips say their blow lands on one of their own frames. `struck` is sent
   before the pose of that step is set; `reached`, which says where the
   limb is, once it is.
+- **On trial: a boxer's blows.** The owner doubts the blows (three of
+  the four are sword strokes thrown without the sword, and all four
+  dive). `Character.BOXING` is a second combination: a straight left
+  and a straight right from the first animation pack, made as punches
+  and thrown standing (the fist 1.4 m up, the body going nowhere), then
+  the leap of the other: three blows (an uppercut from a boxing capture
+  was tried as a third and left out). A button of the bench ("Coups :
+  épée" / "Coups : boxe", `Hud.blows_pressed`, `Main.set_boxing`) goes
+  from one to the other; `--blows=boxing` starts with it. A clip thrown
+  with the left hand says so (`left` in its metadata): the fist that is
+  followed, and the hand left out of what is held back, go by it.
+  Nothing is replaced until the owner has chosen.
 - **Where a blow lands.** Where its fist or foot first touches
   something, not where the move ends. From 0.1 s before a clip has its
   blow land, and until it does, `Character` says at each step where the

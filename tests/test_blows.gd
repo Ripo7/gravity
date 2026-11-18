@@ -329,6 +329,64 @@ func test_the_body_stays_out_of_what_stands_while_it_strikes() -> void:
 	await _unload()
 
 
+func test_on_trial_a_boxers_blows_are_thrown_standing_at_the_height_of_the_shoulder() -> void:
+	await _load()
+	var c := p.character
+	var s := main.structure
+	check_eq(c.combo, Character.COMBO, "the brute starts with the blows it has had so far")
+	main.hud.blows_pressed.emit()
+	check_eq(c.combo, Character.BOXING, "the button gives it a boxer's")
+	check_eq(main.hud._blows.text, "Coups : boxe", "and says so")
+	# A step from the wall: a straight left, a straight right, then the
+	# leap. [move, where from the brute, on which piece, how
+	# far the body has gone, how far the fist that struck is from there]
+	_stand(Main.WALL_AT + Vector3(0, 0.05, 0.9), Main.WALL_AT + Vector3.UP)
+	await frames(10)
+	var from := p.global_position
+	var landed: Array[Array] = []
+	var inside := 0
+	p.blow.connect(
+		func(at: Vector3, _way: Vector3, power: int, on: RID) -> void:
+			var fist := _bone("f_middle.01.L" if c.state == "jab" else "f_middle.01.R")
+			landed.append(
+				[
+					c.state,
+					at - p.global_position,
+					s.standing(on),
+					p.global_position.distance_to(from),
+					power,
+					fist.distance_to(c.limb()[2])
+				]
+			)
+	)
+	for k in 400:
+		if k % 6 == 0 and landed.size() < 3:
+			p.punch()
+		await frames(1)
+		if c.striking():
+			inside += _in_what_stands(c)
+		if landed.size() == 3:
+			break
+	var named: Array[String] = []
+	for blow in landed:
+		named.append(blow[0])
+	check_eq(named, Character.BOXING, "the three land, in order")
+	for k in mini(landed.size(), 2):
+		var blow := landed[k]
+		var at: Vector3 = blow[1]
+		check_eq(blow[2], main.wall, "%s lands on the wall" % blow[0])
+		check(at.y > 1.25 and at.y < 1.6, "%s: at the height of the shoulder (%.2f m up)" % [blow[0], at.y])
+		check(absf(at.x) < 0.3, "%s: straight ahead (%.2f m aside)" % [blow[0], at.x])
+		check(blow[3] < 0.1, "%s: thrown standing (the body has gone %.2f m)" % [blow[0], blow[3]])
+		check_eq(blow[4], 2, "%s: a blow of 2" % blow[0])
+		check(blow[5] < 0.01, "%s: it is the fist of that hand that is followed" % blow[0])
+	check_eq(inside, 0, "nothing of the body but the arm that strikes goes into the wall")
+	main.hud.blows_pressed.emit()
+	check_eq(c.combo, Character.COMBO, "the button gives it its blows back")
+	check_eq(main.hud._blows.text, "Coups : épée", "and says so")
+	await _unload()
+
+
 ## How many parts of the body of `c`, but for the limb that strikes, are in
 ## something that stands (a ball a little smaller than each).
 func _in_what_stands(c: Character) -> int:

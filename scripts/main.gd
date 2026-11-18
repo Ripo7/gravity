@@ -93,6 +93,9 @@ func _ready() -> void:
 	ui.add_child(hud)
 	hud.rebuild_pressed.connect(rebuild)
 	hud.fall_set.connect(set_fall)
+	hud.blows_pressed.connect(func() -> void: set_boxing(player.character.combo != Character.BOXING))
+	if Launch.options.get("blows", "") == "boxing":
+		set_boxing(true)
 	if TouchControls.should_show():
 		var touch := TouchControls.new()
 		touch.player = player
@@ -116,6 +119,13 @@ func set_fall(share: float) -> void:
 
 
 ## Puts the bench back as it was, and the brute where it started.
+## On trial: the brute throws a boxer's blows (Character.BOXING), or the
+## ones it has had so far.
+func set_boxing(on: bool) -> void:
+	player.character.combo = Character.BOXING if on else Character.COMBO
+	hud.show_blows(on)
+
+
 func rebuild() -> void:
 	structure.free()
 	_lay_bench()
