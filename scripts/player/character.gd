@@ -65,6 +65,12 @@ const LAND_TIME := 0.5  ## s before the legs go back to standing or running
 ## fist is there, when the next move may start, how far it reaches and how
 ## hard it is (see tools/moves/build.py).
 const COMBO: Array[String] = ["hook", "upswing", "backhand", "slam"]
+## On trial beside it (docs/CONCEPT.md): a boxer's. A straight left and a
+## straight right thrown standing, the fists at the height of the
+## shoulder, then the hook and the leap of the other.
+const BOXING: Array[String] = ["jab", "cross", "hook", "slam"]
+## Every blow of the fists there is a clip for.
+const BLOWS: Array[String] = ["hook", "upswing", "backhand", "slam", "jab", "cross"]
 ## Steps of a sixtieth add up to a hair under the frame a clip says its
 ## blow lands on: this much (s) short still counts as there.
 const LATE := 0.002
@@ -74,6 +80,7 @@ const SWING := 0.1
 ## The limbs that strike, from the body out: where the limb leaves the
 ## body, its middle joint, and what lands (the knuckles, the toes).
 const ARM: Array[String] = ["DEF-upper_arm.R", "DEF-forearm.R", "DEF-f_middle.01.R"]
+const ARM_LEFT: Array[String] = ["DEF-upper_arm.L", "DEF-forearm.L", "DEF-f_middle.01.L"]
 const LEG: Array[String] = ["DEF-thigh.R", "DEF-shin.R", "DEF-toe.R"]
 ## The rest of the body, which goes into nothing that stands: its parts
 ## (bones), and how far round its bone each reaches (m). Not the forearm
@@ -84,6 +91,7 @@ const BULK := {
 	"DEF-upper_arm.L": 0.1,
 	"DEF-upper_arm.R": 0.1,
 	"DEF-hand.L": 0.06,
+	"DEF-hand.R": 0.06,
 	"DEF-shin.L": 0.08,
 	"DEF-toe.L": 0.05,
 	"DEF-shin.R": 0.08,
@@ -93,9 +101,13 @@ const BULK := {
 const ROOT := "Rig/Skeleton3D:root"
 ## What the body can be doing (see `state`), in the order of the tree's
 ## inputs.
-const STATES: Array[String] = ["ground", "jump", "air", "land", "hook", "upswing", "backhand", "slam", "kick"]
+const STATES: Array[String] = [
+	"ground", "jump", "air", "land", "hook", "upswing", "backhand", "slam", "kick", "jab", "cross"
+]
 ## One of STATES: what the body is doing.
 var state := "ground"
+## The combination a punch throws: COMBO, or BOXING.
+var combo: Array[String] = COMBO
 var tree: AnimationTree
 var skeleton: Skeleton3D
 
@@ -111,6 +123,7 @@ var _move_from := 0  # the physics step that took it up
 var _move_out := false  # its clip has had its fist or foot there
 var _spent := false  # its blow has landed, or has had its time
 var _arm := PackedInt32Array()  # the bones of ARM
+var _arm_left := PackedInt32Array()
 var _leg := PackedInt32Array()
 var _bulk := PackedInt32Array()  # the bones of BULK
 var _then := ""  # the move asked for next: "punch" or "kick"
@@ -142,6 +155,8 @@ func _ready() -> void:
 		_arm.append(skeleton.find_bone(bone))
 	for bone in LEG:
 		_leg.append(skeleton.find_bone(bone))
+	for bone in ARM_LEFT:
+		_arm_left.append(skeleton.find_bone(bone))
 	for bone: String in BULK:
 		_bulk.append(skeleton.find_bone(bone))
 	tree.set("parameters/land_pace/scale", LAND_PACE)
@@ -193,7 +208,7 @@ func land(down: float, along: float) -> void:
 
 ## Is a punch or a kick under way?
 func striking() -> bool:
-	return state == "kick" or state in COMBO
+	return state == "kick" or state in BLOWS
 
 
 ## How far from the body (m) the fist or foot of the strike under way is
@@ -216,7 +231,8 @@ func height() -> float:
 ## joint (the elbow, the knee) and what lands (the knuckles, the toes).
 func limb() -> PackedVector3Array:
 	var at := PackedVector3Array()
-	for bone in _leg if state == "kick" else _arm:
+	var bones := _leg if state == "kick" else (_arm_left if _with_left() else _arm)
+	for bone in bones:
 		at.append(skeleton.global_transform * skeleton.get_bone_global_pose(bone).origin)
 	return at
 
@@ -228,11 +244,20 @@ func bulk() -> PackedVector4Array:
 	var parts := PackedVector4Array()
 	var k := 0
 	for bone: String in BULK:
-		if state != "kick" or not bone in LEG:
+		# (Not the hand that strikes, nor the leg that kicks.)
+		var strikes := (
+			bone in LEG if state == "kick" else bone == ("DEF-hand.L" if _with_left() else "DEF-hand.R")
+		)
+		if not strikes:
 			var at := skeleton.global_transform * skeleton.get_bone_global_pose(_bulk[k]).origin
 			parts.append(Vector4(at.x, at.y, at.z, BULK[bone]))
 		k += 1
 	return parts
+
+
+## Is the strike under way thrown with the left hand?
+func _with_left() -> bool:
+	return striking() and _about("left") > 0.5
 
 
 ## The blow of the strike under way has landed: it lands no more.
@@ -246,11 +271,11 @@ func root_motion() -> Vector3:
 	return skeleton.global_basis * tree.get_root_motion_position()
 
 
-## Throws a blow: the first of COMBO from standing. Asked for while one is
-## under way, the next of COMBO follows it. Returns false if it cannot (in
-## the air).
+## Throws a blow: the first of the combination from standing. Asked for
+## while one is under way, the next of it follows. Returns false if it
+## cannot (in the air).
 func punch() -> bool:
-	return _ask("punch", COMBO[0])
+	return _ask("punch", combo[0])
 
 
 ## A kick: straight ahead with the right leg, stepping in.
@@ -312,9 +337,9 @@ func _move(delta: float) -> void:
 	var length := _clips.get_animation("fight/" + state).length
 	if _then != "" and _move_for >= _about("next"):
 		if _then == "punch":
-			var k := COMBO.find(state)
+			var k := combo.find(state)
 			# After a blow, the next one; after a kick, the first.
-			_start(COMBO[(k + 1) % COMBO.size()] if k >= 0 else COMBO[0], 0.12)
+			_start(combo[(k + 1) % combo.size()] if k >= 0 else combo[0], 0.12)
 		else:
 			_start(_then, 0.12)
 	elif _move_for >= length:
@@ -371,7 +396,7 @@ func _build() -> AnimationNodeBlendTree:
 	t.add_node("land_pace", AnimationNodeTimeScale.new())
 	t.connect_node("land_pace", 0, "land")
 	# The blows.
-	for named: String in COMBO + (["kick"] as Array[String]):
+	for named: String in BLOWS + (["kick"] as Array[String]):
 		t.add_node(named, _clip("fight/" + named))
 	var body := AnimationNodeTransition.new()
 	body.input_count = STATES.size()
@@ -382,7 +407,17 @@ func _build() -> AnimationNodeBlendTree:
 	body.set_input_as_auto_advance(1, true)  # the start of a jump runs into the air
 	t.add_node("state", body)
 	var inputs: Array[String] = [
-		"ground", "jump_start", "air", "land_pace", "hook", "upswing", "backhand", "slam", "kick"
+		"ground",
+		"jump_start",
+		"air",
+		"land_pace",
+		"hook",
+		"upswing",
+		"backhand",
+		"slam",
+		"kick",
+		"jab",
+		"cross"
 	]
 	for k in inputs.size():
 		t.connect_node("state", k, inputs[k])
