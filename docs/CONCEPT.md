@@ -87,6 +87,10 @@ toute sa largeur. Corrigé :
   endroit cède au quatrième coup qu'il reçoit).
 - Les gestes de frappe eux-mêmes ne sont peut-être pas les bons (retour
   du 18 novembre) : à revoir, pas encore décidé.
+- Essai en cours, pour en juger : une combinaison de boxe (direct du
+  gauche, direct du droit, lancés debout, poing à hauteur d'épaule ; puis
+  le crochet et le coup sauté d'aujourd'hui). Un bouton du banc passe de
+  l'une à l'autre. Rien n'est remplacé tant que ce n'est pas choisi.
 - Au-dessus du trou d'un seul coup, ce qui reste tient. Au-dessus d'un
   trou plus large, ça tombe : des trous côte à côte ouvrent le mur
   jusqu'en haut.
