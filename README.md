@@ -5,12 +5,13 @@ is being rebuilt from its concept, one step at a time, in greybox:
 [docs/CONCEPT.md](docs/CONCEPT.md) (in French) says what it is to be, and
 comes before the code.
 
-**Where it is now: step 4 of 7, wood.** A bare ground, one brute that
+**Where it is now: step 5 of 7, glass.** A bare ground, one brute that
 walks, runs, sprints, jumps, throws a three-blow combination and kicks, and
 on the bench in front of it the same three things three times: a column,
 a wall, a slab on four columns. In concrete on its right, in metal on its
 left, in wood straight ahead and farther off (a post, a palisade of
-planks, a floor of boards on beams).
+planks, a floor of boards on beams). Behind it as it starts, three panes of
+glass.
 
 A blow lands where its fist or foot first touches something, and harms
 that place, not the whole piece: the blows of a combination land apart
@@ -31,6 +32,9 @@ blow lands on goes as small wood, what was above is thrown far in one
 long piece, and the foot stands. Each plank is a piece: a blow snaps the
 one it lands on. Long pieces stay long on the ground; struck again, they
 come apart into small wood, which the brute walks through.
+Glass bursts, the whole pane, at the first blow wherever it lands: into
+glitter that falls straight down, lies a moment and is gone. Glitter is
+not pieces: nothing runs into it.
 What a piece carried comes down when the piece is gone. Walking breaks
 nothing.
 
