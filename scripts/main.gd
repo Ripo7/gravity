@@ -3,7 +3,8 @@ extends Node3D
 ## The test bench, in greybox: a bare ground, one giant brute, yours, seen
 ## in third person, and a few pieces of each matter for it to break. What
 ## breaks is worked out here one matter at a time (docs/CONCEPT.md):
-## concrete on its right as it starts, metal on its left.
+## concrete on its right as it starts, metal on its left, wood straight
+## ahead, farther off.
 
 ## Where the brute starts.
 const START := Vector3(0, 0.05, 0)
@@ -30,6 +31,20 @@ const FENCE_AT := Vector3(-4.5, 0, -8)
 const PIER := Vector3(0.2, 2.2, 0.2)
 const DECK := Vector3(3.6, 0.12, 3.6)
 const DECK_AT := Vector3(-9, 0, -7.5)
+## And in wood, straight ahead: a post on its own; a palisade of PLANKS
+## planks that stand side by side, each a piece; a floor of BOARDS boards
+## laid across two beams on four posts.
+const WOOD_POST := Vector3(0.2, 2.6, 0.2)
+const WOOD_POST_AT := Vector3(0, 0, -10)
+const PLANK := Vector3(0.3, 2.4, 0.06)
+const PLANKS := 10
+const PALISADE_AT := Vector3(0, 0, -13)
+const STILT := Vector3(0.2, 2.0, 0.2)
+const BEAM := Vector3(0.2, 0.2, 3.2)
+const BOARD := Vector3(3.2, 0.06, 0.4)
+const BOARDS := 8
+const FLOOR_AT := Vector3(0, 0, -19)
+const FLOOR_SPAN := 2.8
 
 var player: Player
 var structure: Structure
@@ -51,6 +66,13 @@ var metal_post := -1
 var sheets := PackedInt32Array()
 var piers := PackedInt32Array()
 var deck := -1
+## And in wood: the post that stands alone, the planks of the palisade,
+## the four posts under the floor, its two beams, its boards.
+var wood_post := -1
+var planks := PackedInt32Array()
+var stilts := PackedInt32Array()
+var beams := PackedInt32Array()
+var boards := PackedInt32Array()
 
 
 func _ready() -> void:
@@ -106,7 +128,9 @@ func _on_blow(at: Vector3, way: Vector3, power: int, on: RID) -> void:
 
 
 ## What stands on the bench: in concrete, a column, a wall, a slab on four
-## columns; in metal, a post, a fence of sheets, a deck on four posts.
+## columns; in metal, a post, a fence of sheets, a deck on four posts; in
+## wood, a post, a palisade of planks, a floor of boards on two beams on
+## four posts.
 func _lay_bench() -> void:
 	structure = Structure.new()
 	add_child(structure)
@@ -130,6 +154,24 @@ func _lay_bench() -> void:
 		piers.append(_stand(Matter.METAL, PIER, DECK_AT + out))
 	slab = _stand(Matter.CONCRETE, SLAB, SLAB_AT + Vector3.UP * POST.y)
 	deck = _stand(Matter.METAL, DECK, DECK_AT + Vector3.UP * PIER.y)
+	wood_post = _stand(Matter.WOOD, WOOD_POST, WOOD_POST_AT)
+	planks.clear()
+	for k in PLANKS:
+		var along := Vector3((k - (PLANKS - 1) * 0.5) * PLANK.x, 0, 0)
+		planks.append(_stand(Matter.WOOD, PLANK, PALISADE_AT + along))
+	stilts.clear()
+	beams.clear()
+	boards.clear()
+	for corner in corners:
+		var out := Vector3(corner.x, 0, corner.y) * FLOOR_SPAN * 0.5
+		stilts.append(_stand(Matter.WOOD, STILT, FLOOR_AT + out))
+	# A beam on each side, from front to back; the boards across them.
+	for side: float in [-1.0, 1.0]:
+		var out := Vector3(side * FLOOR_SPAN * 0.5, STILT.y, 0)
+		beams.append(_stand(Matter.WOOD, BEAM, FLOOR_AT + out))
+	for k in BOARDS:
+		var along := Vector3(0, STILT.y + BEAM.y, (k - (BOARDS - 1) * 0.5) * BOARD.z)
+		boards.append(_stand(Matter.WOOD, BOARD, FLOOR_AT + along))
 	structure.build()
 
 

@@ -3,17 +3,19 @@
 What was measured, and how to measure it again.
 
 ```sh
-# The brute takes both sides of the bench apart, without a screen: the
-# cost of the physics. M n: it keeps striking for n seconds (its blows
-# land apart, so a piece takes more than one combination). In concrete
-# the column, the wall, two columns under the slab; in metal the post, a
-# sheet, two posts under the deck.
+# The brute takes the bench apart, without a screen: the cost of the
+# physics. M n: it keeps striking for n seconds (its blows land apart, so
+# a piece takes more than one combination). In concrete the column, the
+# wall, two columns under the slab; in metal the post, a sheet, two posts
+# under the deck; in wood the post, the palisade, a post under the floor.
 M() { python3 -c "print(';'.join(['h;w0.25']*round($1/0.25)))"; }
 godot --headless --fixed-fps 60 --path . -- --mode=play --prof --steps="\
 s1.5,0.05,-4.55,1.5,1,-6;$(M 4.5);w4;s-1.5,0.05,-4.6,-1.5,1,-6;$(M 6);w4;\
 s4.5,0.05,-6.3,4.5,1,-8;$(M 9);w4;s-4.5,0.05,-6.4,-4.5,1,-8;$(M 7);w4;\
 s7.4,0.05,-4.4,7.4,1,-5.9;$(M 4.5);w3.5;s10.6,0.05,-4.4,10.6,1,-5.9;$(M 4.5);w8;\
-s-7.4,0.05,-4.5,-7.4,1,-5.9;$(M 6);w3;s-10.6,0.05,-4.5,-10.6,1,-5.9;$(M 6);w10"
+s-7.4,0.05,-4.5,-7.4,1,-5.9;$(M 6);w3;s-10.6,0.05,-4.5,-10.6,1,-5.9;$(M 6);w10;\
+s0,0.05,-8.8,0,1,-10;$(M 1);w2;s0,0.05,-11.6,0,1,-13;$(M 4.5);w3;\
+s-1.4,0.05,-16.3,-1.4,1,-17.6;$(M 1);w6"
 ```
 
 `--prof` prints the cost of the physics once a second and, at the end, how
@@ -43,6 +45,33 @@ Since then, on that phone, with concrete and metal on the bench: 48 to
 53 frames a second while it is broken (see below). The measure above is
 still the way to compare two builds.
 
+### Wood (step 4)
+
+Headless on a 2-core cloud machine, one physics step per frame
+(`--fixed-fps 60`), things falling at real gravity.
+
+The bench is 41 pieces now (16 before): 25 in wood, cut into 166 lengths
+(594 parts in all, 428 before). What the 25 more standing cost when
+none of them is struck: the run this page had at the top before (5507
+steps, concrete and metal only), three times each, one build after the
+other: 0.15 to 0.16 ms a physics step at the median before, 0.16 ms
+with the wood standing; 99% of the steps under 0.38 to 0.48 ms before,
+0.39 to 0.47 ms now; the slowest 2.5 to 2.8 ms before, 2.9 to 5.8 ms
+now. Not told apart.
+
+The run at the top of this page (the same, then the wood: 6586 steps),
+three times: 0.16 ms at the median, 99% of the steps under 0.43 to
+0.57 ms, the slowest 2.4 to 5.7 ms; 104 to 106 loose bodies at the end,
+24 to 26 at most moving at once.
+
+The wood alone (its three stops: 1109 steps), three times: 0.15 to
+0.17 ms at the median, 99% under 0.55 to 0.61 ms, the slowest 2.1 to
+3.0 ms; 36 loose bodies at the end (lengths, long pieces, a beam, eight
+boards), 25 to 29 at most moving at once.
+
+Not measured on a phone, where what counts is how many bodies move at
+once and how many parts are drawn: wood adds to both.
+
 ### Blows that land where the fist goes in
 
 Headless on a 2-core cloud machine, one physics step per frame
@@ -57,7 +86,7 @@ step (a ball moved, two lines along the arm, for the 6 steps a fist is
 thrown): 0.10 to 0.11 ms, 0.31 to 0.37 ms, 2.3 to 3.7 ms. Not told
 apart.
 
-The run at the top of this page (5507 steps), three times: a physics
+The run this page had at the top then (5507 steps), three times: a physics
 step cost 0.14 to 0.15 ms at the median, 99% of the steps were under
 0.41 to 0.52 ms, the slowest took 3.2 to 3.7 ms; 70 loose bodies at the
 end, 22 to 24 at most moving at once. This is not the run of the table
@@ -73,7 +102,7 @@ Same machine, same two runs, one build after the other. Blows in the
 open (1310 steps), three times each: 0.07 to 0.15 ms at the median
 before, 0.11 to 0.12 ms with the body held back; 99% of the steps under
 0.42 to 0.48 ms before, 0.32 to 0.38 ms now; the slowest 2.3 to 3.9 ms
-before, 2.3 to 3.2 ms now. The run at the top of this page, five times
+before, 2.3 to 3.2 ms now. The run of 5507 steps, five times
 before and seven now: 0.14 to 0.16 ms at the median before, 0.15 to
 0.17 ms now; 99% under 0.38 to 0.57 ms before, 0.39 to 0.56 ms now; the
 slowest 2.5 to 6.2 ms before, 2.5 to 9.0 ms now (a step over 6 ms in one

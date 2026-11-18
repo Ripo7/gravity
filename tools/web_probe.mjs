@@ -1,7 +1,8 @@
 // Loads the web export in headless Chromium (software WebGL2), plays a short
 // scripted run on the bench (the brute runs, cuts the concrete column
 // where its fists land on it, bends the metal post, dents a sheet twice,
-// then brings down a post under the deck) and checks that the bench
+// then brings down a post under the deck and snaps the wooden post)
+// and checks that the bench
 // was built, that the brute went where it was sent, that the column was
 // cut, that the post and the sheet stand marked, that the deck came loose
 // in its triangles, and that nothing failed on the way (a
@@ -49,7 +50,9 @@ const mash = (seconds) => Array(Math.round(seconds / 0.25)).fill("h;w0.25").join
 const steps =
   `f1;w0.3;s1.5,0.05,-4.55,1.5,1,-6;${mash(4.5)};w4;s-1.5,0.05,-4.6,-1.5,1,-6;${blows};w2;` +
   `s-4.5,0.05,-6.55,-4.5,1,-8;w0.3;h;w0.4;h;w1.5;` +
-  `s-7.4,0.05,-4.5,-7.4,1,-5.9;${mash(7)};w3`;
+  `s-7.4,0.05,-4.5,-7.4,1,-5.9;${mash(7)};w3;` +
+  // One blow at the wooden post: it is cut there.
+  `s0,0.05,-8.8,0,1,-10;w0.3;h;w2.5`;
 // Software WebGL is slow: loading alone can take a while.
 await page.goto(`http://localhost:8061/index.html?mode=play&prof&steps=${encodeURIComponent(steps)}`, { timeout: 180000 });
 // And a few seconds of game time can take a minute.
@@ -75,15 +78,15 @@ const m = walked && walked.match(/\(([-\d.]+), ([-\d.]+), ([-\d.]+)\) \(on floor
 if (!done) failures.push("the run did not finish");
 else if (!m) failures.push("the brute did not report where it went");
 else if (Number(m[3]) > -2 || m[4] !== "true") failures.push(`the brute did not run forward on the ground: ${walked}`);
-// "PLAY_DONE at=... standing=14/16 marked=3 loose=16 ...": the column is
+// "PLAY_DONE at=... standing=39/41 marked=4 loose=18 ...": the column is
 // cut where the fists landed (its foot stands, the rest is down, in blocks);
 // the post and the sheet stand, marked; a post under the deck has lain
 // down in its two limbs, and the deck has come loose in its eight
 // triangles.
 const end = done && done.match(/standing=(\d+)\/(\d+) marked=(\d+) loose=(\d+)/);
 if (done && (!end || Number(end[1]) >= Number(end[2]) || Number(end[4]) < 2)) failures.push(`nothing came down: ${done}`);
-if (end && Number(end[3]) < 3) failures.push(`the column, the post and the sheet were not all marked: ${done}`);
-if (end && (Number(end[1]) > Number(end[2]) - 2 || Number(end[4]) < 13)) failures.push(`the column was not cut, or the deck did not come loose: ${done}`);
+if (end && Number(end[3]) < 4) failures.push(`the column, the two posts and the sheet were not all marked: ${done}`);
+if (end && (Number(end[1]) > Number(end[2]) - 2 || Number(end[4]) < 15)) failures.push(`the column or the wooden post was not cut, or the deck did not come loose: ${done}`);
 const errors = lines.filter((t) => /SCRIPT ERROR|shader.*(error|fail)|ERROR:/i.test(t));
 if (errors.length) failures.push(`${errors.length} errors, first: ${errors[0]}`);
 console.log(failures.length ? "WEB_FAIL " + failures.join("; ") : "WEB_OK");
