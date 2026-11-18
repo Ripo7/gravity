@@ -1,9 +1,7 @@
 extends Node
-## Reads launch options. Desktop: `godot -- --mode=showcase --quality=low`.
-## Web: `index.html?quality=low`.
-##   --quality=low|medium|high  forces a quality tier (phone settings on a
-##                              desktop, for measurements)
-##   --mode=...                 a scripted run, see Director
+## Reads launch options. Desktop: `godot -- --mode=play --steps="f2;h"`.
+## Web: `index.html?mode=play&steps=f2;h`.
+##   --mode=...   a scripted run, see Director
 
 var options := {}
 
@@ -14,8 +12,6 @@ func _enter_tree() -> void:
 		var query: Variant = JavaScriptBridge.eval("window.location.search", true)
 		if query is String:
 			options.merge(parse_query(query), true)
-	if options.has("quality"):
-		Quality.force(["low", "medium", "high"].find(options["quality"]))
 
 
 static func parse(args: PackedStringArray) -> Dictionary:

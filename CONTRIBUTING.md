@@ -1,5 +1,10 @@
 # How a change goes in
 
+What the game is to be is in [docs/CONCEPT.md](docs/CONCEPT.md), and it
+comes first: a change that goes against it corrects the concept before
+the code. The plan is there too: one pull request a step, each one
+playable on a phone.
+
 1. **One change, one branch, one pull request** to `main`. If it builds on
    a pull request that is not merged yet, say so at the top and give the
    order to merge in.
@@ -14,15 +19,18 @@
 
    A script with a warning that counts as an error (see `project.godot`)
    does not load: the tests fail.
-3. **CI** (`.github/workflows/ci.yml`) runs lint, the tests, the physics
-   perf gate, the web export and a probe that plays the export in headless
-   Chromium. Vercel builds a preview of every push; the version at the top
-   left of the game ends with the commit it was built from.
+3. **CI** (`.github/workflows/ci.yml`) runs lint, the tests, the web
+   export and a probe that plays the export in headless Chromium. Vercel
+   builds a preview of every push; the version at the top left of the
+   game ends with the commit it was built from.
 4. **Show it.** Anything you can see comes with a clip or a picture made
    by a scripted run, so it can be made again. Anything about speed or cost
    comes with numbers, and how they were measured
    (`docs/PERFORMANCE.md`).
-5. **Say what is not there.** A pull request lists its limits.
+5. **Say what is not there.** A pull request lists its limits, and what
+   was not measured.
+6. **Nothing stays that nothing uses.** What a change makes useless goes
+   with it: code, tests, assets, tools, lines of these documents.
 
 ## Code
 
@@ -40,6 +48,6 @@
   `CREDITS.md` and a `SOURCE.md` next to it.
 - A new clip of the mannequin's library: add its name to `KEEP` in
   `tools/strip_clips.py` and run it on the original file.
-- A new fighting move: add a line to `MADE` (a clip made for games) or to
-  `CLIPS` (motion capture) in `tools/moves/build.py` and run it
+- A new blow: add a line to `MADE` (a clip made for games) or to `CLIPS`
+  (motion capture) in `tools/moves/build.py` and run it
   (`assets/fight/SOURCE.md`).

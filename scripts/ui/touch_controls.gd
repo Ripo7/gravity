@@ -5,8 +5,7 @@ extends Control
 ##   how far it is pushed sets the pace, from a walk to a run, and held at
 ##   full tilt it breaks into a sprint.
 ##   Right half: drag to look.
-##   Bottom-right: the punch button. Above it: jump. Left of it: the kick,
-##   with the guard above (held) and the lock farther left.
+##   Bottom-right: the punch button. Above it: jump. Left of it: the kick.
 ## Multi-touch is tracked per finger so you can move, look and strike at once.
 
 @export var player: Player
@@ -26,8 +25,6 @@ var _look_finger := -1
 var _jump_finger := -1
 var _punch_finger := -1
 var _kick_finger := -1
-var _guard_finger := -1
-var _lock_finger := -1
 ## Last position per finger. Deltas are computed from these instead of the
 ## event's `relative`: on the web, Godot pairs multi-touch moves with the
 ## wrong previous finger, which made the camera jump and spin on iOS.
@@ -35,8 +32,13 @@ var _last := {}
 var _tilted := 0.0  # s the stick has been at full tilt
 
 
+## On phones and tablets, and on anything with a touchscreen. (Godot reads
+## web_ios from the user agent, and Safari on iPadOS sends a Mac one: an
+## iPad is caught by its touchscreen.)
 static func should_show() -> bool:
-	return DisplayServer.is_touchscreen_available() or Quality.is_handheld()
+	if DisplayServer.is_touchscreen_available():
+		return true
+	return OS.has_feature("mobile") or OS.has_feature("web_android") or OS.has_feature("web_ios")
 
 
 func _ready() -> void:
@@ -60,15 +62,7 @@ func kick_center() -> Vector2:
 	return Vector2(size.x - size.y * 0.47, size.y * 0.82)
 
 
-func guard_center() -> Vector2:
-	return Vector2(size.x - size.y * 0.44, size.y * 0.585)
-
-
-func lock_center() -> Vector2:
-	return Vector2(size.x - size.y * 0.7, size.y * 0.86)
-
-
-## The radius of the kick, guard and lock buttons.
+## The radius of the kick button.
 func small_radius() -> float:
 	return size.y * 0.08
 
@@ -82,7 +76,7 @@ func jump_radius() -> float:
 
 
 func _input(event: InputEvent) -> void:
-	if not is_visible_in_tree() or player == null or get_tree().paused or not player.input_enabled:
+	if not is_visible_in_tree() or player == null or get_tree().paused:
 		_release_all()
 		return
 	if event is InputEventScreenTouch:
@@ -94,22 +88,17 @@ func _input(event: InputEvent) -> void:
 
 
 func _release_all() -> void:
-	var fingers: Array[int] = [
-		_stick_finger, _look_finger, _jump_finger, _punch_finger, _kick_finger, _guard_finger, _lock_finger
-	]
+	var fingers: Array[int] = [_stick_finger, _look_finger, _jump_finger, _punch_finger, _kick_finger]
 	if fingers.max() < 0:
 		return
 	_punch_finger = -1
 	_kick_finger = -1
-	_guard_finger = -1
 	_stick_finger = -1
 	_look_finger = -1
-	_lock_finger = -1
 	_jump_finger = -1
 	_last.clear()
 	if player:
 		player.touch_move = Vector2.ZERO
-		player.touch_guard = false
 	queue_redraw()
 
 
@@ -129,10 +118,7 @@ func _physics_process(delta: float) -> void:
 func _on_touch(e: InputEventScreenTouch) -> void:
 	if e.pressed:
 		_last[e.index] = e.position
-		if e.position.distance_to(lock_center()) < small_radius() * 1.3 and _lock_finger < 0:
-			_lock_finger = e.index
-			player.lock()
-		elif e.position.distance_to(jump_center()) < jump_radius() * 1.4 and _jump_finger < 0:
+		if e.position.distance_to(jump_center()) < jump_radius() * 1.4 and _jump_finger < 0:
 			_jump_finger = e.index
 			player.touch_jump = true
 		elif e.position.distance_to(punch_center()) < punch_radius() * 1.3 and _punch_finger < 0:
@@ -141,9 +127,6 @@ func _on_touch(e: InputEventScreenTouch) -> void:
 		elif e.position.distance_to(kick_center()) < small_radius() * 1.3 and _kick_finger < 0:
 			_kick_finger = e.index
 			player.touch_kick = true
-		elif e.position.distance_to(guard_center()) < small_radius() * 1.3 and _guard_finger < 0:
-			_guard_finger = e.index
-			player.touch_guard = true
 		elif e.position.x < size.x * 0.5 and _stick_finger < 0:
 			_stick_finger = e.index
 			_stick_origin = e.position
@@ -152,17 +135,12 @@ func _on_touch(e: InputEventScreenTouch) -> void:
 			_look_finger = e.index
 	else:
 		_last.erase(e.index)
-		if e.index == _lock_finger:
-			_lock_finger = -1
-		elif e.index == _jump_finger:
+		if e.index == _jump_finger:
 			_jump_finger = -1
 		elif e.index == _punch_finger:
 			_punch_finger = -1
 		elif e.index == _kick_finger:
 			_kick_finger = -1
-		elif e.index == _guard_finger:
-			_guard_finger = -1
-			player.touch_guard = false
 		elif e.index == _stick_finger:
 			_stick_finger = -1
 			player.touch_move = Vector2.ZERO
@@ -224,32 +202,6 @@ func _draw() -> void:
 		]
 	)
 	draw_polyline(boot, Color(1, 1, 1, 0.9), r * 0.2, true)
-	# The guard: a shield, in white, filled while it is held.
-	c = guard_center()
-	draw_circle(
-		c, r * (1.08 if _guard_finger >= 0 else 1.0), Color(1, 1, 1, 0.6 if _guard_finger >= 0 else 0.35)
-	)
-	draw_arc(c, r * 1.12, 0, TAU, 48, Color(1, 1, 1, 0.6), 3.0, true)
-	var shield := PackedVector2Array(
-		[
-			c + Vector2(-r * 0.42, -r * 0.45),
-			c + Vector2(r * 0.42, -r * 0.45),
-			c + Vector2(r * 0.42, r * 0.05),
-			c + Vector2(0, r * 0.55),
-			c + Vector2(-r * 0.42, r * 0.05),
-			c + Vector2(-r * 0.42, -r * 0.45),
-		]
-	)
-	draw_polyline(shield, Color(1, 1, 1, 0.9), r * 0.16, true)
-	# The lock: a sight, filled while the other brute is locked on.
-	c = lock_center()
-	var on := player != null and player.locked != null
-	draw_circle(c, r, Color(1.0, 0.75, 0.2, 0.6) if on else Color(1, 1, 1, 0.2))
-	draw_arc(c, r * 1.12, 0, TAU, 48, Color(1, 1, 1, 0.6), 3.0, true)
-	draw_arc(c, r * 0.5, 0, TAU, 32, Color(1, 1, 1, 0.9), r * 0.12, true)
-	for k in 4:
-		var out := Vector2.RIGHT.rotated(k * PI * 0.5)
-		draw_line(c + out * r * 0.35, c + out * r * 0.8, Color(1, 1, 1, 0.9), r * 0.12, true)
 	draw_circle(jump_center(), jump_radius(), ink_strong if _jump_finger >= 0 else ink)
 	var a := jump_center() + Vector2(0, -jump_radius() * 0.35)
 	var w := jump_radius() * 0.4

@@ -1,6 +1,6 @@
 extends TestCase
 ## The character seen from behind: the camera, where it turns, what its legs
-## and its arm show.
+## show, what it steps onto.
 
 var main: Main
 var p: Player
@@ -8,23 +8,25 @@ var p: Player
 
 func test_the_camera_sits_behind_the_left_shoulder_and_comes_in_at_walls() -> void:
 	await _load()
-	# In the open, looking at the house.
+	# In the open.
 	var eye := p.camera.global_position - p.global_position
 	check(absf(eye.z - Player.BACK * cos(p.pitch)) < 0.3, "behind (%.1f m)" % eye.z)
 	check(absf(eye.x + Player.SHOULDER) < 0.05, "to the left (%.2f m)" % -eye.x)
 	check(eye.y > 1.5 and eye.y < 2.6, "above the shoulders (%.1f m)" % eye.y)
 	# The view goes where it is told, although the camera is off to the
-	# side: here, on a pillar of the porch.
-	var target := main.house_at * Vector3(1.5, 1.4, 6.9)
+	# side.
+	var target := Vector3(1.5, 1.4, -8.1)
 	p.look_at_point(target)
 	var along := -p.camera.global_basis.z
 	var miss := (target - p.camera.global_position).cross(along).length()
 	check(miss < 0.02, "look_at_point puts the middle of the view on its target (%.3f m off)" % miss)
-	# Back to the front wall of the house (where it is solid), 0.9 m from it,
-	# looking away: the camera must stay on this side of the wall.
-	_stand(main.house_at * Vector3(-2.5, 0.05, 4.4), main.house_at * Vector3(-2.5, 1.5, 20))
+	# Its back to a wall, 0.9 m from it, looking away: the camera must stay
+	# on this side of the wall. (The wall's face is at z = 10.)
+	_wall(Vector3(0, 2, 10.5), Vector3(12, 4, 1))
 	await frames(2)
-	var room := (main.house_at.affine_inverse() * p.camera.global_position).z - House.Z1
+	_stand(Vector3(0, 0.05, 9.1), Vector3(0, 1.5, -20))
+	await frames(2)
+	var room := 10.0 - p.camera.global_position.z
 	check(room > Player.ROOM * 0.9, "it stays in front of the wall behind you (%.2f m from it)" % room)
 	check(
 		p.camera.global_position.distance_to(p.global_position + Vector3.UP * Player.HEAD) < 1.2,
@@ -33,15 +35,34 @@ func test_the_camera_sits_behind_the_left_shoulder_and_comes_in_at_walls() -> vo
 	check(p.character.visible, "the character is still drawn")
 	# Right up against the wall, the camera has no room: it would only see
 	# the character's back, which is not drawn then.
-	_stand(main.house_at * Vector3(-2.5, 0.05, 4.0), main.house_at * Vector3(-2.5, 1.5, 20))
+	_stand(Vector3(0, 0.05, 9.5), Vector3(0, 1.5, -20))
 	await frames(2)
 	check(not p.character.visible, "against the wall, the character is not drawn")
 	# Away from the wall again, it eases back out.
-	_stand(main.house_at * Vector3(2.5, 0.05, 12), main.house_at * Vector3(2.5, 1.5, 20))
+	_stand(Vector3(0, 0.05, 2), Vector3(0, 1.5, -20))
 	await frames(60)
 	eye = p.camera.global_position - p.global_position
 	check(Vector2(eye.x, eye.z).length() > Player.BACK * 0.9, "and comes back out in the open")
 	check(p.character.visible, "where the character is drawn again")
+	await _unload()
+
+
+func test_it_steps_onto_what_is_low_and_is_stopped_by_what_is_not() -> void:
+	await _load()
+	# A kerb 0.4 m high across its way, then a wall.
+	_wall(Vector3(0, 0.2, -6), Vector3(8, 0.4, 4))
+	_wall(Vector3(0, 1.5, -12), Vector3(8, 3, 1))
+	await frames(2)
+	p.touch_move = Vector2(0, -1)
+	await frames(90)
+	check(
+		p.global_position.z < -4.5 and absf(p.global_position.y - 0.4) < 0.1,
+		"it steps up onto the kerb and runs on (at %s)" % p.global_position.snappedf(0.01)
+	)
+	await frames(120)
+	p.touch_move = Vector2.ZERO
+	check(p.global_position.z > -11.5, "the wall stops it (z %.2f)" % p.global_position.z)
+	check(p.global_position.y < 0.2, "and it is not climbed (y %.2f)" % p.global_position.y)
 	await _unload()
 
 
@@ -162,16 +183,27 @@ func _stand(at: Vector3, target: Vector3) -> void:
 	p.facing = p.yaw
 
 
+## A box that stands in the way, `size` across, its middle at `at`.
+func _wall(at: Vector3, size: Vector3) -> void:
+	var box := BoxShape3D.new()
+	box.size = size
+	var shape := CollisionShape3D.new()
+	shape.shape = box
+	var body := StaticBody3D.new()
+	body.collision_layer = Layers.WORLD
+	body.collision_mask = 0
+	body.position = at
+	body.add_child(shape)
+	main.add_child(body)
+
+
 func _load() -> void:
 	seed(5)
 	main = (load("res://scenes/main.tscn") as PackedScene).instantiate() as Main
-	main.level = "house"
-	main.fight = false  # the other brute only stands there
 	get_tree().root.add_child.call_deferred(main)
 	await get_tree().process_frame
 	await frames(20)
 	p = main.player
-	p.input_enabled = true
 
 
 func _unload() -> void:
