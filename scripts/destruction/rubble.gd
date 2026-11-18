@@ -10,8 +10,9 @@ extends Node
 ## gives, slowly, and stays as it ends up. That is metal bending under a
 ## weight.
 ##
-## They fall slowly (`fall`): that is what makes the brute a giant. A body
-## that has come to rest is frozen (static): it costs nothing, a heap stays
+## They fall as fast as `fall` says: as things really do, to begin with
+## (slower was tried, to make the brute a giant: see docs/CONCEPT.md). A
+## body that has come to rest is frozen (static): it costs nothing, a heap stays
 ## put and the brute can stand on it, until something near it is broken or
 ## struck. Bodies joined to one another rest, and move again, together.
 
@@ -21,7 +22,7 @@ signal bears_down(from: Vector3, weight: float)
 
 ## The share of real gravity that pulls what has come off, to begin with,
 ## and what it may be set to.
-const FALL := 0.3
+const FALL := 1.0
 const FALL_LEAST := 0.05
 const FALL_MOST := 1.0
 const GRAVITY := 9.8

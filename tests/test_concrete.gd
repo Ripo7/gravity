@@ -1,7 +1,7 @@
 extends TestCase
 ## Concrete, on the bench: it cracks where it is struck, then the blocks
-## round the fist are knocked out and what they held up comes down, slowly,
-## and lies low; the rest stands; it carries; only a blow breaks it.
+## round the fist are knocked out and what they held up comes down and
+## lies low; the rest stands; it carries; only a blow breaks it.
 
 var main: Main
 var p: Player
@@ -321,7 +321,7 @@ func test_what_lands_on_a_piece_is_a_blow_to_it() -> void:
 	await _unload()
 
 
-func test_things_fall_slowly_and_as_slowly_as_they_are_set_to() -> void:
+func test_things_fall_as_fast_as_they_are_set_to() -> void:
 	await _load()
 	check_near(s.rubble.fall, Rubble.FALL, 0.001, "to begin with, at %.2f of real gravity" % Rubble.FALL)
 	# The same column let go of high in the air, twice: how long its blocks

@@ -45,7 +45,8 @@ still the way to compare two builds.
 ### Concrete and metal, where the blow lands (step 3)
 
 Headless on a 2-core cloud machine, one physics step per frame
-(`--fixed-fps 60`), things falling at 0.3 of real gravity.
+(`--fixed-fps 60`), things falling at 0.3 of real gravity (what they
+fell at to begin with then) unless it says otherwise.
 
 The run at the top of this page (both sides of the bench taken apart:
 3930 steps), three times each, the same hour:

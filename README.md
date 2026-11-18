@@ -14,9 +14,8 @@ left.
 A blow harms the place it lands on, not the whole piece. Concrete cracks
 round the blow, for all to see, then lets go there: the few big blocks
 round the fist are knocked out, away from the blow, and a wall keeps a
-hole. What they held up comes down, slowly (that is what makes the brute
-a giant), breaks into its blocks when it lands and lies low; the rest
-stands.
+hole. What they held up comes down, breaks into its blocks when it lands
+and lies low; the rest stands.
 Metal never breaks: a blow leaves its mark where it lands, away from
 the blow, and the piece keeps it. A sheet takes a dent under the fist, a
 post kinks at the height it is struck at. Marked as deep as it goes in
@@ -75,8 +74,9 @@ blows elsewhere start other dents. A blow from the other side takes as
 much back. A kick is as heavy as the fourth blow of the combination.
 
 The slider ("Chute") sets how fast what has come off falls, as a share of
-real gravity: 0.30 to begin with, 1 as things really fall, less for a
-bigger giant. It is there to be tried on a phone and settled.
+real gravity: 1 to begin with, as things really fall (what the owner
+settled on, on the phone); less, and they fall slowly, which was tried
+to make the brute a giant.
 
 The line at the top left shows frames per second, the cost of one physics
 step, how many pieces still stand, how many loose bodies there are (and
@@ -123,7 +123,7 @@ Add `--write-movie out.avi --fixed-fps 30` before `--path` to record a run.
   down; a piece, and a place of it, take what its matter and its
   size say however it is cut; a slab holds on three columns and comes
   down without two; what lands on a piece is a blow to it; things fall
-  as slowly as they are set to; the brute knocks a hole in the wall,
+  as fast as they are set to; the brute knocks a hole in the wall,
   round its fist, then a way through); metal (walking
   bends nothing; a post bends blow after blow, keeps the shape and never
   breaks; a blow from the other side straightens it; it kinks at each
