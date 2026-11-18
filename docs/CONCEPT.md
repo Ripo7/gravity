@@ -20,8 +20,10 @@ La matière seule dit comment une pièce répond à un choc.
 - Chaque pièce est faite d'une matière.
 - Seul un choc casse : un coup de la brute, ou un morceau lourd qui tombe
   dessus. Marcher ne casse rien.
+- Un coup abîme l'endroit qu'il touche, pas la pièce entière. Un endroit,
+  c'est la largeur d'un poing.
 - Ce qui n'est plus porté tombe.
-- La résistance se règle par matière et par pièce, jamais par éclat.
+- La résistance se règle par matière et par endroit, jamais par éclat.
   Changer la découpe ne dérègle rien.
 
 ## L'effet géant
@@ -40,33 +42,48 @@ tombent lentement.
 Quatre matières, quatre réponses : le verre éclate, le bois casse net, le
 béton se fissure puis lâche, le métal plie.
 
-| Matière | Réponse à un choc | Elle cède | Morceaux | Ce qui reste au sol |
+| Matière | Réponse à un choc | Elle cède | Morceaux | Ce qui reste |
 | --- | --- | --- | --- | --- |
 | Verre | Éclate, le panneau entier | Au premier choc | Paillettes qui tombent droit | Rien : elles disparaissent |
 | Bois | Casse net, là où il est frappé | En un coup | Longs morceaux légers qui volent loin | Du petit bois que la brute pousse du pied |
-| Béton | Se fissure à vue, puis lâche | Après plusieurs coups | Quelques gros blocs lourds : la pièce bascule à l'opposé du coup et se disloque en tombant (voir la note) | Des blocs lourds, couchés, en tas bas |
-| Métal | Plie et garde la forme | Jamais en morceaux ; trop plié, il se couche | Aucun : il reste d'un seul tenant | Une pièce tordue, couchée |
+| Béton | Se fissure autour du coup, puis lâche à cet endroit | Après plusieurs coups au même endroit | Les blocs autour du poing partent à l'opposé du coup. Ce qui n'est plus tenu tombe et se disloque | Un trou dans la pièce ; au sol, des blocs lourds, couchés, en tas bas |
+| Métal | Se creuse ou plie là où le coup porte, et garde la forme | Jamais en morceaux ; trop plié à un endroit, il se couche | Aucun : il reste d'un seul tenant | Une pièce cabossée ou tordue, couchée |
 
 Qui porte : le béton et le métal portent des étages, le bois porte une
 maison, le verre ne porte rien.
 
-Note sur le béton (étape 2, validée) : la page disait d'abord que ses
-blocs « tombent droit ». Au banc, des blocs laissés là où ils étaient
-restaient empilés : un poteau cassé tenait encore debout et portait encore
-sa dalle. C'est le même défaut que le morceau coincé dans son trou de la
-version précédente. La pièce bascule donc à l'opposé du coup, et ses blocs
-se séparent en tombant : l'ouverture est dégagée et les gravats sont
-couchés, bas.
+Là où le coup touche (retour du 18 novembre 2026, à valider au banc). La
+page disait qu'une pièce encaisse en entier, où qu'on la frappe : un
+poteau se fissurait partout puis partait d'un bloc, une tôle pliait sur
+toute sa largeur. Corrigé :
 
-Précisions sur le métal (étape 3, à valider) :
+- Béton : les fissures se voient autour du coup seulement. Quand l'endroit
+  a assez encaissé, seuls les blocs autour du poing partent, à l'opposé du
+  coup. Un mur frappé au milieu garde un trou ; le reste tient tant qu'il
+  est accroché à quelque chose qui tient. Un poteau frappé à mi-hauteur
+  est coupé là : le bas reste debout, le haut tombe.
+- Ce qui n'est plus tenu, ou plus en équilibre, tombe d'un bloc et se
+  disloque en touchant le sol.
+- Métal : une tôle se creuse sous le poing, le reste reste plat, les
+  bosses s'ajoutent. Un poteau plie à chaque hauteur frappée. Un coup venu
+  de l'autre côté redresse d'autant.
+- Une pièce en métal qui porte quelque chose garde la tête en place et se
+  cintre.
+- Trop déformé à un endroit, le métal cède : une tôle se couche avec ses
+  bosses ; un poteau se replie sur ses plis. Sous une charge, il ne reste
+  pas debout : ce qu'il portait descend.
+- Une plaque en métal posée à plat (un plancher) s'affaisse là où elle
+  n'est plus portée, et se plie en tombant : elle ne reste pas raide.
+- Couché, le métal garde la forme qu'il a prise : les coups ne le
+  déforment plus.
+- Verre et bois : inchangés.
 
-- Il plie à l'opposé du coup, là où le premier coup a porté. Un coup venu
-  de l'autre côté le redresse d'autant.
-- Une pièce qui porte quelque chose garde la tête en place et se cintre :
-  ce qu'elle porte reste posé dessus jusqu'à ce qu'elle se couche.
-- Une plaque posée à plat (un plancher) ne plie pas sous les coups : elle
-  descend d'un seul tenant quand ses poteaux se couchent.
-- Couché, le métal garde la forme qu'il a prise. Il ne plie plus.
+Note sur le béton (étape 2) : la page disait d'abord que ses blocs
+« tombent droit ». Au banc, des blocs laissés là où ils étaient restaient
+empilés : un poteau cassé tenait encore debout et portait encore sa dalle.
+C'est le même défaut que le morceau coincé dans son trou de la version
+précédente. Ce qui lâche part donc à l'opposé du coup, et ce qui tombe se
+disloque : l'ouverture est dégagée et les gravats sont couchés, bas.
 
 ## Maison, immeuble, tour
 
@@ -96,8 +113,8 @@ Le plan, une pull request par étape, chacune jouable sur le téléphone
 (béton d'abord : validé ; l'ordre des trois autres matières est proposé) :
 
 1. Banc vide : la brute seule sur un sol nu. (fait)
-2. Béton. (fait, validé)
-3. Métal. (fait, à valider sur le téléphone)
+2. Béton. (fait, validé ; repris pour casser là où le coup touche)
+3. Métal. (repris de même ; à valider sur le téléphone)
 4. Bois.
 5. Verre.
 6. Maison, immeuble, tour sur le banc.
