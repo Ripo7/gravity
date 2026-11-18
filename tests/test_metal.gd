@@ -478,3 +478,33 @@ func test_the_brute_does_not_hold_up_what_comes_down_on_it() -> void:
 	check(lowest < 1.0, "the deck's corner came down past its head (%.2f m up)" % lowest)
 	check(p.global_position.y < 0.3, "and the brute is on the ground (%.2f m up)" % p.global_position.y)
 	await _unload()
+
+
+func test_the_brute_walking_into_a_sheet_that_falls_does_not_throw_it() -> void:
+	# As on the phone: things falling at real gravity, the brute striking a
+	# sheet and pushing on into it as it comes down. Propped against the
+	# brute and pushed at its foot, the sheet left for the sky.
+	for start: Vector3 in [Vector3(0, 0.05, 1.3), Vector3(0.2, 0.05, 1.5)]:
+		await _load()
+		main.fall = 1.0
+		var q := main.sheets[1]
+		_face(Main.FENCE_AT + start, Main.FENCE_AT + Vector3(start.x, 1, 0))
+		await frames(5)
+		var body := -1
+		var highest := 0.0
+		var fastest := 0.0
+		for k in 420:
+			if k % 6 == 0 and (body < 0 or k % 60 < 30):
+				p.punch()
+			if body < 0 and s.state[q] != Structure.STANDS:
+				body = s._loose[q][0]
+			if body >= 0:
+				p.touch_move = Vector2(0, -1) if (k / 20) % 2 == 0 else Vector2.ZERO
+				highest = maxf(highest, s.rubble.transform_of(body).origin.y)
+				fastest = maxf(fastest, s.rubble.velocity_of(body).length())
+			await frames(1)
+		p.touch_move = Vector2.ZERO
+		check(body >= 0, "the sheet lies down")
+		check(highest < 1.5, "its middle never goes higher than it stood (%.2f m)" % highest)
+		check(fastest < Rubble.PUSH + 1.5, "nor faster than the brute shoves (%.1f m/s)" % fastest)
+		await _unload()
