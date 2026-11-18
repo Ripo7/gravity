@@ -4,18 +4,18 @@ What was measured, and how to measure it again.
 
 ```sh
 # The brute takes the bench apart, without a screen: the cost of the
-# physics. M n: it keeps striking for n seconds (its blows land apart, so
-# a piece takes more than one combination). In concrete the column, the
-# wall, two columns under the slab; in metal the post, a sheet, two posts
-# under the deck; in wood the post, the palisade, a post under the floor.
+# physics. M n: it keeps striking for n seconds, a step from each piece
+# (its straights do not step in). In concrete the column, the wall, two
+# columns under the slab; in metal the post, a sheet, two posts under
+# the deck; in wood the post, the palisade, a post under the floor.
 M() { python3 -c "print(';'.join(['h;w0.25']*round($1/0.25)))"; }
 godot --headless --fixed-fps 60 --path . -- --mode=play --prof --steps="\
-s1.5,0.05,-4.55,1.5,1,-6;$(M 4.5);w4;s-1.5,0.05,-4.6,-1.5,1,-6;$(M 6);w4;\
-s4.5,0.05,-6.3,4.5,1,-8;$(M 9);w4;s-4.5,0.05,-6.4,-4.5,1,-8;$(M 7);w4;\
-s7.4,0.05,-4.4,7.4,1,-5.9;$(M 4.5);w3.5;s10.6,0.05,-4.4,10.6,1,-5.9;$(M 4.5);w8;\
-s-7.4,0.05,-4.5,-7.4,1,-5.9;$(M 6);w3;s-10.6,0.05,-4.5,-10.6,1,-5.9;$(M 6);w10;\
-s0,0.05,-8.8,0,1,-10;$(M 1);w2;s0,0.05,-11.6,0,1,-13;$(M 4.5);w3;\
-s-1.4,0.05,-16.3,-1.4,1,-17.6;$(M 1);w6"
+s1.5,0.05,-5.0,1.5,1,-6;$(M 6);w4;s-1.5,0.05,-5.0,-1.5,1,-6;$(M 5);w4;\
+s4.5,0.05,-7.0,4.5,1,-8;$(M 9);w4;s-4.5,0.05,-7.0,-4.5,1,-8;$(M 4);w4;\
+s7.4,0.05,-4.9,7.4,1,-5.9;$(M 6);w3.5;s10.6,0.05,-4.9,10.6,1,-5.9;$(M 6);w8;\
+s-7.4,0.05,-4.9,-7.4,1,-5.9;$(M 5);w3;s-10.6,0.05,-4.9,-10.6,1,-5.9;$(M 5);w10;\
+s0,0.05,-9.1,0,1,-10;$(M 1);w2;s0,0.05,-12.0,0,1,-13;$(M 4.5);w3;\
+s-1.4,0.05,-16.6,-1.4,1,-17.6;$(M 1);w6"
 ```
 
 `--prof` prints the cost of the physics once a second and, at the end, how
@@ -45,6 +45,27 @@ Since then, on that phone, with concrete and metal on the bench: 48 to
 53 frames a second while it is broken (see below). The measure above is
 still the way to compare two builds.
 
+### The three blows (two straights and the leap)
+
+Headless on a 2-core cloud machine, one physics step per frame
+(`--fixed-fps 60`), things falling at real gravity.
+
+The run at the top of this page changed with the blows (the brute now
+stands a step from each piece, and strikes for other lengths of time:
+6490 steps). Three times: a physics step cost 0.15 to 0.16 ms at the
+median, 99% of the steps were under 0.47 to 0.57 ms, the slowest took
+2.5 to 6.8 ms (a step over 6 ms in two runs of three, as this machine
+does by itself); 85 to 86 loose bodies at the end, 20 to 21 at most
+moving at once. Not the run of the sections below: the two cannot be
+compared. Nothing in the physics changed.
+
+How many blows it takes now, the brute a step away and striking without
+a pause: a sheet lies down at the 4th; the wall keeps its first hole at
+the 5th; a metal post lies down at the 6th; the concrete column is cut
+at the 7th; a plank snaps at the first.
+
+Not measured on a phone.
+
 ### Wood (step 4)
 
 Headless on a 2-core cloud machine, one physics step per frame
@@ -59,7 +80,7 @@ with the wood standing; 99% of the steps under 0.38 to 0.48 ms before,
 0.39 to 0.47 ms now; the slowest 2.5 to 2.8 ms before, 2.9 to 5.8 ms
 now. Not told apart.
 
-The run at the top of this page (the same, then the wood: 6586 steps),
+The run this page had at the top then (the same, then the wood: 6586 steps),
 three times: 0.16 ms at the median, 99% of the steps under 0.43 to
 0.57 ms, the slowest 2.4 to 5.7 ms; 104 to 106 loose bodies at the end,
 24 to 26 at most moving at once.

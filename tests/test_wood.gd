@@ -115,9 +115,9 @@ func test_a_wooden_post_is_cut_by_one_blow() -> void:
 	await _unload()
 
 
-func test_the_brute_snaps_the_planks_its_fists_land_on_and_walks_through() -> void:
+func test_the_brute_snaps_the_planks_its_fists_land_on_and_kicks_its_way_through() -> void:
 	await _load()
-	_face(Main.PALISADE_AT + Vector3(0, 0.05, 1.5), Main.PALISADE_AT + Vector3.UP)
+	_face(Main.PALISADE_AT + Vector3(0, 0.05, 1.0), Main.PALISADE_AT + Vector3.UP)
 	await frames(5)
 	var thrown := [0]
 	p.blow.connect(func(_at: Vector3, _way: Vector3, _power: int, _on: RID) -> void: thrown[0] += 1)
@@ -128,15 +128,32 @@ func test_the_brute_snaps_the_planks_its_fists_land_on_and_walks_through() -> vo
 		await frames(1)
 		if thrown[0] == 1 and after_one < 0:
 			after_one = _snapped()
-		if thrown[0] >= 8:
+		if thrown[0] >= 6:
 			break
 	check_eq(after_one, 1, "its first blow snaps a plank: the one its fist lands on")
 	var open := _snapped()
-	check(open >= 4, "two combinations snap several: each blow its own (%d planks)" % open)
+	check(open >= 2, "two combinations snap more: each blow its own (%d planks)" % open)
 	for q in main.planks:
 		check_eq(s.state[q], Structure.STANDS, "plank %d: its foot stands, or all of it" % q)
-	await frames(120)
-	# Through the gap, over the feet of the planks and the small wood.
+	await frames(150)
+	# The fists land at the height of the shoulder: the planks they snap
+	# keep a foot too high to step over. A kick at each of three planks
+	# side by side, from a step back, cuts them low; then it walks through.
+	var tall := 0
+	for q in main.planks:
+		var top := 0.0
+		for i in range(s.first[q], s.first[q] + s.blocks[q]):
+			if s.stands[i] == 1:
+				top = maxf(top, s.centroid[i].y)
+		if top > 0.7 and top < 2.0:
+			tall += 1
+	check(tall >= 1, "a snapped plank keeps a foot more than a step high")
+	for aside: float in [-0.3, 0.0, 0.3]:
+		_face(Main.PALISADE_AT + Vector3(aside, 0.05, 1.2), Main.PALISADE_AT + Vector3(aside, 1, 0))
+		await frames(5)
+		p.kick()
+		await frames(90)
+	await frames(60)
 	_face(Main.PALISADE_AT + Vector3(0, 0.05, 2.0), Main.PALISADE_AT + Vector3.UP)
 	p.touch_move = Vector2(0, -1)
 	var through := false
@@ -145,9 +162,8 @@ func test_the_brute_snaps_the_planks_its_fists_land_on_and_walks_through() -> vo
 		if p.global_position.z < Main.PALISADE_AT.z - 1.5:
 			through = true
 			break
-		for j in 3:
-			p.punch()
-			await frames(20)
+		p.kick()
+		await frames(60)
 	p.touch_move = Vector2.ZERO
 	check(through, "the brute walks through (z %.2f)" % p.global_position.z)
 	await _unload()

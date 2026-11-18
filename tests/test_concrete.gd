@@ -37,7 +37,7 @@ func test_a_column_cracks_where_the_fists_land_then_is_cut_there() -> void:
 	await _load()
 	var q := main.column
 	var all := s.blocks[q]
-	_face(Main.COLUMN_AT + Vector3(0, 0.05, 1.45), Main.COLUMN_AT + Vector3.UP)
+	_face(Main.COLUMN_AT + Vector3(0, 0.05, 1.0), Main.COLUMN_AT + Vector3.UP)
 	await frames(5)
 	# Where each blow lands on the column; what it shows after the first,
 	# and where it shows cracks once three have landed.
@@ -375,11 +375,11 @@ func test_things_fall_as_fast_as_they_are_set_to() -> void:
 	await _unload()
 
 
-func test_the_brute_knocks_holes_in_the_wall_where_its_fists_land_then_a_way_through() -> void:
+func test_the_brute_knocks_a_hole_in_the_wall_where_its_fists_land_then_kicks_a_way_through() -> void:
 	await _load()
 	var q := main.wall
 	var all := s.blocks[q]
-	_face(Main.WALL_AT + Vector3(0, 0.05, 1.7), Main.WALL_AT + Vector3.UP)
+	_face(Main.WALL_AT + Vector3(0, 0.05, 1.0), Main.WALL_AT + Vector3.UP)
 	await frames(5)
 	var thrown := [0]
 	var landed: Array[Vector3] = []
@@ -403,11 +403,11 @@ func test_the_brute_knocks_holes_in_the_wall_where_its_fists_land_then_a_way_thr
 	check_eq(s.state[q], Structure.STANDS, "the wall stands round the hole")
 	check(out >= 2 and out <= 8, "a few blocks knocked out, no more (%d of %d)" % [out, all])
 	var face := Main.WALL_AT.z + Main.WALL.z * 0.5
-	var apart := 0.0
+	var high := 9.0
 	for at in landed:
 		check(absf(at.z - face) < 0.03, "a blow lands on the face of the wall (z %.2f)" % at.z)
-		apart = maxf(apart, at.distance_to(landed[0]))
-	check(apart > 1.0, "the blows landed apart (up to %.2f m)" % apart)
+		high = minf(high, at.y)
+	check(high > 1.2, "all of them at the height of the shoulder or above (the lowest %.2f m up)" % high)
 	for i in range(s.first[q], s.first[q] + all):
 		if s.stands[i] == 1:
 			continue
@@ -415,19 +415,31 @@ func test_the_brute_knocks_holes_in_the_wall_where_its_fists_land_then_a_way_thr
 		for at in landed:
 			off = minf(off, Vector2(s.centroid[i].x - at.x, s.centroid[i].y - at.y).length())
 		check(off < 0.6, "block %d, knocked out, was by a fist (%.2f m from it)" % [i, off])
-	# It goes on: more holes, where the other fists land, and what they
-	# held up comes down; then it walks through, striking aside what lies
-	# in its way.
+	# The fists land high: what is below the shoulder is for the foot.
+	# More blows, then kicks from a step back, and it walks through.
 	for k in 1200:
 		if k % 6 == 0:
 			p.punch()
 		await frames(1)
-		if thrown[0] >= 24:
+		if thrown[0] >= 12:
 			break
 	await frames(150)  # the blows run their course
 	await _rest(1200)
+	var low := all
+	for i in range(s.first[q], s.first[q] + all):
+		if s.stands[i] == 1 and absf(s.centroid[i].x - Main.WALL_AT.x) < 0.3:
+			low = mini(low, int(s.centroid[i].y * 10.0))
+	check(low < 5, "the fists have left the foot of the wall standing")
 	var through := false
-	for attempt in 4:
+	var kicks := 0
+	for attempt in 5:
+		for aside: float in [0.0, -0.35, 0.35]:
+			_face(Main.WALL_AT + Vector3(aside, 0.05, 1.1), Main.WALL_AT + Vector3(aside, 1, 0))
+			await frames(5)
+			p.kick()
+			kicks += 1
+			await frames(80)
+		await _rest(600)
 		_face(Main.WALL_AT + Vector3(0, 0.05, 2.0), Main.WALL_AT + Vector3.UP)
 		p.touch_move = Vector2(0, -1)
 		await frames(220)
@@ -435,13 +447,8 @@ func test_the_brute_knocks_holes_in_the_wall_where_its_fists_land_then_a_way_thr
 		if p.global_position.z < Main.WALL_AT.z - 1.0:
 			through = true
 			break
-		for k in 60:
-			if k % 6 == 0:
-				p.punch()
-			await frames(1)
-		await frames(90)
 	check(through, "the brute walks through (z %.2f)" % p.global_position.z)
-	check(thrown[0] <= 60, "after a few combinations (%d blows in all)" % thrown[0])
+	check(kicks <= 15, "after a few kicks (%d)" % kicks)
 	check_eq(s.state[q], Structure.STANDS, "what is left of the wall stands")
 	check(_standing(s, q) >= all / 4, "a good part of it (%d blocks of %d)" % [_standing(s, q), all])
 	for other in s.pieces:

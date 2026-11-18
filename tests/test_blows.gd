@@ -6,45 +6,50 @@ var main: Main
 var p: Player
 
 
-func test_four_blows_in_a_row_then_it_stands_again() -> void:
+func test_three_blows_in_a_row_then_it_stands_again() -> void:
 	await _load()
 	var c := p.character
 	var from := p.global_position
 	check(p.punch(), "it strikes")
-	check_eq(c.state, "hook", "a hook first")
+	check_eq(c.state, "jab", "a straight left first")
 	# Pressed again and again: the combination, in order.
 	var seen: Array[String] = []
+	var left := 0.0
 	var right := 0.0
 	var low := 9.0
 	var overhead := 0.0
 	var ground := 9.0
 	for k in 360:
-		if k % 6 == 0 and k < 150:
+		if k % 6 == 0 and k < 100:
 			p.punch()
 		await frames(1)
 		if seen.is_empty() or seen[-1] != c.state:
 			seen.append(c.state)
-		if c.state == "hook" and seen.size() == 1:
+		if seen.size() <= 2:
+			left = maxf(left, _ahead("hand.L"))
 			right = maxf(right, _ahead("hand.R"))
 			low = minf(low, _bone("hips").y - p.global_position.y)
 		elif c.state == "slam":
 			overhead = maxf(overhead, _bone("hand.R").y - p.global_position.y)
 			ground = minf(ground, _bone("hand.R").y - p.global_position.y)
-		if c.state == "ground" and k > 150:
+		if c.state == "ground" and k > 100:
 			break
 	check_eq(
 		seen,
-		["hook", "upswing", "backhand", "slam", "hook", "ground"] as Array[String],
-		"a hook, a swing up, one back across, a leap and a slam, round again, then standing: nothing else"
+		["jab", "cross", "slam", "jab", "ground"] as Array[String],
+		"a straight left, a straight right, a leap and a slam, round again, then standing: nothing else"
 	)
-	check(right > 1.1, "the hook lunges: the fist goes far out (%.2f m ahead)" % right)
-	check(low < 0.6, "the body dropping into it (hips %.2f m up)" % low)
+	check(
+		left > 0.6 and right > 0.5,
+		"the two straights go straight out (%.2f and %.2f m ahead)" % [left, right]
+	)
+	check(low > 0.7, "thrown standing (hips no lower than %.2f m)" % low)
 	check(overhead > 1.7, "for the last the fist goes straight up (%.2f m)" % overhead)
 	check(ground < 0.45, "and comes down to the ground (%.2f m)" % ground)
-	# The moves take their own steps, and some dash a long way: the body has
-	# followed them.
+	# The straights stay where they are; the leap takes its own steps, and
+	# the body has followed them.
 	var moved := p.global_position.distance_to(from)
-	check(moved > 1.5 and moved < 6.0, "the body followed the steps of the blows (%.2f m)" % moved)
+	check(moved > 0.7 and moved < 6.0, "the body followed the steps of the leap (%.2f m)" % moved)
 	# Nothing of the kind in the air.
 	p.touch_jump = true
 	await frames(6)
@@ -71,19 +76,19 @@ func test_each_blow_says_when_it_lands_how_far_and_how_hard() -> void:
 		await frames(1)
 		steps[0] += 1
 		if not landed.is_empty() and landed[-1].size() == 5:
-			landed[-1].append(_bone("hand.R") - p.global_position)
-		if landed.size() == 4:
+			landed[-1].append(_bone("hand.L" if landed[-1][0] == "jab" else "hand.R") - p.global_position)
+		if landed.size() == 3:
 			break
 	var named: Array[String] = []
 	for blow in landed:
 		named.append(blow[0])
 	check_eq(named, Character.COMBO, "each blow of the combination lands, once and in order")
-	if landed.size() == 4:
-		for k in 4:
+	if landed.size() == 3:
+		for k in 3:
 			var blow := landed[k]
 			var limb: Vector3 = blow[5]
 			var out := Vector2(limb.x, limb.z).length()
-			check_eq(blow[3], 3 if k == 3 else 2, "%s: a blow is 2, the last one 3" % blow[0])
+			check_eq(blow[3], 3 if k == 2 else 2, "%s: a blow is 2, the last one 3" % blow[0])
 			check(blow[2] > 0.5 and blow[2] < 1.6, "%s reaches %.2f m" % [blow[0], blow[2]])
 			check(
 				absf(out - blow[2]) < 0.35,
@@ -94,8 +99,8 @@ func test_each_blow_says_when_it_lands_how_far_and_how_hard() -> void:
 				"%s: and as high (%.2f m for %.2f)" % [blow[0], limb.y, blow[4]]
 			)
 			check(k == 0 or blow[1] > landed[k - 1][1] + 0.3, "%s lands after the one before" % blow[0])
-		check(landed[0][1] < 0.35, "the hook lands in a third of a second (%.2f s)" % landed[0][1])
-		check(landed[3][1] < 2.4, "the last within two and a half (%.2f s)" % landed[3][1])
+		check(landed[0][1] < 0.3, "the first lands in a quarter of a second (%.2f s)" % landed[0][1])
+		check(landed[2][1] < 2.0, "the last within two (%.2f s)" % landed[2][1])
 	await frames(120)
 	# The kick.
 	landed.clear()
@@ -127,12 +132,16 @@ func test_a_blow_is_thrown_where_the_stick_pushes() -> void:
 	await frames(2)
 	p.punch()
 	p.touch_move = Vector2.ZERO
-	await frames(40)
+	var reached := 0.0
+	for k in 40:
+		await frames(1)
+		reached = maxf(reached, _bone("hand.L").x - from.x)
 	check(
 		absf(angle_difference(p.facing, p.yaw - PI * 0.5)) < 0.2,
 		"it turns to where the stick was pushed (%.0f deg)" % rad_to_deg(p.facing)
 	)
-	check(p.global_position.x > from.x + 0.3, "and steps that way (%.2f m)" % (p.global_position.x - from.x))
+	# (The straight left stays where it is; its fist goes that way.)
+	check(reached > 0.5, "and strikes that way (its fist goes %.2f m)" % reached)
 	await frames(90)
 	# Without the stick: where it faces.
 	var facing := p.facing
@@ -166,18 +175,18 @@ func test_a_blow_lands_where_its_fist_first_touches() -> void:
 			landed.append([c.state, at, s.standing(on), step[0] - began[0], off])
 	)
 	for k in 400:
-		if k % 6 == 0 and landed.size() < 4:
+		if k % 6 == 0 and landed.size() < 3:
 			p.punch()
 		await frames(1)
 		step[0] += 1
 		fist_was[0] = c.limb()[2]
-		if landed.size() == 4:
+		if landed.size() == 3:
 			break
 	var named: Array[String] = []
 	for blow in landed:
 		named.append(blow[0])
 	check_eq(named, Character.COMBO, "each blow of the combination lands, once and in order")
-	if landed.size() == 4:
+	if landed.size() == 3:
 		var face := Main.WALL_AT.z + Main.WALL.z * 0.5
 		for blow in landed:
 			var at: Vector3 = blow[1]
@@ -192,14 +201,16 @@ func test_a_blow_lands_where_its_fist_first_touches() -> void:
 				blow[3] <= roundi(hit * 60.0) + 1,
 				"%s: no later than its move has it land (step %d)" % [blow[0], blow[3]]
 			)
-		var hook: Vector3 = landed[0][1] - p.global_position
-		var back: Vector3 = landed[2][1] - p.global_position
-		var slam: Vector3 = landed[3][1] - p.global_position
-		check(hook.y > 1.0, "the hook goes in high (%.2f m up): not where it ends in the open" % hook.y)
-		check(hook.x > 0.4, "and on the right (%.2f m)" % hook.x)
-		check(back.x < -0.3, "the blow back across goes in on the left (%.2f m)" % back.x)
+		var left: Vector3 = landed[0][1] - p.global_position
+		var right: Vector3 = landed[1][1] - p.global_position
+		var slam: Vector3 = landed[2][1] - p.global_position
+		for straight: Vector3 in [left, right]:
+			check(
+				straight.y > 1.25 and straight.y < 1.6,
+				"a straight goes in at the height of the shoulder (%.2f m up)" % straight.y
+			)
+			check(absf(straight.x) < 0.3, "straight ahead (%.2f m aside)" % straight.x)
 		check(slam.y > 1.7, "the fist from above goes in over the brute's head (%.2f m up)" % slam.y)
-		check(slam.y - hook.y > 0.5 and hook.x - back.x > 0.7, "they land apart")
 	await _unload()
 	# A thin column, the brute a little to one side of it: the arms run
 	# into it all the same.
@@ -217,14 +228,14 @@ func test_a_blow_lands_where_its_fist_first_touches() -> void:
 					on_it.append(at)
 		)
 		for k in 400:
-			if k % 6 == 0 and thrown[0] < 4:
+			if k % 6 == 0 and thrown[0] < 3:
 				p.punch()
 			await frames(1)
-			if thrown[0] >= 4:
+			if thrown[0] >= 3:
 				break
 		check(
 			on_it.size() >= 2,
-			"%.1f m to one side of a column, blows land on it (%d of 4)" % [side, on_it.size()]
+			"%.1f m to one side of a column, blows land on it (%d of 3)" % [side, on_it.size()]
 		)
 		for at in on_it:
 			var off := Vector2(at.x - Main.COLUMN_AT.x, at.z - Main.COLUMN_AT.z)
@@ -246,13 +257,13 @@ func test_a_blow_that_touches_nothing_says_where_its_fist_ended() -> void:
 			)
 	)
 	for k in 400:
-		if k % 6 == 0 and landed.size() < 4:
+		if k % 6 == 0 and landed.size() < 3:
 			p.punch()
 		await frames(1)
 		step[0] += 1
-		if landed.size() == 4:
+		if landed.size() == 3:
 			break
-	check_eq(landed.size(), 4, "each blow of the combination says so once")
+	check_eq(landed.size(), 3, "each blow of the combination says so once")
 	var ahead := Basis(Vector3.UP, p.facing) * Vector3.FORWARD
 	for blow in landed:
 		var hit: float = c._clips.get_animation("fight/" + blow[0]).get_meta("hit")
@@ -271,7 +282,7 @@ func test_a_blow_that_touches_nothing_says_where_its_fist_ended() -> void:
 func test_the_body_stays_out_of_what_stands_while_it_strikes() -> void:
 	# Right up against the wall, the column and the thinner metal post: the
 	# combination, then a kick. The moves lunge 0.9 m ahead of where the
-	# brute stands.
+	# brute stands in the leap.
 	for target: Array in [
 		["the wall", Main.WALL_AT, 0.6],
 		["the column", Main.COLUMN_AT, 0.6],
@@ -296,9 +307,9 @@ func test_the_body_stays_out_of_what_stands_while_it_strikes() -> void:
 		var kicked := false
 		var farthest := 0.0
 		for k in 700:
-			if k % 6 == 0 and thrown[0] < 4:
+			if k % 6 == 0 and thrown[0] < 3:
 				p.punch()
-			elif thrown[0] >= 4 and not c.striking() and not kicked:
+			elif thrown[0] >= 3 and not c.striking() and not kicked:
 				kicked = p.kick()
 			await frames(1)
 			if c.striking():
@@ -325,18 +336,14 @@ func test_the_body_stays_out_of_what_stands_while_it_strikes() -> void:
 		if k % 6 == 0 and k < 110:
 			p.punch()
 		await frames(1)
-	check(p.global_position.distance_to(from) > 1.5, "in the open the body follows the steps of its blows")
+	check(p.global_position.distance_to(from) > 0.7, "in the open the body follows the steps of its blows")
 	await _unload()
 
 
-func test_on_trial_a_boxers_blows_are_thrown_standing_at_the_height_of_the_shoulder() -> void:
+func test_the_two_straights_are_thrown_standing_at_the_height_of_the_shoulder() -> void:
 	await _load()
 	var c := p.character
 	var s := main.structure
-	check_eq(c.combo, Character.COMBO, "the brute starts with the blows it has had so far")
-	main.hud.blows_pressed.emit()
-	check_eq(c.combo, Character.BOXING, "the button gives it a boxer's")
-	check_eq(main.hud._blows.text, "Coups : boxe", "and says so")
 	# A step from the wall: a straight left, a straight right, then the
 	# leap. [move, where from the brute, on which piece, how
 	# far the body has gone, how far the fist that struck is from there]
@@ -370,7 +377,7 @@ func test_on_trial_a_boxers_blows_are_thrown_standing_at_the_height_of_the_shoul
 	var named: Array[String] = []
 	for blow in landed:
 		named.append(blow[0])
-	check_eq(named, Character.BOXING, "the three land, in order")
+	check_eq(named, Character.COMBO, "the three land, in order")
 	for k in mini(landed.size(), 2):
 		var blow := landed[k]
 		var at: Vector3 = blow[1]
@@ -381,9 +388,6 @@ func test_on_trial_a_boxers_blows_are_thrown_standing_at_the_height_of_the_shoul
 		check_eq(blow[4], 2, "%s: a blow of 2" % blow[0])
 		check(blow[5] < 0.01, "%s: it is the fist of that hand that is followed" % blow[0])
 	check_eq(inside, 0, "nothing of the body but the arm that strikes goes into the wall")
-	main.hud.blows_pressed.emit()
-	check_eq(c.combo, Character.COMBO, "the button gives it its blows back")
-	check_eq(main.hud._blows.text, "Coups : épée", "and says so")
 	await _unload()
 
 

@@ -36,7 +36,7 @@ func test_a_post_bends_blow_after_blow_keeps_the_shape_and_never_breaks() -> voi
 	var q := main.metal_post
 	var top := s.blocks[q] - 1
 	var head := _parts(s, q)[top]
-	_face(Main.METAL_POST_AT + Vector3(0, 0.05, 1.45), Main.METAL_POST_AT + Vector3.UP)
+	_face(Main.METAL_POST_AT + Vector3(0, 0.05, 1.0), Main.METAL_POST_AT + Vector3.UP)
 	await frames(5)
 	# What the post is after each blow that lands: [what it is doing, what
 	# it has taken, how far its head has gone from where it was].
@@ -54,9 +54,7 @@ func test_a_post_bends_blow_after_blow_keeps_the_shape_and_never_breaks() -> voi
 			seen.append([s.state[q], s.harm[q], gone])
 		if s.state[q] != Structure.STANDS:
 			break
-	check(
-		seen.size() >= 5 and seen.size() <= 12, "it takes two or three combinations (%d blows)" % seen.size()
-	)
+	check(seen.size() >= 5 and seen.size() <= 12, "it takes two combinations or so (%d blows)" % seen.size())
 	for k in seen.size() - 1:
 		check_eq(seen[k][0], Structure.STANDS, "after blow %d it stands" % (k + 1))
 		check(
@@ -67,18 +65,13 @@ func test_a_post_bends_blow_after_blow_keeps_the_shape_and_never_breaks() -> voi
 	check_eq(s.state[q], Structure.FALLS, "in the end it lies down")
 	var b := s.bend[q]
 	check(b.leans().z < 0.0 and absf(b.leans().x) < absf(b.leans().z), "bent away from the brute")
-	# The fists of the first three blows land about as high; the last one
-	# of the combination, thrown from a leap, lands well above them.
-	check_eq(b.kink_at.size(), 2, "two kinks")
-	if b.kink_at.size() == 2:
-		check(
-			b.kink_at[0] > 0.5 and b.kink_at[0] < 1.1,
-			"one where three fists landed (%.2f m up)" % b.kink_at[0]
-		)
-		check(b.kink_at[1] > 1.2, "one where the fist from above did (%.2f m up)" % b.kink_at[1])
-	# In one piece: a limb either side of each kink, and nothing else.
+	# The fists all land within half a metre of one another, up the post:
+	# one kink.
+	check_eq(b.kink_at.size(), 1, "one kink")
+	check(b.kink_at[0] > 1.1 and b.kink_at[0] < 1.8, "where the fists landed (%.2f m up)" % b.kink_at[0])
+	# In one piece: a limb either side of the kink, and nothing else.
 	var loose := s.rubble
-	check_eq(loose.live, 3, "three loose bodies")
+	check_eq(loose.live, 2, "two loose bodies")
 	for i in loose.body.size():
 		check_eq(loose.piece[i], q, "body %d is of the post" % i)
 	# (The brute steps back: what it stands against does not come to rest.)
@@ -88,7 +81,7 @@ func test_a_post_bends_blow_after_blow_keeps_the_shape_and_never_breaks() -> voi
 	await frames(150)
 	var rested := await _rest(900)
 	check(rested, "it comes to rest")
-	check_eq(loose.live, 3, "still three")
+	check_eq(loose.live, 2, "still two")
 	check_eq(s.state[q], Structure.FALLS, "never in blocks")
 	var rings := _parts(s, q)
 	var highest := 0.0
@@ -346,7 +339,7 @@ func test_a_sheet_takes_a_dent_under_the_fist_and_the_rest_stays_flat() -> void:
 func test_the_brute_dents_a_sheet_until_it_lies_down_and_the_fence_is_open() -> void:
 	await _load()
 	var middle := main.sheets[1]
-	_face(Main.FENCE_AT + Vector3(0, 0.05, 1.5), Main.FENCE_AT + Vector3.UP)
+	_face(Main.FENCE_AT + Vector3(0, 0.05, 1.0), Main.FENCE_AT + Vector3.UP)
 	await frames(5)
 	var blows := [0]
 	p.blow.connect(func(_at: Vector3, _way: Vector3, _power: int, _on: RID) -> void: blows[0] += 1)
