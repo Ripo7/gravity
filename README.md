@@ -90,8 +90,9 @@ settled on, on the phone); less, and they fall slowly, which was tried
 to make the brute a giant.
 
 On trial: the button under "Reconstruire" ("Coups : épée" / "Coups :
-boxe") changes the first three blows of the combination for a boxer's: a
-straight left and a straight right thrown standing, then a left uppercut. It is there to
+boxe") gives the brute a boxer's combination of three blows instead: a
+straight left and a straight right thrown standing, then the leap that
+ends the other. It is there to
 compare; the blows the brute starts with are the ones it has had so far.
 
 The line at the top left shows frames per second, the cost of one physics

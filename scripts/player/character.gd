@@ -65,13 +65,12 @@ const LAND_TIME := 0.5  ## s before the legs go back to standing or running
 ## fist is there, when the next move may start, how far it reaches and how
 ## hard it is (see tools/moves/build.py).
 const COMBO: Array[String] = ["hook", "upswing", "backhand", "slam"]
-## On trial beside it (docs/CONCEPT.md): a boxer's. A straight left and a
-## straight right thrown standing, the fists at the height of the
-## shoulder, a left uppercut (the owner's choice for the third), then the
-## leap of the other.
-const BOXING: Array[String] = ["jab", "cross", "uppercut", "slam"]
+## On trial beside it (docs/CONCEPT.md): a boxer's, of three blows. A
+## straight left and a straight right thrown standing, the fists at the
+## height of the shoulder, then the leap of the other.
+const BOXING: Array[String] = ["jab", "cross", "slam"]
 ## Every blow of the fists there is a clip for.
-const BLOWS: Array[String] = ["hook", "upswing", "backhand", "slam", "jab", "cross", "uppercut"]
+const BLOWS: Array[String] = ["hook", "upswing", "backhand", "slam", "jab", "cross"]
 ## Steps of a sixtieth add up to a hair under the frame a clip says its
 ## blow lands on: this much (s) short still counts as there.
 const LATE := 0.002
@@ -103,7 +102,7 @@ const ROOT := "Rig/Skeleton3D:root"
 ## What the body can be doing (see `state`), in the order of the tree's
 ## inputs.
 const STATES: Array[String] = [
-	"ground", "jump", "air", "land", "hook", "upswing", "backhand", "slam", "kick", "jab", "cross", "uppercut"
+	"ground", "jump", "air", "land", "hook", "upswing", "backhand", "slam", "kick", "jab", "cross"
 ]
 ## One of STATES: what the body is doing.
 var state := "ground"
@@ -418,8 +417,7 @@ func _build() -> AnimationNodeBlendTree:
 		"slam",
 		"kick",
 		"jab",
-		"cross",
-		"uppercut"
+		"cross"
 	]
 	for k in inputs.size():
 		t.connect_node("state", k, inputs[k])
