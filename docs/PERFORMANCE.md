@@ -3,13 +3,16 @@
 What was measured, and how to measure it again.
 
 ```sh
-# The brute breaks the column, a panel of the wall and two columns under
-# the slab, without a screen: the cost of the physics.
+# The brute takes both sides of the bench apart, without a screen: the
+# cost of the physics. C: a combination; in concrete the column, a panel,
+# two columns under the slab; in metal the post, a sheet, two posts under
+# the deck (two combinations each for the posts).
+C="w0.4;h;w0.4;h;w0.4;h;w0.4;h"
 godot --headless --fixed-fps 60 --path . -- --mode=play --prof --steps="\
-s-3.5,0.05,-4.55,-3.5,1,-6;w0.3;h;w0.4;h;w0.4;h;w0.4;h;w4;\
-s0,0.05,-6.3,0,1,-8;w0.5;h;w0.5;h;w0.5;h;w0.5;h;w4;\
-s3.4,0.05,-4.4,3.4,1,-5.9;w0.4;h;w0.4;h;w0.4;h;w0.4;h;w3.5;\
-s6.6,0.05,-4.4,6.6,1,-5.9;w0.4;h;w0.4;h;w0.4;h;w0.4;h;w10"
+s1.5,0.05,-4.55,1.5,1,-6;$C;w4;s-1.5,0.05,-4.6,-1.5,1,-6;$C;w2;$C;w4;\
+s4.5,0.05,-6.3,4.5,1,-8;$C;w4;s-4.5,0.05,-6.4,-4.5,1,-8;$C;w4;\
+s7.4,0.05,-4.4,7.4,1,-5.9;$C;w3.5;s10.6,0.05,-4.4,10.6,1,-5.9;$C;w8;\
+s-7.4,0.05,-4.5,-7.4,1,-5.9;$C;w2;$C;w3;s-10.6,0.05,-4.5,-10.6,1,-5.9;$C;w2;$C;w10"
 ```
 
 `--prof` prints the cost of the physics once a second and, at the end, how
@@ -35,23 +38,42 @@ bare bench of step 1 (pull request #56), the brute alone on the ground,
 49 to 56 frames a second. That is what every later number on that phone
 starts from.
 
-Not measured yet on a phone: the bench with concrete on it, standing or
-broken. The measure above is there for that.
+Not measured yet on a phone: the bench with concrete and metal on it,
+standing or broken. The measure above is there for that.
 
-### Concrete
+### Concrete and metal (step 3)
 
 Headless on a 2-core cloud machine, one physics step per frame
 (`--fixed-fps 60`), things falling at 0.3 of real gravity.
 
-The run at the top of this page (four combinations: the column, the
-middle panel, two columns under the slab, which comes down; 1741 steps),
-three times: a physics step costs 0.12 to 0.13 ms at the median, 99% of
-the steps are under 0.37 to 0.41 ms, the slowest takes 2.2 to 2.3 ms. At
-the end 17 to 31 bodies lie loose, 19 at most having moved at once. (How
-the slab ends is not the same every time: whole and leaning, or in its
-nine blocks, with a column or two broken under it.)
+The run at the top of this page (both sides of the bench taken apart:
+3930 steps), three times, with metal marked where the blow lands (dents,
+kinks, folds, the deck in triangles): a physics step costs 0.14 ms at the
+median, 99% of the steps are under 0.35 to 0.46 ms, the slowest takes 2.2
+to 8.3 ms (one step over 6 ms, in one run of the three). At the end 38
+to 44 bodies lie loose, 19 at most having moved at once.
 
-The bench is 9 pieces cut into 43 blocks.
+The same run, the same hour, on the commit before (metal bent as a whole
+piece, the deck one rigid body): 0.13 to 0.18 ms at the median, 99% under
+0.39 to 0.60 ms, the slowest 3.0 to 4.6 ms. The two cannot be told apart
+at the median on this machine; the slowest step is not better.
+
+Not measured: what a fold costs on a phone. A piece of metal that has
+come loose is up to 8 bodies and as many folds while it moves (the deck),
+frozen like the rest once it lies still.
+
+The bench is 18 pieces: 9 in concrete, cut into 43 blocks, and 9 in
+metal, drawn with 46 rings (the posts) and 282 nodes (the sheets, the
+deck): 371 parts.
+
+### Concrete alone (step 2)
+
+Same machine, with only the concrete on the bench: four combinations
+(the column, the middle panel, two columns under the slab, which comes
+down; 1741 steps), three times: a physics step cost 0.12 to 0.13 ms at
+the median, 99% of the steps were under 0.37 to 0.41 ms, the slowest
+took 2.2 to 2.3 ms; 17 to 31 loose bodies at the end, 19 at most moving
+at once.
 
 ### The bare bench (step 1)
 
@@ -73,8 +95,8 @@ the two swings, 1.04 m for the leap; the foot 0.95 m out and 1.14 m up.
 
 What a browser downloads besides the engine (`index.pck`): 0.69 MB then,
 for 2.56 MB in the version before (both exported here with the same
-Godot); 0.72 MB with concrete. The engine itself (`index.wasm`, 39.5 MB
-before compression) is the same.
+Godot); 0.72 MB with concrete, 0.74 MB with metal too. The engine itself
+(`index.wasm`, 39.5 MB before compression) is the same.
 
 ### What the version before measured on the phone
 

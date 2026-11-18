@@ -5,14 +5,21 @@ is being rebuilt from its concept, one step at a time, in greybox:
 [docs/CONCEPT.md](docs/CONCEPT.md) (in French) says what it is to be, and
 comes before the code.
 
-**Where it is now: step 2 of 7, concrete.** A bare ground, one brute that
+**Where it is now: step 3 of 7, metal.** A bare ground, one brute that
 walks, runs, sprints, jumps, throws a four-blow combination and kicks, and
-on the bench in front of it, in concrete: a column, a wall of three
-panels, a slab on four columns. Concrete cracks blow after blow, for all
-to see, then lets go: the piece goes over away from the blow and comes
-apart into a few big blocks, which come down slowly (that is what makes
-the brute a giant) and lie low. What a piece carried comes down when the
-piece is gone. Walking breaks nothing.
+on the bench in front of it the same three things twice: a column, a wall
+of three, a slab on four columns. In concrete on its right, in metal on
+its left.
+
+Concrete cracks blow after blow, for all to see, then lets go: the piece
+goes over away from the blow and comes apart into a few big blocks, which
+come down slowly (that is what makes the brute a giant) and lie low.
+Metal never breaks: a blow leaves its mark where it lands, away from
+the blow, and the piece keeps it. A sheet takes a dent under the fist, a
+post kinks at the height it is struck at. Marked as deep as it goes in
+one place, it lies down; a post that gives under a load folds, and a
+plate sags where nothing holds it any more. What a piece carried comes
+down when the piece is gone. Walking breaks nothing.
 
 What breaks is worked out one material at a time, each on this bench and
 each tried on a phone before the next: concrete, then metal, wood, glass;
@@ -52,9 +59,13 @@ back across from the left, then a leap that comes down fist first, then
 round again. A blow is thrown where the stick pushes, or where the
 character faces.
 
-A column 0.4 m thick takes one whole combination: three blows crack it,
-wider each time, and the fourth, the heavy one, brings it down. A kick is
-as heavy as that fourth blow.
+A concrete column 0.4 m thick takes one whole combination: three blows
+crack it, wider each time, and the fourth, the heavy one, brings it down.
+A metal post 0.2 m thick takes a combination and a half where the fists
+land: it leans more at each blow and lies down at the seventh. A sheet
+takes a dent at each blow and lies down at the third in the same place;
+blows elsewhere start other dents. A blow from the other side takes as
+much back. A kick is as heavy as the fourth blow of the combination.
 
 The slider ("Chute") sets how fast what has come off falls, as a share of
 real gravity: 0.30 to begin with, 1 as things really fall, less for a
@@ -80,12 +91,12 @@ Scripted runs (`scripts/core/director.gd`), on desktop after `--`, in a
 browser as `index.html?mode=...`:
 
 ```sh
-# Stand in front of the column and throw the four blows at it.
-godot --path . -- --mode=play --steps="s-3.5,0.05,-4.55,-3.5,1,-6;w0.3;h;w0.4;h;w0.4;h;w0.4;h;w5"
-# The same without a screen, with the cost of the physics.
-godot --headless --fixed-fps 60 --path . -- --mode=play --prof --steps="s-3.5,0.05,-4.55,-3.5,1,-6;w0.3;h;w0.4;h;w0.4;h;w0.4;h;w5"
+# Stand in front of the concrete column and throw the four blows at it.
+godot --path . -- --mode=play --steps="s1.5,0.05,-4.55,1.5,1,-6;w0.3;h;w0.4;h;w0.4;h;w0.4;h;w5"
+# The same at the metal post, without a screen, with the cost of the physics.
+godot --headless --fixed-fps 60 --path . -- --mode=play --prof --steps="s-1.5,0.05,-4.6,-1.5,1,-6;w0.3;h;w0.4;h;w0.4;h;w0.4;h;w5"
 # Just look, from somewhere at something.
-godot --path . -- --mode=still --pos=3,0.05,4 --at=0,1,-8 --wait=2
+godot --path . -- --mode=still --pos=0,0.05,4 --at=0,1,-8 --wait=2
 # What the picture costs here while the bench is broken (see docs/PERFORMANCE.md).
 godot --path . -- --mode=mesure
 ```
@@ -103,7 +114,17 @@ Add `--write-movie out.avi --fixed-fps 30` before `--path` to record a run.
   matter and its size say, however it is cut; a slab holds on three
   columns and comes down without two; what lands on a piece is a blow to
   it; things fall as slowly as they are set to; a broken panel opens the
-  wall, and the brute walks through over its rubble); the character
+  wall, and the brute walks through over its rubble); metal (walking
+  bends nothing; a post bends blow after blow, keeps the shape and never
+  breaks; a blow from the other side straightens it; it kinks at each
+  height it is struck at; a post that carries bows and keeps its head
+  under what it carries; a post that gives under a deck folds, and the
+  deck sags there, still on the posts that stand; metal that comes down
+  from high lands whole; what lands on metal bends it; a sheet takes a
+  dent under the fist and the rest stays flat; dented deep enough in one
+  place it lies down and opens the fence; the brute does not hold up
+  what comes down on it, and does not throw what it walks into); the
+  character
   (where the camera sits and how it comes in at a wall, the character
   turning to where it goes, its planted foot not sliding from a slow walk
   to a sprint, jumps and landings, stepping onto what is low); the blows
@@ -111,7 +132,8 @@ Add `--write-movie out.avi --fixed-fps 30` before `--path` to record a run.
   how far and how hard, the kick); the controls, keys and thumbs; and the
   cut of a box into blocks (volumes, shared faces).
 - `tools/web_probe.mjs`: loads the web export in headless Chromium, has
-  the brute break the column and fails on any error (`npm install playwright`, then
+  the brute break the concrete column and bend the metal post, and fails
+  on any error (`npm install playwright`, then
   `node tools/web_probe.mjs build/web shot.png`). WebGL2 is stricter than
   desktop OpenGL: two bugs only showed there.
 - `.github/workflows/ci.yml` runs lint, tests, the web export and the
