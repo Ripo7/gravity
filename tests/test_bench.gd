@@ -1,30 +1,45 @@
 extends TestCase
-## The bench itself: a bare ground, one brute, no sun shadow, a round shadow
-## that stays on the ground.
+## The bench itself: a bare ground, one brute, what stands on it to be
+## broken, no sun shadow, a round shadow that stays on the ground, and the
+## button that puts it all back.
 
 var main: Main
 
 
-func test_the_bench_is_a_bare_ground_with_one_brute() -> void:
+func test_the_bench_is_a_bare_ground_with_one_brute_and_concrete_to_break() -> void:
 	await _load()
 	var p := main.player
+	var s := main.structure
 	check(p.is_on_floor(), "the brute stands on the ground")
 	check_near(p.global_position.y, 0.0, 0.05, "which is at 0")
-	# It is alone, and there is nothing to run into but the ground.
 	var brutes := 0
-	var bodies := 0
 	var suns := 0
 	for child in main.get_children():
 		if child is CharacterBody3D:
 			brutes += 1
-		elif child is PhysicsBody3D:
-			bodies += 1
 		if child is DirectionalLight3D:
 			suns += 1
 			check(not (child as DirectionalLight3D).shadow_enabled, "the sun casts no shadow")
 	check_eq(brutes, 1, "one brute")
-	check_eq(bodies, 1, "one body besides it: the ground")
 	check_eq(suns, 1, "one sun")
+	# What stands: a column, a wall of three panels, a slab on four columns.
+	check_eq(s.pieces, 9, "nine pieces")
+	check_eq(s.standing_count, 9, "all standing")
+	check_eq(main.panels.size(), 3, "three panels to the wall")
+	check_eq(Array(s.rests_on[main.slab]).size(), 4, "the slab rests on its four columns")
+	for post in main.posts:
+		check(post in s.rests_on[main.slab], "column %d carries the slab" % post)
+	for q in s.pieces:
+		check_eq(s.matter[q], Matter.CONCRETE, "piece %d is concrete" % q)
+		check(q == main.slab or s.rests_on[q].is_empty(), "piece %d stands on the ground" % q)
+		check(
+			s.blocks[q] >= 2 and s.blocks[q] <= 9, "piece %d is cut into a few blocks (%d)" % [q, s.blocks[q]]
+		)
+	check_eq(s.rubble.live, 0, "nothing lies loose")
+	# All of it in front of the brute as it starts, a few steps away.
+	for q in s.pieces:
+		var to := s.place[q].origin - p.global_position
+		check(to.z < -4.0 and to.z > -11.0 and absf(to.x) < 8.0, "piece %d is in front of the brute" % q)
 	# Far from the middle the ground is still there.
 	p.global_position = Vector3(150, 0.05, -150)
 	await frames(30)
@@ -46,7 +61,7 @@ func test_the_round_shadow_stays_on_the_ground() -> void:
 	await frames(3)
 	var under := blob.global_position - p.global_position
 	check(Vector2(under.x, under.z).length() < 0.05 and blob.visible, "at its feet")
-	p.touch_move = Vector2(0, -1)
+	p.touch_move = Vector2(0, 1)  # away from what stands on the bench
 	await frames(30)
 	p.touch_jump = true
 	var top := 0.0
@@ -63,6 +78,26 @@ func test_the_round_shadow_stays_on_the_ground() -> void:
 		Vector2(under.x, under.z).length() < 0.2,
 		"and follows it (%.2f m off)" % Vector2(under.x, under.z).length()
 	)
+	await _unload()
+
+
+func test_rebuilding_puts_the_bench_back() -> void:
+	await _load()
+	var s := main.structure
+	s.hit(main.column, s.strength[main.column], Vector3.FORWARD)
+	s.hit(main.posts[0], s.strength[main.posts[0]], Vector3.FORWARD)
+	s.hit(main.posts[1], s.strength[main.posts[1]], Vector3.FORWARD)
+	await frames(30)
+	check(s.standing_count < 9 and s.rubble.live > 0, "things are down")
+	main.fall = 0.6
+	main.player.global_position = Vector3(3, 0.05, 3)
+	main.rebuild()
+	await frames(5)
+	check(main.structure != s and not is_instance_valid(s), "what stood is gone")
+	check_eq(main.structure.standing_count, 9, "and stands again")
+	check_eq(main.structure.rubble.live, 0, "nothing lies loose")
+	check_near(main.structure.rubble.fall, 0.6, 0.001, "things still fall as fast as they were set to")
+	check(main.player.global_position.distance_to(Main.START) < 0.3, "the brute is back where it starts")
 	await _unload()
 
 

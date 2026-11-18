@@ -4,22 +4,22 @@ How the code is laid out and who owns what. What the game is to be is in
 [CONCEPT.md](CONCEPT.md); numbers are in [PERFORMANCE.md](PERFORMANCE.md);
 where the assets come from is in [CREDITS.md](../CREDITS.md).
 
-The game is at step 1 of its plan: a bare bench and one brute. What
-breaks is not written yet. The engine of the version before (boxes cut
-into shards bonded together) was taken out with it, on purpose: see the
-end of the concept for why, and the branch `archive/v1` for the code.
+The game is at step 2 of its plan: a bench, one brute, and concrete to
+break. The engine of the version before (boxes cut into shards bonded
+together) was taken out, on purpose: see the end of the concept for why,
+and the branch `archive/v1` for the code.
 
 ## Layout
 
 | Where | What |
 | --- | --- |
-| `scripts/main.gd` | builds the bench: sky, sun, ground, the brute, HUD |
+| `scripts/main.gd` | builds the bench: sky, sun, ground, what stands on it, the brute, HUD |
 | `scripts/core/` | launch options, input map, collision layers, the physics clock, scripted runs (`director.gd`) |
 | `scripts/player/` | `Player` (controls, camera) and `Character` (the animated body) |
 | `scripts/fx/` | the round shadow under the brute |
 | `scripts/ui/` | HUD and touch controls |
-| `scripts/destruction/` | `Fracture`: cuts a box into irregular convex shards. Kept for the blocks concrete breaks into; nothing uses it yet |
-| `shaders/` | the ground's grid |
+| `scripts/destruction/` | what breaks: `Matter`, `Structure` (what stands), `Rubble` (what has come off), `Fracture` (the cut), `ShardMesh` (the picture) |
+| `shaders/` | the ground's grid; the one shader that draws every block |
 | `assets/` | the mannequin and its blows (made by `tools/moves`) |
 | `tools/` | CI and build scripts, the web probe, the asset tools |
 | `tests/` | headless tests, one file per subject |
@@ -38,12 +38,19 @@ node with `main.gd`) and the test runner's.
   happens (`move`, `jump`, `land`, `punch`, `kick`) and turns it into a
   pose. It says when a strike starts and when its fist or foot gets
   there (`swung`, `struck`), and what that blow is (`reach`, `height`,
-  `power`, `way`). It never decides what the blow does: nothing listens
-  yet; what breaks will.
+  `power`). It never decides what the blow does.
+- **`Player`** turns that into where the fist went and how hard
+  (`blow`); **`Main`** hands it to the structure (`Structure.strike`).
+  The brute knows nothing of what it breaks.
+- **`Structure`** owns what stands, its blocks and the `Rubble`. The
+  rest of the game breaks things through `strike` (a blow of the brute)
+  and `hit` (so many points of blows to a piece).
 - Signals go up, calls go down; a child never calls its parent.
 
 Collision layers (`Layers`): 1 world (the ground, what neither moves nor
-breaks), 4 the brute.
+breaks), 2 structure (what stands: in the way of the brute and of the
+camera), 3 rubble (what has come off: in the way of the brute, not of
+the camera), 4 the brute.
 
 ## Conventions
 
@@ -57,8 +64,75 @@ breaks), 4 the brute.
 - Comments say why. A claim about speed or cost comes with a measurement.
 - Scripted, seeded runs (`--mode=play`) are how clips and numbers are
   made, so both can be made again.
-- Nothing is kept that nothing uses, apart from `Fracture`, which the
-  next step takes up.
+- Nothing is kept that nothing uses.
+
+## What breaks
+
+The rule is in the concept: a building is an assembly of simple pieces,
+each of one matter, and the matter alone says how a piece answers a
+blow. One matter so far, concrete.
+
+1. **Pieces** (`Structure.add_piece`). A piece is an upright box: a
+   column, a slab, a panel of a wall. While it stands it is one static
+   box for the physics.
+2. **Strength belongs to the piece** (`Matter.strength`). So many points
+   of blows for each metre the piece is thick the way it is thinnest:
+   22.5 for concrete, so 9 for a column 0.4 m thick. A blow is 2 points,
+   a heavy one (the last of the combination, the kick) 3: one whole
+   combination brings that column down. Where the piece is hit and how
+   it is cut change nothing to it.
+3. **Cut once, when it is made** (`Fracture`, `Matter.grain`). Each piece
+   is cut into a few irregular convex blocks, about 0.7 m across, bigger
+   if that would make more than nine: 4 for the column, 6 for a panel, 9
+   for the slab. The cut only says what the piece looks like cracked and
+   what it breaks into.
+4. **Cracks** (`Structure._crack`). A piece that has taken a blow shows
+   its cut: each block is drawn a little smaller and askew, the gaps
+   dark. From half its strength on, wider. The cracks are where it will
+   break.
+5. **Letting go** (`Structure.shatter`). A piece that has taken all it
+   can breaks into its blocks, which become loose bodies. They start off
+   as if the whole piece turned about its foot, away from the blow, and
+   come apart as they go down: the piece goes over and ends as blocks
+   lying on the ground. Left where they stood, blocks cut one on top of
+   the other stayed there, a broken column still standing and still
+   carrying. For their first 0.45 s the blocks also hardly rub on
+   anything (`Rubble.FRESH`), so that those caught under a slab slide
+   out from under it.
+6. **What is no longer carried comes down** (`Structure._held`). A piece
+   rests on the pieces right under it. When one of them goes, it holds
+   if it stands on the ground or if its middle is still over what is
+   left under it (the slab holds on three columns, not on two on the
+   same side). Otherwise it comes down in one piece, a loose body with
+   the shape of the piece, and breaks into its blocks when it is stopped
+   as hard as by a drop of 0.3 m.
+7. **Only a blow breaks.** From the brute: `Structure.strike` follows the
+   fist from the body to where it ends; the first piece on its way takes
+   the blow, and what lies loose near the end is sent off (not far: it
+   is heavy). Or from something heavy that lands on a piece
+   (`Rubble._land`): a point for each 900 kg.m/s it loses against it,
+   and only on a face that looks up. What brushes past a wall on its way
+   down does nothing to it. Walking, running and jumping break nothing:
+   what stands is a wall to the brute.
+8. **The rubble** (`Rubble`). Loose bodies are made straight on the
+   physics server, no nodes. They fall at a share of real gravity
+   (`fall`, 0.3 to begin with, set by the slider): slowly, which is what
+   makes the brute a giant. Speeds told "as at real gravity" in the code
+   go with the square root of that share, so the same things happen at
+   any setting, only slower. A body that touches something and has been
+   still for half a second is frozen (static): a heap costs nothing,
+   stays put, and the brute steps onto it. It moves again when a piece
+   near it breaks or when a blow lands by it.
+9. **One draw call** (`ShardMesh`, `shaders/shards.gdshader`). Every
+   block of every piece is in one mesh that never changes; a small
+   texture says which body each block goes with (the world, its own, or
+   that of a piece falling whole) and another where each body is. Faces
+   made by the cut are only drawn once the two blocks are apart.
+
+Not there: what falls does nothing to the brute (it is stopped by it as
+by a wall); a blow on a piece that lies whole breaks it only once it has
+taken its strength in all; pieces are upright boxes, turned about the
+vertical at most.
 
 ## The bench
 
@@ -71,6 +145,12 @@ The sun casts no shadow: on the phone the version before was measured on,
 its shadows were what cost the most. The brute has a round shadow
 (`BlobShadow`) that lies on the ground under it, found by a ray each
 physics step, and gets smaller and fainter as the brute goes up.
+
+On it, in concrete, a few steps in front of the brute: a column 2.6 m
+high on its own; a wall of three panels (1.2 m wide, 2.4 high, 0.35
+thick); a slab 3.6 m across on four columns 2.2 m high. "Reconstruire"
+puts them back and the brute where it started, without loading anything
+again (`Main.rebuild`).
 
 ## The character
 
@@ -138,7 +218,7 @@ uneven ground.
 
 Behind the left shoulder, turning about the head. A ray from the head to
 the shoulder, then one back from there, find what stands in the way
-(layer world): the camera stays in front of it, going in at once and
-easing back out. With less than 1.4 m behind the shoulder it goes behind
+(the world and what stands; what lies loose is not in its way): the
+camera stays in front of it, going in at once and easing back out. With less than 1.4 m behind the shoulder it goes behind
 the head instead; closer than 0.7 m it would only see the character's
 back, which is then not drawn.

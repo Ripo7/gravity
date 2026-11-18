@@ -84,53 +84,6 @@ static func cut(size: Vector3, grain: float, rng_seed: int, fine := 0.25) -> Arr
 	return out
 
 
-## Cuts shard `whole` once more, into about `count` crumbs that fill it
-## exactly. Their faces are marked like a shard's, except that any face made
-## by a cut says 0. Fewer than two crumbs: an empty list.
-static func crumble(whole: Shard, count: int, rng: RandomNumberGenerator) -> Array[Shard]:
-	var out: Array[Shard] = []
-	for attempt in 3:
-		if count < 2:
-			break
-		var seeds := PackedVector3Array()
-		for k in count:
-			var best := Vector3.ZERO
-			var best_gap := -1.0
-			for tries in 6:
-				var corner := whole.points[rng.randi() % whole.points.size()]
-				var p := whole.centroid.lerp(corner, rng.randf_range(0.15, 0.8))
-				var gap := INF
-				for q in seeds:
-					gap = minf(gap, p.distance_squared_to(q))
-				if gap > best_gap:
-					best_gap = gap
-					best = p
-			seeds.append(best)
-		out.clear()
-		for i in count:
-			var s := seeds[i]
-			var planes: Array[Plane] = []
-			var gens := PackedInt32Array()
-			for f in whole.faces.size():
-				var normal := whole.normals[f]
-				planes.append(Plane(normal, normal.dot(whole.points[whole.faces[f][0]] - s)))
-				gens.append(mini(whole.others[f], 0))
-			for j in count:
-				if j != i:
-					planes.append(_bisector(seeds[j] - s, Vector3.ONE))
-					gens.append(0)
-			var pts := Geometry3D.compute_convex_mesh_points(planes)
-			var bit := _build(i, seeds, pts, planes, gens, [], Vector3.ONE)
-			if bit.points.size() < 4 or bit.volume < whole.volume * 0.02:
-				break
-			out.append(bit)
-		if out.size() == count:
-			return out
-		count -= 1
-	out.clear()
-	return out
-
-
 static func _stretch(size: float, grain: float, cells: int) -> float:
 	if cells > 1 or size >= grain * LEAN:
 		return 1.0

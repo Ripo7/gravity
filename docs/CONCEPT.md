@@ -44,11 +44,19 @@ béton se fissure puis lâche, le métal plie.
 | --- | --- | --- | --- | --- |
 | Verre | Éclate, le panneau entier | Au premier choc | Paillettes qui tombent droit | Rien : elles disparaissent |
 | Bois | Casse net, là où il est frappé | En un coup | Longs morceaux légers qui volent loin | Du petit bois que la brute pousse du pied |
-| Béton | Se fissure à vue, puis lâche | Après plusieurs coups | Quelques gros blocs lourds qui tombent droit | Des blocs lourds, en tas bas |
+| Béton | Se fissure à vue, puis lâche | Après plusieurs coups | Quelques gros blocs lourds : la pièce bascule à l'opposé du coup et se disloque en tombant (voir la note) | Des blocs lourds, couchés, en tas bas |
 | Métal | Plie et garde la forme | Jamais en morceaux ; trop plié, il se couche | Aucun : il reste d'un seul tenant | Une pièce tordue, couchée |
 
 Qui porte : le béton et le métal portent des étages, le bois porte une
 maison, le verre ne porte rien.
+
+Note sur le béton (étape 2, à valider) : la page disait d'abord que ses
+blocs « tombent droit ». Au banc, des blocs laissés là où ils étaient
+restaient empilés : un poteau cassé tenait encore debout et portait encore
+sa dalle. C'est le même défaut que le morceau coincé dans son trou de la
+version précédente. La pièce bascule donc à l'opposé du coup, et ses blocs
+se séparent en tombant : l'ouverture est dégagée et les gravats sont
+couchés, bas.
 
 ## Maison, immeuble, tour
 
@@ -78,7 +86,7 @@ Le plan, une pull request par étape, chacune jouable sur le téléphone
 (béton d'abord : validé ; l'ordre des trois autres matières est proposé) :
 
 1. Banc vide : la brute seule sur un sol nu. (fait)
-2. Béton.
+2. Béton. (fait, à valider sur le téléphone)
 3. Métal : c'est la partie neuve, autant savoir tôt si le téléphone suit.
 4. Bois.
 5. Verre.

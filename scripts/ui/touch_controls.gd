@@ -127,11 +127,13 @@ func _on_touch(e: InputEventScreenTouch) -> void:
 		elif e.position.distance_to(kick_center()) < small_radius() * 1.3 and _kick_finger < 0:
 			_kick_finger = e.index
 			player.touch_kick = true
+		elif Hud.takes(e.position, size):
+			pass  # a button or the slider of the HUD: it sees to it itself
 		elif e.position.x < size.x * 0.5 and _stick_finger < 0:
 			_stick_finger = e.index
 			_stick_origin = e.position
 			_stick_pos = e.position
-		elif _look_finger < 0 and not Hud.rebuild_rect(size).grow(10).has_point(e.position):
+		elif _look_finger < 0:
 			_look_finger = e.index
 	else:
 		_last.erase(e.index)

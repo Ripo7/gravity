@@ -68,6 +68,5 @@ python3 tools/moves/build.py /tmp/cmu/data /tmp/ual2        # needs numpy
 
 It prints, for each clip, when its fist or foot gets there, how far it
 reaches and how far the body walks; the same numbers are stored in the
-clip (`metadata/hit`, `next`, `reach`, `power`, `height`, and `way_x`,
-`way_y`, `way_z`: which way the fist or foot is going when it gets there)
-and read by `scripts/player/character.gd`.
+clip (`metadata/hit`, `next`, `reach`, `power`, `height`) and read by
+`scripts/player/character.gd`.

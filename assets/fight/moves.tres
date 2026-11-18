@@ -387,9 +387,6 @@ metadata/power = 2
 metadata/reach = 1.3867
 metadata/height = 0.6945
 metadata/aside = -0.0051
-metadata/way_x = 0.4463
-metadata/way_y = -0.3559
-metadata/way_z = 0.8211
 
 [sub_resource type="Animation" id="upswing"]
 resource_name = "upswing"
@@ -778,9 +775,6 @@ metadata/power = 2
 metadata/reach = 0.7941
 metadata/height = 0.7357
 metadata/aside = -0.0668
-metadata/way_x = 0.7745
-metadata/way_y = 0.6202
-metadata/way_z = 0.1247
 
 [sub_resource type="Animation" id="backhand"]
 resource_name = "backhand"
@@ -1169,9 +1163,6 @@ metadata/power = 2
 metadata/reach = 0.8097
 metadata/height = 0.7572
 metadata/aside = 0.0938
-metadata/way_x = -0.9289
-metadata/way_y = 0.1888
-metadata/way_z = 0.3187
 
 [sub_resource type="Animation" id="slam"]
 resource_name = "slam"
@@ -1560,9 +1551,6 @@ metadata/power = 3
 metadata/reach = 1.0431
 metadata/height = 0.8443
 metadata/aside = -0.0374
-metadata/way_x = -0.1216
-metadata/way_y = -0.9522
-metadata/way_z = -0.2802
 
 [sub_resource type="Animation" id="kick"]
 resource_name = "kick"
@@ -1951,9 +1939,6 @@ metadata/power = 3
 metadata/reach = 0.9499
 metadata/height = 1.141
 metadata/aside = 0
-metadata/way_x = 0.1571
-metadata/way_y = 0.8205
-metadata/way_z = 0.5496
 
 [resource]
 _data = {

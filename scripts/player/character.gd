@@ -170,15 +170,6 @@ func height() -> float:
 	return _about("height") if striking() else 0.0
 
 
-## Which way the fist or foot of the strike under way goes when it gets
-## there (a unit vector, in this node's space: -Z is ahead).
-func way() -> Vector3:
-	if not striking():
-		return Vector3.FORWARD
-	# (The clips say it in the model's space, which looks along +Z.)
-	return Vector3(-_about("way_x"), _about("way_y"), -_about("way_z"))
-
-
 ## How far the clips carried the body in the last physics step (m, in the
 ## world): the steps the blows take.
 func root_motion() -> Vector3:
@@ -229,8 +220,8 @@ func _start(named: String, fade: float) -> void:
 
 
 ## What the clip of the move under way says about itself: "hit" (s before
-## its fist or foot gets there), "next", "reach" (m), "power", "height" (m),
-## "way_x", "way_y", "way_z". See MOVES.
+## its fist or foot gets there), "next", "reach" (m), "power", "height"
+## (m). See MOVES.
 func _about(what: String) -> float:
 	return _clips.get_animation("fight/" + state).get_meta(what, 0.0)
 
