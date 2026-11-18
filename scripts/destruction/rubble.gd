@@ -344,16 +344,18 @@ func spin_of(i: int) -> Vector3:
 
 
 ## A blow of `power` lands at `at`, going along `way`: what lies loose
-## within `radius` m of it is sent off, the lighter the faster.
+## within `radius` m of it is sent off that way (a little up, if the blow
+## goes ahead), the lighter the faster.
 func shove(at: Vector3, radius: float, way: Vector3, power: int) -> void:
-	var flat := Vector3(way.x, 0.0, way.z).normalized()
+	var along := way.normalized()
+	var level := Vector3(along.x, 0.0, along.z).length()
 	for i in body.size():
 		if alive[i] == 0 or _xf[i].origin.distance_to(at) > radius + reach[i]:
 			continue
 		thaw(i)
 		var most := SHOVE_MOST if mass[i] > LIGHT else FLUNG
 		var speed := minf(SHOVE * power / mass[i], most) * _slow()
-		var push := (flat + Vector3.UP * 0.3) * speed * mass[i]
+		var push := (along + Vector3.UP * 0.3 * level) * speed * mass[i]
 		PhysicsServer3D.body_apply_central_impulse(body[i], push)
 
 

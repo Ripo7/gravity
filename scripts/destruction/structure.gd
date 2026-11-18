@@ -579,22 +579,24 @@ func _free(i: int, xf: Transform3D, lin: Vector3, ang: Vector3) -> int:
 
 
 ## Block `i`, which stood, is knocked out of its piece by something going
-## along `way` (out from the middle of the piece, if that is not told:
-## something came down on it).
+## along `way`: it leaves that way, down as much as the blow goes down
+## (out from the middle of the piece, if no way is told: something came
+## down on it).
 func _expel(i: int, way: Vector3) -> void:
 	var p := piece_of[i]
-	var flat := Vector3(way.x, 0.0, way.z)
-	if flat.length() < 0.1:
-		flat = Vector3(centroid[i].x - place[p].origin.x, 0.0, centroid[i].z - place[p].origin.z)
-		if flat.length() < 0.05:
-			flat = Vector3.FORWARD.rotated(Vector3.UP, randf() * TAU)
+	var along := way.normalized()
+	if Vector3(way.x, 0.0, way.z).length() < 0.1:
+		along = Vector3(centroid[i].x - place[p].origin.x, 0.0, centroid[i].z - place[p].origin.z)
+		if along.length() < 0.05:
+			along = Vector3.FORWARD.rotated(Vector3.UP, randf() * TAU)
+		along = along.normalized()
 		if not Matter.upright(size[p]):
 			# (Out of a slab, from above: it drops.)
-			flat = Vector3.ZERO
+			along = Vector3.ZERO
 	var slow := sqrt(rubble.fall)
 	var own := Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * 2.0 * SCATTER * slow
 	stands[i] = 0
-	var out := flat.normalized() * Matter.KNOCK[matter[p]] * slow + own
+	var out := along * Matter.KNOCK[matter[p]] * slow + own
 	var block := _free(i, Transform3D(Basis(), centroid[i]), out, own)
 	# (Whatever its shape, it gets clear of what is left of its piece; and
 	# from under what the piece carried, it slides out.)
@@ -763,9 +765,11 @@ func _fall(p: int, chunk: PackedInt32Array, way: Vector3) -> void:
 	var thrown := Vector3.ZERO
 	if way != Vector3.ZERO:
 		turn = _over(way) * sqrt(rubble.fall)
-		# (What is light is thrown as well, a little up.)
-		var flat := Vector3(way.x, 0.0, way.z).normalized()
-		thrown = (flat + Vector3.UP * 0.25) * Matter.THROWN[matter[p]] * sqrt(rubble.fall)
+		# (What is light is thrown as well, the way the blow goes: a little
+		# up if it goes ahead, down if it goes down.)
+		var along := way.normalized()
+		var level := Vector3(along.x, 0.0, along.z).length()
+		thrown = (along + Vector3.UP * 0.25 * level) * Matter.THROWN[matter[p]] * sqrt(rubble.fall)
 	var lying := rubble.add(
 		shapes,
 		Transform3D(Basis(), middle),

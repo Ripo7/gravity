@@ -5,11 +5,11 @@ extends CharacterBody3D
 ## character's left shoulder; the character goes where you push, relative to
 ## the camera, and turns to face where it goes. The punch button throws a
 ## blow, then the next of the combination if it is pressed again, and so on;
-## there is a kick too. While such a move plays, the body goes where the
-## move steps (Character.root_motion).
+## another button brings both fists down (the hammer blow). While such a
+## move plays, the body goes where the move steps (Character.root_motion).
 ##
-## A blow lands where its fist or foot first touches something on its way,
-## not where the move ends: the fist is followed step by step from the
+## A blow lands where its fist first touches something on its way, not
+## where the move ends: the fist is followed step by step from the
 ## moment it is thrown (Character.reached). If it touches nothing, the
 ## blow goes to what the arm behind it runs through, then, when the move
 ## has it land, to what stands between the body and the fist.
@@ -18,8 +18,9 @@ extends CharacterBody3D
 ## where it landed, on what and how hard (`blow`), and that takes it.
 
 ## A blow lands at `at`, on the body `on` (an empty RID: on nothing; `at`
-## is then where the fist or foot ended). It was thrown along `way`,
-## `power` hard (2 a blow, 3 a heavy one).
+## is then where the fist ended). It pushes along `way` (ahead of the
+## brute; the hammer blow, down as well), `power` hard (2 a blow, 3 a
+## heavy one).
 signal blow(at: Vector3, way: Vector3, power: int, on: RID)
 
 const FOV := 70.0
@@ -57,8 +58,7 @@ const RADIUS := 0.35
 ## (m; the most is its left hand in the leap, 0.8 m; with room to
 ## spare).
 const LUNGE := 1.1
-## A fist, or a foot, is a ball this wide round the knuckles or the toes
-## (m, its radius).
+## A fist is a ball this wide round the knuckles (m, its radius).
 const FIST := 0.1
 ## What stands between the body and a fist that touched nothing on its way
 ## is looked for this wide (m, a radius): the arm and the shoulder.
@@ -82,7 +82,7 @@ const GIVE_WAY := 3.0
 var touch_move := Vector2.ZERO
 var touch_jump := false
 var touch_punch := false
-var touch_kick := false
+var touch_hammer := false
 ## Set by TouchControls and scripted runs: sprint without the key.
 var touch_sprint := false
 ## Where the camera looks (rad): `yaw` about the vertical (0 is along -Z),
@@ -159,12 +159,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 		elif event.is_action_pressed("punch"):
 			punch()
-		elif event.is_action_pressed("kick"):
-			kick()
+		elif event.is_action_pressed("hammer"):
+			hammer()
 	elif event.is_action_pressed("punch"):
 		punch()
-	elif event.is_action_pressed("kick"):
-		kick()
+	elif event.is_action_pressed("hammer"):
+		hammer()
 	elif event.is_action_pressed("release_mouse"):
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
@@ -207,9 +207,9 @@ func punch() -> bool:
 	return is_on_floor() and character.punch()
 
 
-## A kick, feet on the ground.
-func kick() -> bool:
-	return is_on_floor() and character.kick()
+## The hammer blow (see Character.hammer), feet on the ground.
+func hammer() -> bool:
+	return is_on_floor() and character.hammer()
 
 
 func _physics_process(delta: float) -> void:
@@ -218,10 +218,10 @@ func _physics_process(delta: float) -> void:
 	move = (move + touch_move).limit_length(1.0)
 	if touch_punch:
 		punch()
-	if touch_kick:
-		kick()
+	if touch_hammer:
+		hammer()
 	touch_punch = false
-	touch_kick = false
+	touch_hammer = false
 	if stick != Vector2.ZERO:
 		# Squared response curve gives fine aim near the centre.
 		look(stick * stick.length() * stick_sensitivity * delta)
@@ -327,9 +327,9 @@ func _on_posed() -> void:
 		move_and_collide(-ahead * deep)
 
 
-## The fist or the foot of the strike under way is at the end of `limb`
-## (see Character.limb). What it touches on its way there takes the blow,
-## there and then; `there`: the move has it land now, on something or not.
+## The fist of the strike under way is at the end of `limb` (see
+## Character.limb). What it touches on its way there takes the blow, there
+## and then; `there`: the move has it land now, on something or not.
 func _on_reached(limb: PackedVector3Array, there: bool) -> void:
 	var fist := limb[2]
 	var was := _fist_was if _fist_was.is_finite() else fist
@@ -348,7 +348,9 @@ func _on_reached(limb: PackedVector3Array, there: bool) -> void:
 	if met.is_empty() and not there:
 		return
 	character.landed()
-	blow.emit(met.get("at", fist), ahead, character.power(), met.get("on", RID()))
+	var dive := character.dive()
+	var way := ahead * cos(dive) + Vector3.DOWN * sin(dive)
+	blow.emit(met.get("at", fist), way, character.power(), met.get("on", RID()))
 
 
 ## What the fist touches as it goes from `from` to `to`, or else what the

@@ -6,11 +6,12 @@
 Two kinds of clips, in one library:
 
 - MADE: animations made for games, from Quaternius's Universal Animation
-  Library 2 (CC0). Its skeleton is the mannequin's, so they are taken over
-  as they are (library.py): cut, joined end to end, measured.
+  Libraries (CC0). Their skeleton is the mannequin's, so they are taken
+  over as they are (library.py): cut, joined end to end, measured. One is
+  reworked: a throw of one hand made a blow of both fists (`both`).
 - CLIPS: motion capture, from the CMU Graphics Lab Motion Capture Database
   in Bruce Hahne's BVH conversion, put on the mannequin (retarget.py) and
-  retimed.
+  retimed. None for now: the kick is out of the game.
 
 Where the files come from, which clips and which seconds of them:
 assets/fight/SOURCE.md.
@@ -21,7 +22,10 @@ Every clip starts with the pelvis over the origin, the opponent along +Z
 put); what is left is the pose. Each strike carries, as metadata, the
 moment its fist or foot gets there ("hit"), the moment the next move may
 start ("next"), how far from the body that fist or foot is then
-("reach"), how high ("height") and how hard it is ("power").
+("reach"), how high ("height") and how hard it is ("power"); and, if they
+are not the usual ones: with the left hand ("left"), with both ("both"),
+from how long before "hit" the fist counts ("swing"), how far below level
+it pushes ("dive", rad).
 """
 import os
 import sys
@@ -57,11 +61,7 @@ LINGERS = 2.5
 #   slow: how much longer the wind-up and the recovery take than performed
 #   (the blow itself is retimed the same way for all, see SNAP)
 #   steps: the root takes the steps (else the clip stays where it is)
-CLIPS = [
-    # A karateka's front kick, stepping in.
-    dict(name="kick", take="135_04", t0=2.62, t1=3.30, hit=3.11, limb="RightFoot", next=3.26, power=3,
-         slow=(1.2, 1.3), steps=True),
-]
+CLIPS = []  # (none for now: the kick, the one move that was a capture, is out of the game)
 
 
 # The clips made for games. name, the file (without .glb: "_RM" has the
@@ -86,13 +86,22 @@ MADE = [
     # A leap, the fist straight up, and down to the ground.
     dict(name="slam", glb="UAL2_Standard_RM", parts=[("Sword_Heavy_Combo", 2.1, 3.8)],
          hit=15 / 30, limb="RightHand", next=1.1, power=3, steps=True),
+    # Both fists side by side, from over the head down to the knees: the
+    # gesture of a throw, its left arm made the mirror image of its right
+    # (both: how far from the middle each wrist is, m). The fists count
+    # from the top of their way down (swing, s before they are there), and
+    # push down as much as ahead (dive, degrees below level).
+    dict(name="hammer", glb="UAL2_Standard_RM", parts=[("OverhandThrow", 0.1, 1.33)], both=0.05,
+         hit=0.37, limb="RightHand", next=0.8, power=3, steps=False, swing=0.14, dive=45.0),
 ]
 LIMBS = {"LeftHand": "DEF-hand.L", "RightHand": "DEF-hand.R", "RightFoot": "DEF-foot.R", "LeftFoot": "DEF-foot.L"}
 
 
-def made(lib, skel, spec):
+def made(lib, skel, spec, fist):
     """One clip made of clips of the library: tracks and metadata."""
     turns, places = library.join([lib.clip(part[0], MADE_FPS, *part[1:]) for part in spec["parts"]])
+    if "both" in spec:
+        turns = library.joined(skel, turns, places, fist, spec["both"])
     walk = places["root"] - places["root"][0]
     tracks = []
     if spec.get("steps"):
@@ -114,6 +123,12 @@ def made(lib, skel, spec):
                     reach=float(np.hypot(at[0], at[2])), height=float(at[1]), aside=float(at[0]))
         if spec["limb"].startswith("Left"):
             meta.update(left=1.0)  # (the others are thrown with the right)
+        if "both" in spec:
+            meta.update(both=1.0)
+        if "swing" in spec:
+            meta.update(swing=spec["swing"])
+        if "dive" in spec:
+            meta.update(dive=float(np.radians(spec["dive"])))
     clip = {"name": spec["name"], "dt": 1.0 / MADE_FPS, "tracks": tracks, "meta": meta, "loop": False}
     return clip, walk
 
@@ -233,7 +248,7 @@ def main():
         source = spec.get("file") or spec["glb"] + ".glb"
         if source not in libraries:
             libraries[source] = library.Library(os.path.join(games, source))
-        clip, walk = made(libraries[source], skel, spec)
+        clip, walk = made(libraries[source], skel, spec, fist)
         clips.append(clip)
         length = (max(len(v) for _, _, v in clip["tracks"]) - 1) / MADE_FPS
         print("%-8s %s (plays %.2f s)  walks %+.2f m ahead, %+.2f aside  %s" % (

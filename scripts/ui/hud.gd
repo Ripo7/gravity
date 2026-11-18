@@ -48,11 +48,11 @@ func _ready() -> void:
 	_hint = _label(22)
 	_hint.position = Vector2(20, 44)
 	_hint.text = (
-		"Clic ou F : frapper  ·  Clic droit ou E : coup de pied\n"
+		"Clic ou F : frapper  ·  Clic droit ou E : marteau (deux poings vers le bas)\n"
 		+ "Espace : sauter  ·  Maj : sprinter  ·  R : reconstruire"
 	)
 	if TouchControls.should_show():
-		_hint.text = "Rouge : frapper  ·  Orange : coup de pied\nManette poussée à fond : sprint"
+		_hint.text = "Rouge : frapper  ·  Orange : marteau (vers le bas)\nManette poussée à fond : sprint"
 	var button := Button.new()
 	button.text = "Reconstruire"
 	button.focus_mode = Control.FOCUS_NONE

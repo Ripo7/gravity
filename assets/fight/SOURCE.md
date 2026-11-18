@@ -1,9 +1,9 @@
 # The brute's blows
 
 `moves.tres` is a Godot animation library for the mannequin of
-`assets/mannequin`, built by `tools/moves/build.py` from two sources:
-animations made for games, and motion capture for the one move those do
-not have (the kick).
+`assets/mannequin`, built by `tools/moves/build.py` from animations made
+for games: two packs by the author of the mannequin. (Motion capture gave
+the kick, which is out of the game for now: see below.)
 
 ## Made for games: Universal Animation Library 2
 
@@ -24,9 +24,18 @@ mirror <https://github.com/NafisRayan/Animate-Rigged-Humanoid-No-Blender>
 | Clip | Made of | What it is in the game |
 | --- | --- | --- |
 | `slam` | `Sword_Heavy_Combo`, 2.1 to 3.8 s | a leap, the fist straight up, and down to the ground |
+| `hammer` | `OverhandThrow`, 0.1 to 1.33 s, made a blow of both fists | both fists side by side, from over the head down to the knees |
 
-It is the last stroke of the heavy sword combination, cut out of the clip
-of the whole combination and thrown without the sword.
+`slam` is the last stroke of the heavy sword combination, cut out of the
+clip of the whole combination and thrown without the sword.
+
+`hammer` is not in the pack as such: the tool makes it out of the
+overhand throw (`joined` in `tools/moves/library.py`). The trunk keeps
+how far it leans and loses its twist; the right arm does to the trunk
+what it did in the throw, then swings about its shoulder until its wrist
+is 0.05 m from the middle of the chest; the left arm is the mirror image
+of the right; both hands are the fists of `jab`, the wrists straight.
+The pelvis and the legs are the throw's own.
 
 ## Made for games: Universal Animation Library (the first)
 
@@ -44,7 +53,13 @@ the shoulder. They are the first two blows of the brute's combination.
 They are read from the pack as distributed, not from the copy in
 `assets/mannequin`, which is cut down to the clips the game plays itself.
 
-## Motion capture: CMU
+## Motion capture: CMU (nothing of it in the game for now)
+
+The kick came from here. The owner found its animation wrong on
+19 November 2026 and it was taken out: `moves.tres` holds nothing from
+this database at present. The tool still reads it (`CLIPS` in
+`tools/moves/build.py` is the list of captures, empty for now), and what
+follows says where the kick came from, for when one comes back.
 
 The CMU Graphics Lab Motion Capture Database, <http://mocap.cs.cmu.edu/>,
 in the BVH conversion by Bruce Hahne (cgspeed.com, 2010 release), as
@@ -58,26 +73,30 @@ mirrored at <https://github.com/una-dinosauria/cmu-mocap> (commit
 (from mocap.cs.cmu.edu; the conversion adds no restriction of its own, see
 `READMEFIRST.txt` in the mirror.)
 
-| Clip | Take (as the database names it) | Seconds of the take | What it is in the game |
+| Clip | Take (as the database names it) | Seconds of the take | What it was in the game |
 | --- | --- | --- | --- |
-| `kick` | 135_04 (front kick) | 2.62 to 3.31 | straight ahead with the right leg, stepping in |
+| `kick` (out) | 135_04 (front kick) | 2.62 to 3.31 | straight ahead with the right leg, stepping in |
 
-It is put on the mannequin's skeleton by the tool and retimed: its
-wind-up and its recovery take 1.2 and 1.3 times as long as performed, the
-last 0.12 s before it lands 0.65 of their time, and the 0.06 s after it
-2.5 times theirs.
+It was put on the mannequin's skeleton by the tool and retimed: its
+wind-up and its recovery took 1.2 and 1.3 times as long as performed, the
+last 0.12 s before it landed 0.65 of their time, and the 0.06 s after it
+2.5 times theirs. A lower, quicker kick (take 74_03, 1.49 to 2.24 s) was
+tried the same day and is kept, unmerged, on the branch
+`refonte/coup-de-pied`.
 
 ## Making it again
 
 ```sh
-git clone --depth 1 --filter=blob:none --sparse https://github.com/una-dinosauria/cmu-mocap /tmp/cmu
-git -C /tmp/cmu sparse-checkout set --no-cone /data/135/135_04.bvh
 # /tmp/ual2: UAL2_Standard.glb and UAL2_Standard_RM.glb, from the pack's "Unreal-Godot" folder,
 # and beside them the first pack as distributed: AnimationLibrary_Godot_Standard.gltf and .bin
+# /tmp/cmu/data: where the captures would be (none is read for now, it need not exist):
+#   git clone --depth 1 --filter=blob:none --sparse https://github.com/una-dinosauria/cmu-mocap /tmp/cmu
+#   git -C /tmp/cmu sparse-checkout set --no-cone /data/135/135_04.bvh
 python3 tools/moves/build.py /tmp/cmu/data /tmp/ual2        # needs numpy
 ```
 
-It prints, for each clip, when its fist or foot gets there, how far it
-reaches and how far the body walks; the same numbers are stored in the
-clip (`metadata/hit`, `next`, `reach`, `power`, `height`) and read by
+It prints, for each clip, when its fist gets there, how far it reaches
+and how far the body walks; the same numbers are stored in the clip
+(`metadata/hit`, `next`, `reach`, `power`, `height`; and `left`, `both`,
+`swing`, `dive` for the clips that have them) and read by
 `scripts/player/character.gd`.

@@ -1,6 +1,6 @@
 extends TestCase
-## The brute's blows: the combination and the kick, what they show, where
-## they take the body, and what each says when its fist or foot gets there.
+## The brute's blows: the combination and the hammer blow, what they show,
+## where they take the body, and what each says when its fist gets there.
 
 var main: Main
 var p: Player
@@ -53,14 +53,14 @@ func test_three_blows_in_a_row_then_it_stands_again() -> void:
 	# Nothing of the kind in the air.
 	p.touch_jump = true
 	await frames(6)
-	check(not p.punch() and not p.kick(), "no blow or kick in the air")
+	check(not p.punch() and not p.hammer(), "no blow in the air")
 	await _unload()
 
 
 func test_each_blow_says_when_it_lands_how_far_and_how_hard() -> void:
 	await _load()
 	var c := p.character
-	# What the character says the moment each fist or foot gets there:
+	# What the character says the moment each fist gets there:
 	# [move, s since the first press, reach, power, height], and then
 	# where the limb that strikes is in the pose of that step (from the
 	# body's feet): the pose is set after the character has spoken.
@@ -102,26 +102,104 @@ func test_each_blow_says_when_it_lands_how_far_and_how_hard() -> void:
 		check(landed[0][1] < 0.3, "the first lands in a quarter of a second (%.2f s)" % landed[0][1])
 		check(landed[2][1] < 2.0, "the last within two (%.2f s)" % landed[2][1])
 	await frames(120)
-	# The kick.
+	# The hammer blow: both fists, from over the head down to the knees.
 	landed.clear()
 	steps[0] = 0
-	check(p.kick(), "it kicks")
-	check_eq(c.state, "kick", "a kick")
+	var stood := p.global_position
+	check(p.hammer(), "the other button strikes too")
+	check_eq(c.state, Character.HAMMER, "the hammer blow")
+	var over := 0.0
 	for k in 90:
 		await frames(1)
 		steps[0] += 1
+		over = maxf(over, minf(_bone("hand.L").y, _bone("hand.R").y) - p.global_position.y)
 		if not landed.is_empty():
-			landed[-1].append(_bone("foot.R") - p.global_position)
+			landed[-1].append(_bone("hand.R") - p.global_position)
+			landed[-1].append(_bone("hand.L") - p.global_position)
 			break
-	check_eq(landed.size(), 1, "the kick lands")
+	check_eq(landed.size(), 1, "the hammer blow lands")
 	if landed.size() == 1:
-		var foot: Vector3 = landed[0][5]
+		var right: Vector3 = landed[0][5]
+		var left: Vector3 = landed[0][6]
 		check_eq(landed[0][3], 3, "as hard as the last blow")
-		check(foot.y > 0.8, "the foot is up when it counts (%.2f m)" % foot.y)
-		check(landed[0][2] > 0.8, "and reaches farther than a fist (%.2f m)" % landed[0][2])
+		check(over > 1.5, "both fists went over the head (%.2f m up)" % over)
+		check(
+			right.y < 0.6 and left.y < 0.6,
+			"and are down by the knees (%.2f and %.2f m up)" % [right.y, left.y]
+		)
+		check(right.distance_to(left) < 0.2, "side by side (%.2f m apart)" % right.distance_to(left))
+		check(absf(right.x + left.x) < 0.2, "in front of the middle of the body")
+		check(landed[0][1] < 0.45, "within half a second of the press (%.2f s)" % landed[0][1])
 	await frames(70)
 	check_eq(c.state, "ground", "then it stands again")
-	check(_bone("foot.R").y < 0.25, "both feet on the ground")
+	check(p.global_position.distance_to(stood) < 0.05, "where it stood: it takes no step")
+	check(_bone("foot.R").y < 0.25 and _bone("foot.L").y < 0.25, "both feet on the ground")
+	await _unload()
+
+
+func test_the_hammer_blow_lands_where_the_fists_come_down_and_pushes_down() -> void:
+	await _load()
+	var c := p.character
+	var s := main.structure
+	# In the open: on nothing, down by the knees, ahead of the brute.
+	var landed: Array[Array] = []
+	p.blow.connect(
+		func(at: Vector3, way: Vector3, power: int, on: RID) -> void:
+			landed.append([at - p.global_position, way, power, s.standing(on), on.is_valid()])
+	)
+	var ahead := Basis(Vector3.UP, p.facing) * Vector3.FORWARD
+	p.hammer()
+	await frames(90)
+	check_eq(landed.size(), 1, "one blow")
+	if landed.size() == 1:
+		var at: Vector3 = landed[0][0]
+		var way: Vector3 = landed[0][1]
+		check(not landed[0][4], "in the open, on nothing")
+		check(at.y < 0.5, "it ends down by the knees (%.2f m up)" % at.y)
+		check(at.dot(ahead) > 0.5, "ahead of the brute (%.2f m)" % at.dot(ahead))
+		check(absf(at.cross(ahead).y) < 0.05, "in the middle: the two fists count as one")
+		check(way.y < -0.5 and way.dot(ahead) > 0.5, "it pushes down as much as ahead (%s)" % way)
+		check_near(way.length(), 1.0, 0.001, "(a direction)")
+	# A step from the wall, which is taller than the brute: the fists meet
+	# its face on their way down, well before the knees.
+	_stand(Main.WALL_AT + Vector3(0, 0.05, 1.0), Main.WALL_AT + Vector3.UP)
+	await frames(10)
+	landed.clear()
+	var q := main.wall
+	var all := s.blocks[q]
+	var down: Array[float] = []  # how fast each block knocked out goes down, then
+	for k in 400:
+		if not c.striking() and landed.size() < 4:
+			p.hammer()
+		var live := s.rubble.live
+		await frames(1)
+		if s.rubble.live > live and down.is_empty():
+			for i in s.rubble.body.size():
+				if s.rubble.alive[i] == 1:
+					down.append(s.rubble.velocity_of(i).y)
+		if landed.size() >= 4 and not c.striking():
+			break
+	check_eq(landed.size(), 4, "four blows")
+	for k in mini(landed.size(), 3):
+		var at: Vector3 = landed[k][0]
+		check(
+			at.y > 1.2 and at.y < 1.8,
+			"blow %d: on the face of the wall, on the way down (%.2f m up)" % [k + 1, at.y]
+		)
+	var left := 0
+	for i in range(s.first[q], s.first[q] + all):
+		left += s.stands[i]
+	check(left < all, "the wall gives where they land")
+	check(not down.is_empty(), "blocks are knocked out")
+	for speed in down:
+		check(speed < -0.5, "and go down (%.1f m/s)" % speed)
+	if landed.size() == 4:
+		# The next one lands lower: on what is left under the hole.
+		var at: Vector3 = landed[3][0]
+		var first: Vector3 = landed[0][0]
+		check(at.y < first.y - 0.2, "then lower, on what is left (%.2f m up after %.2f)" % [at.y, first.y])
+		check_eq(landed[3][3], q, "still the wall")
+	check_eq(s.state[q], Structure.STANDS, "what is left of the wall stands")
 	await _unload()
 
 
@@ -281,8 +359,8 @@ func test_a_blow_that_touches_nothing_says_where_its_fist_ended() -> void:
 
 func test_the_body_stays_out_of_what_stands_while_it_strikes() -> void:
 	# Right up against the wall, the column and the thinner metal post: the
-	# combination, then a kick. The moves lunge 0.9 m ahead of where the
-	# brute stands in the leap.
+	# combination, then the hammer blow. The moves lunge 0.9 m ahead of
+	# where the brute stands (the head, in the leap and in the hammer blow).
 	for target: Array in [
 		["the wall", Main.WALL_AT, 0.6],
 		["the column", Main.COLUMN_AT, 0.6],
@@ -304,23 +382,26 @@ func test_the_body_stays_out_of_what_stands_while_it_strikes() -> void:
 		)
 		var steps := 0
 		var inside := 0
-		var kicked := false
+		var hammered := false
 		var farthest := 0.0
 		for k in 700:
 			if k % 6 == 0 and thrown[0] < 3:
 				p.punch()
-			elif thrown[0] >= 3 and not c.striking() and not kicked:
-				kicked = p.kick()
+			elif thrown[0] >= 3 and not c.striking() and not hammered:
+				hammered = p.hammer()
 			await frames(1)
 			if c.striking():
 				steps += 1
 				inside += _in_what_stands(c)
 				farthest = maxf(farthest, p.global_position.z - at.z)
-			elif kicked:
+			elif hammered:
 				break
-		check(steps > 100 and kicked, "against %s: a combination and a kick (%d steps)" % [target[0], steps])
+		check(
+			steps > 100 and hammered,
+			"against %s: a combination and a hammer blow (%d steps)" % [target[0], steps]
+		)
 		check_eq(
-			inside, 0, "against %s, nothing of the body but the limb that strikes goes into it" % target[0]
+			inside, 0, "against %s, nothing of the body but the fists that strike goes into it" % target[0]
 		)
 		check(on_it[0] >= 3, "against %s, its blows land all the same (%d)" % [target[0], on_it[0]])
 		check(

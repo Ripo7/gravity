@@ -6,17 +6,20 @@ is being rebuilt from its concept, one step at a time, in greybox:
 comes before the code.
 
 **Where it is now: step 5 of 7, glass.** A bare ground, one brute that
-walks, runs, sprints, jumps, throws a three-blow combination and kicks, and
+walks, runs, sprints, jumps, throws a three-blow combination or brings
+both fists down (the hammer blow), and
 on the bench in front of it the same three things three times: a column,
 a wall, a slab on four columns. In concrete on its right, in metal on its
 left, in wood straight ahead and farther off (a post, a palisade of
 planks, a floor of boards on beams). Behind it as it starts, three panes of
 glass.
 
-A blow lands where its fist or foot first touches something, and harms
+A blow lands where its fist first touches something, and harms
 that place, not the whole piece: the blows of a combination land apart
 (two straights at the height of the shoulder, a fist from above over
-the brute's head): the fists land high, and what is low is for the kick. Its body stays out of what stands: it
+the brute's head): the fists land high. What they leave standing is for
+the hammer blow: both fists come down on it, and what they knock out
+goes down rather than away. Its body stays out of what stands: it
 backs off as it lunges, and only the fist and the arm go in. Concrete
 cracks round the blow, for all to see, then lets go there: the few big blocks
 round the fist are knocked out, away from the blow, and a wall keeps a
@@ -60,7 +63,7 @@ the concept. The project before that is on
 | Sprint | shift | the stick held fully pushed for 0.8 s |
 | Look | mouse | drag on the right half |
 | Strike | left click or F | big red button |
-| Kick | right click or E | orange button |
+| Hammer blow (both fists down) | right click or E | orange button |
 | Jump | space | small button |
 | Put the bench back | R | "Reconstruire" |
 | How fast things fall | the slider at the top | the slider at the top |
@@ -85,7 +88,15 @@ A metal post 0.2 m thick takes a combination and a half where the fists
 land: it leans more at each blow and lies down at the seventh. A sheet
 takes a dent at each blow and lies down at the third in the same place;
 blows elsewhere start other dents. A blow from the other side takes as
-much back. A kick is as heavy as the fourth blow of the combination.
+much back.
+
+The hammer blow is as heavy as the last blow of the combination. The
+brute stays where it stands; both fists go over its head and come down
+to its knees, 0.8 m ahead. It lands where they first meet something on
+the way: on top of what is lower than the brute, on the face of a wall
+taller than it at about 1.5 m, then lower each time the place gives. It
+pushes down as much as ahead: what it knocks out comes down at the foot
+of the piece.
 
 The slider ("Chute") sets how fast what has come off falls, as a share of
 real gravity: 1 to begin with, as things really fall (what the owner
@@ -152,8 +163,9 @@ Add `--write-movie out.avi --fixed-fps 30` before `--path` to record a run.
   (where the camera sits and how it comes in at a wall, the character
   turning to where it goes, its planted foot not sliding from a slow walk
   to a sprint, jumps and landings, stepping onto what is low); the blows
-  (the four in order then standing again, each one saying when it lands,
-  how far and how hard, the kick); the controls, keys and thumbs; and the
+  (the three in order then standing again, each one saying when it lands,
+  how far and how hard, the hammer blow and where it lands); the controls,
+  keys and thumbs; and the
   cut of a box into blocks (volumes, shared faces).
 - `tools/web_probe.mjs`: loads the web export in headless Chromium, has
   the brute break the concrete column and bend the metal post, and fails

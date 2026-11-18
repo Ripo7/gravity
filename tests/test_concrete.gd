@@ -375,7 +375,7 @@ func test_things_fall_as_fast_as_they_are_set_to() -> void:
 	await _unload()
 
 
-func test_the_brute_knocks_a_hole_in_the_wall_where_its_fists_land_then_kicks_a_way_through() -> void:
+func test_the_brute_knocks_a_hole_in_the_wall_where_its_fists_land_then_hammers_a_way_through() -> void:
 	await _load()
 	var q := main.wall
 	var all := s.blocks[q]
@@ -415,8 +415,9 @@ func test_the_brute_knocks_a_hole_in_the_wall_where_its_fists_land_then_kicks_a_
 		for at in landed:
 			off = minf(off, Vector2(s.centroid[i].x - at.x, s.centroid[i].y - at.y).length())
 		check(off < 0.6, "block %d, knocked out, was by a fist (%.2f m from it)" % [i, off])
-	# The fists land high: what is below the shoulder is for the foot.
-	# More blows, then kicks from a step back, and it walks through.
+	# The straights land high: what they leave standing is for both fists,
+	# brought down on it. More blows, then hammer blows from a step back,
+	# and it walks through.
 	for k in 1200:
 		if k % 6 == 0:
 			p.punch()
@@ -431,13 +432,14 @@ func test_the_brute_knocks_a_hole_in_the_wall_where_its_fists_land_then_kicks_a_
 			low = mini(low, int(s.centroid[i].y * 10.0))
 	check(low < 5, "the fists have left the foot of the wall standing")
 	var through := false
-	var kicks := 0
+	var hammered := 0
+	landed.clear()
 	for attempt in 5:
-		for aside: float in [0.0, -0.35, 0.35]:
-			_face(Main.WALL_AT + Vector3(aside, 0.05, 1.1), Main.WALL_AT + Vector3(aside, 1, 0))
+		for again in 3:
+			_face(Main.WALL_AT + Vector3(0, 0.05, 1.1), Main.WALL_AT + Vector3.UP)
 			await frames(5)
-			p.kick()
-			kicks += 1
+			p.hammer()
+			hammered += 1
 			await frames(80)
 		await _rest(600)
 		_face(Main.WALL_AT + Vector3(0, 0.05, 2.0), Main.WALL_AT + Vector3.UP)
@@ -448,7 +450,9 @@ func test_the_brute_knocks_a_hole_in_the_wall_where_its_fists_land_then_kicks_a_
 			through = true
 			break
 	check(through, "the brute walks through (z %.2f)" % p.global_position.z)
-	check(kicks <= 15, "after a few kicks (%d)" % kicks)
+	check(hammered <= 12, "after a few hammer blows (%d)" % hammered)
+	for at in landed:
+		check(at.y < 1.3, "which land on what the straights left (%.2f m up)" % at.y)
 	check_eq(s.state[q], Structure.STANDS, "what is left of the wall stands")
 	check(_standing(s, q) >= all / 4, "a good part of it (%d blocks of %d)" % [_standing(s, q), all])
 	for other in s.pieces:

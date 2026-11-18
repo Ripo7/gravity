@@ -34,7 +34,7 @@ const TINT: Array[Color] = [
 const DENSITY: Array[float] = [2400.0, 7800.0, 600.0, 2500.0]
 ## How much a piece takes before it lets go (concrete) or lies down (metal),
 ## in points of blows, for each metre it is thick the way it is thinnest. A
-## blow is 2 points, a heavy one (the last of the combination, the kick) 3.
+## blow is 2 points, a heavy one (the last of the combination, the hammer blow) 3.
 ## A concrete column 0.4 m thick takes 9, one whole combination; a metal
 ## post 0.2 m thick takes 14, a combination and a half. It belongs to the
 ## piece: however the piece is cut or drawn, it gives at the same blow.

@@ -35,10 +35,11 @@ node with `main.gd`) and the test runner's.
   gamepad and the thumbs (`TouchControls` sets its `touch_*`), moves the
   capsule and places the camera.
 - **`Character`** is a body you see and nothing else: it is told what
-  happens (`move`, `jump`, `land`, `punch`, `kick`) and turns it into a
-  pose. It says when a strike starts (`swung`), where its fist or foot
-  is drawn at each step while it is thrown (`reached`, `limb`), and how
-  hard the blow is (`power`). It never decides what the blow does.
+  happens (`move`, `jump`, `land`, `punch`, `hammer`) and turns it into
+  a pose. It says when a strike starts (`swung`), where its fist is drawn
+  at each step while it is thrown (`reached`, `limb`), how hard the blow
+  is (`power`) and how far below level it pushes (`dive`). It never
+  decides what the blow does.
 - **`Player`** follows that fist and says where it first touched
   something, what, and how hard (`blow`); **`Main`** hands it to the
   structure (`Structure.strike`). The brute knows nothing of what it
@@ -84,7 +85,7 @@ which bends; glass, which bursts.
    of blows for each metre the piece is thick the way it is thinnest,
    22.5 for concrete, so 9 for a column 0.4 m thick; 70 for metal, so 14
    for a post 0.2 m thick. A blow is 2 points, a heavy one (the last of
-   the combination, the kick) 3. How the piece is cut or drawn changes
+   the combination, the hammer blow) 3. How the piece is cut or drawn changes
    nothing to it.
 3. **What is no longer carried comes down** (`Structure._settle`). A
    piece rests on the pieces right under it. When something under it
@@ -165,7 +166,11 @@ which bends; glass, which bursts.
    together through their cuts. Cut off by a blow, it starts off going
    over away from it. It breaks into its blocks when something stops it
    once it has come down 0.3 m. A slab that loses its columns comes down
-   the same way, whole.
+   the same way, whole. (Stopped: it lost speed in a step in which it
+   touched something. The engine can tell of the contacts a step before
+   it tells what they took; the stop counts all the same, shared out
+   evenly among them. Until 19 November such a landing was dropped, and
+   a length of wall could be left lying whole.)
 6. **All at once** (`Structure.shatter`). A blow that lands nowhere in
    particular (`hit` without a place: the measure, some tests) is taken
    by the whole piece, which cracks all over and, at its strength, goes
@@ -331,7 +336,7 @@ figure, 46 clips, of which 7 are played. The blows are not from that
 library: see below. `scripts/player/character.gd` builds the tree that
 blends all of them; `scripts/player/player.gd` moves the capsule and
 tells the character how fast it goes, whether it is in the air, and when
-it jumps, lands, strikes or kicks.
+it jumps, lands or strikes.
 
 - **Legs that keep pace.** Each clip has one ground speed at which its feet
   do not slide: 1.05 m/s for the walk, 5.2 for the jog, 7.8 for the sprint
@@ -361,16 +366,32 @@ it jumps, lands, strikes or kicks.
   The owner chose these on 19 November, having tried them beside the
   four the brute had (a lunging hook and three sword strokes, which all
   dived: fists 0.7 to 0.85 m up) and an uppercut from motion capture.
-- **What is motion capture.** The kick is what a real person did (CMU
-  motion capture database, free to use): the free library has none. The
-  tool puts it on the mannequin's skeleton and retimes it (a slow
-  wind-up, the last 0.12 s in two thirds of their time, the pose all but
-  held for an instant after).
+- **The hammer blow, made here.** The other button: both fists side by
+  side, from over the head (1.7 m) down to the knees (0.4 m), 0.8 m
+  ahead, the body lunging over its front knee without taking a step.
+  Neither library has it. It is made by `tools/moves/library.py`
+  (`joined`) out of an overhand throw of the second library: the trunk
+  keeps how far it leans and loses its twist; the right arm does to the
+  trunk what it did, then swings about its shoulder until its wrist is
+  0.05 m from the middle of the chest; the left arm is the mirror image
+  of the right; both hands are the fists of the straights, wrists
+  straight. The pelvis and the legs are the throw's. Its clip says three
+  things more than the others: that both hands strike (they are both
+  left out of what is held back from what stands, and the blow is
+  followed halfway between the two fists), that its fists count from the
+  top of their way down (0.14 s before the clip has them land, not 0.1),
+  and that it pushes 45 degrees below level.
+- **No motion capture for now.** The kick was what a real person did
+  (CMU motion capture database). The owner found it wrong on
+  19 November and it is out of the game; a lower, quicker one from the
+  same database was tried and is kept on the branch
+  `refonte/coup-de-pied`. The tool still reads captures
+  (`tools/moves/bvh.py`, `retarget.py`): its list of them is empty.
 - **The combination.** A straight left, a straight right, a leap that
   comes down fist first, then round again. The next blow starts when the
   one before lets it (`next` in its clip).
-- **Steps that are real.** The straights stay where they are; the leap
-  and the kick step (the leap 1.4 m). The steps are on the skeleton's
+- **Steps that are real.** The straights and the hammer blow stay where
+  they are; the leap steps (1.4 m). The steps are on the skeleton's
   root bone; the game moves the body by them (root motion), so a planted
   foot stays planted. A blow is thrown where the stick pushes, or where
   the character faces.
@@ -382,11 +403,12 @@ it jumps, lands, strikes or kicks.
   clips say their blow lands on one of their own frames. `struck` is sent
   before the pose of that step is set; `reached`, which says where the
   limb is, once it is.
-- **Where a blow lands.** Where its fist or foot first touches
-  something, not where the move ends. From 0.1 s before a clip has its
-  blow land, and until it does, `Character` says at each step where the
-  limb that strikes is drawn (`reached`: shoulder, elbow, knuckles; or
-  hip, knee, toes), once the pose of the step is set. `Player` moves a
+- **Where a blow lands.** Where its fist first touches something, not
+  where the move ends. From 0.1 s before a clip has its blow land (the
+  hammer blow: 0.14 s, its whole way down), and until it does,
+  `Character` says at each step where the arm that strikes is drawn
+  (`reached`: shoulder, elbow, knuckles), once the pose of the step is
+  set. `Player` moves a
   ball as wide as a fist (0.1 m in radius) from where the knuckles were
   a step before to where they are, once they are in front of the body:
   the first thing it touches, standing or loose, takes the blow, at that
@@ -397,12 +419,22 @@ it jumps, lands, strikes or kicks.
   body's axis at the height of the shoulder): the brute's moves lunge so
   far that its chest can be through a thin column while its fist is past
   it. Nothing at all: the blow is said where the fist ended, on nothing,
-  and what a fist touches there (0.3 m round) takes it. A blow is thrown
-  along the way the brute faces, wherever it lands.
+  and what a fist touches there (0.3 m round) takes it. A blow pushes
+  along the way the brute faces, wherever it lands; the hammer blow, 45
+  degrees below that (`Character.dive`).
   What this does: a step from a wall, the two straights go in 1.4 m up,
   straight ahead, and the fist of the leap 1.9 m up, over the brute's
-  head: the fists land high. What is below the shoulder (the foot of a
-  wall, of a plank) is for the kick, which goes in 0.4 to 0.8 m up.
+  head: the fists land high. The hammer blow meets the face of that wall
+  1.5 m up, on its way down; once the place has given (three of them),
+  the next lands on what is left under the hole, 1.2 m up, then 0.85,
+  then 0.3: it takes down what stands, from the top. On something lower
+  than the brute it lands on top.
+- **A push that goes down.** What a blow knocks out of a piece leaves
+  along the way the blow goes (`Structure._expel`), what it cuts off is
+  thrown that way (`_fall`), and what lies loose near it is shoved that
+  way (`Rubble.shove`): down too, when the blow goes down. Level blows
+  do what they did. Which way a piece goes over, and which way metal
+  bends, still go by where the blow is headed along the ground.
   Before, a blow was a thin line from the body's axis straight ahead to
   where the fist ends in the open, at that height: 0.3 m to one side of
   a column 0.4 m wide, every blow missed it.

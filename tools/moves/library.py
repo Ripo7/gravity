@@ -1,4 +1,5 @@
-"""Reads clips out of Quaternius's Universal Animation Library 2 (.glb).
+"""Reads clips out of Quaternius's Universal Animation Libraries (.glb,
+.gltf), and makes a blow of one fist a blow of both (`joined`).
 
 Its skeleton is the mannequin's own, bone for bone and at rest, under other
 names (and with a leaf at the end of each finger and toe that the mannequin
@@ -9,7 +10,8 @@ import struct
 
 import numpy as np
 
-from skeleton import quat_to_matrix
+from retarget import between
+from skeleton import matrix_to_quat, quat_to_matrix
 
 PLAIN = {
     "root": "root",
@@ -129,9 +131,10 @@ def join(parts):
     return turns, places
 
 
-def positions(skel, turns, places):
-    """Where every bone is (F, B, 3), seen from the body: from "root" at
-    rest, in the mannequin's space (+Z ahead, +X to its left)."""
+def poses(skel, turns, places):
+    """How every bone is turned (F, B, 3, 3) and where it is (F, B, 3),
+    seen from the body: from "root" at rest, in the mannequin's space (+Z
+    ahead, +X to its left)."""
     frames = len(next(iter(turns.values())))
     rot = np.empty((frames, len(skel.names), 3, 3))
     pos = np.empty((frames, len(skel.names), 3))
@@ -144,4 +147,93 @@ def positions(skel, turns, places):
         else:
             rot[:, b] = rot[:, p] @ local
             pos[:, b] = pos[:, p] + np.einsum("fij,fj->fi", rot[:, p], at)
+    return rot, pos
+
+
+def positions(skel, turns, places):
+    """Where every bone is (F, B, 3), seen from the body."""
+    return poses(skel, turns, places)[1]
+
+
+TRUNK = ("DEF-spine.001", "DEF-spine.002", "DEF-spine.003", "DEF-neck", "DEF-head")
+MIRROR = np.diag([-1.0, 1.0, 1.0])
+
+
+def joined(skel, turns, places, fist, apart):
+    """A blow of the right hand, made a blow of both fists side by side:
+
+    - the trunk no longer twists or tilts: it only leans, as much as it did;
+    - the right arm does to the trunk what it did, then swings about its
+      shoulder until its wrist is `apart` m to the right of the middle of
+      the chest;
+    - the left arm is the mirror image of the right;
+    - both hands are fists (`fist`: the turn of every finger bone), the
+      wrists straight.
+
+    The pelvis and the legs are left as they are. Returns the turns."""
+    rot, _ = poses(skel, turns, places)
+    frames, index = len(rot), skel.index
+    new = rot.copy()
+    for name in TRUNK:
+        b = index(name)
+        lean = matrix_to_quat(rot[:, b] @ skel.world_rot[b].T)
+        lean[:, 1:3] = 0.0  # (what is left is the turn about the axis from side to side)
+        lean /= np.linalg.norm(lean, axis=-1, keepdims=True)
+        new[:, b] = quat_to_matrix(lean) @ skel.world_rot[b]
+    arm = [b for b, name in enumerate(skel.names) if name.endswith(".R") and _under(skel, b, index("DEF-shoulder.R"))]
+    for b in arm:
+        name, p = skel.names[b], skel.parents[b]
+        if name in fist:
+            local = quat_to_matrix(np.asarray(fist[name], dtype=float))
+        elif name == "DEF-hand.R":
+            local = skel.rest_rot[b]
+        else:
+            local = np.einsum("fji,fjk->fik", rot[:, p], rot[:, b])
+        new[:, b] = new[:, p] @ local
+    at = _places(skel, new, places)
+    shoulder, wrist, chest = index("DEF-upper_arm.R"), index("DEF-hand.R"), index("DEF-spine.003")
+    for f in range(frames):
+        reach = at[f, wrist] - at[f, shoulder]
+        length = np.linalg.norm(reach)
+        aside = float(np.clip(at[f, chest, 0] - apart - at[f, shoulder, 0], -0.95 * length, 0.95 * length))
+        there = reach.copy()
+        there[0] = aside
+        there[1:] *= np.sqrt(length * length - aside * aside) / max(np.linalg.norm(reach[1:]), 1e-9)
+        swing = between(reach, there)
+        for b in arm:
+            if b != index("DEF-shoulder.R"):
+                new[f, b] = swing @ new[f, b]
+    for b in arm:
+        other = index(skel.names[b][:-1] + "L")
+        new[:, other] = MIRROR @ new[:, b] @ skel.world_rot[b].T @ MIRROR @ skel.world_rot[other]
+    out = {}
+    for b, name in enumerate(skel.names):
+        p = skel.parents[b]
+        if p < 0:
+            continue
+        quats = matrix_to_quat(np.einsum("fji,fjk->fik", new[:, p], new[:, b]))
+        for f in range(1, frames):
+            if quats[f] @ quats[f - 1] < 0:
+                quats[f] *= -1
+        out[name] = quats
+    for name in turns:
+        out.setdefault(name, turns[name])
+    return out
+
+
+def _under(skel, b, top):
+    while b >= 0:
+        if b == top:
+            return True
+        b = skel.parents[b]
+    return False
+
+
+def _places(skel, rot, places):
+    """Where every bone is, from how each is turned."""
+    pos = np.empty(rot.shape[:2] + (3,))
+    for b, name in enumerate(skel.names):
+        at = places[name] if name == "DEF-hips" and name in places else np.broadcast_to(skel.rest_pos[b], (len(rot), 3))
+        p = skel.parents[b]
+        pos[:, b] = at if p < 0 else pos[:, p] + np.einsum("fij,fj->fi", rot[:, p], at)
     return pos

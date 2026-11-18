@@ -47,6 +47,37 @@ Since then, on that phone, with concrete and metal on the bench: 48 to
 53 frames a second while it is broken (see below). The measure above is
 still the way to compare two builds.
 
+### The hammer blow
+
+Same machine, same way (headless, 2 cores, `--fixed-fps 60`, real
+gravity). The change is in what a blow pushes, not in how much breaks.
+
+The run at the top of this page, as it is (fists only, 7225 steps), six
+times: a physics step cost 0.14 to 0.15 ms at the median, 99% of the
+steps were under 0.41 to 0.52 ms, the slowest took 3.3 to 7.3 ms (one
+step over 6 ms in two of the six runs); 85 to 87 loose bodies at the
+end. The build before (glass), three times, run turn about with three of
+those six: 0.14 ms, 99% under 0.39 to 0.46 ms, the slowest 2.5 to
+4.9 ms, none over 6 ms; 84 to 87 loose bodies. The medians are the
+same; the slowest steps fall, in both builds, in seconds where nothing
+moves (a bench at rest, 86 loose bodies all asleep: 4.8 ms), which
+points at the machine rather than at the game. Whether the two steps
+over 6 ms are the machine's too cannot be told from six runs.
+
+The same stations for the same time with the hammer blow instead (in
+the command, `M` becomes
+`D() { python3 -c "print(';'.join(['d;w0.9']*round($1/0.9)))"; }`: 63
+blows, 7135 steps), three times: 0.13 ms at the median, 99% under 0.40
+to 0.43 ms, the slowest 3.3 to 7.2 ms (one step over 6 ms in one run);
+75 or 76 loose bodies at the end.
+
+The blow itself, measured in the tests: its fists count 0.27 s after the
+press against a wall a step away (they meet its face 1.5 m up), 0.38 s
+in the open (0.34 m up, 0.83 m ahead). At the wall, after twelve blows
+of the fists, five hammer blows at one spot and the brute walks through;
+with the hammer blow alone at one spot, twelve do not open it (they land
+1.54, 1.19, 0.85 then 0.29 m up, three each). Not measured on the phone.
+
 ### Glass (step 5)
 
 Headless on a 2-core cloud machine, one physics step per frame

@@ -52,8 +52,9 @@ const steps =
   `s-7.4,0.05,-4.9,-7.4,1,-5.9;${mash(6)};w3;` +
   `s0,0.05,-9.1,0,1,-10;w0.3;h;w2.5;` +
   // One blow at a pane of glass, behind where it started: it bursts
-  // (its glitter is drawn by a shader of its own).
-  `s0,0.05,7.1,0,1,8;w0.3;h;w2.5`;
+  // (its glitter is drawn by a shader of its own). Then both fists down,
+  // on nothing: the clip that is made here plays in a browser too.
+  `s0,0.05,7.1,0,1,8;w0.3;h;w2.5;d;w1.5`;
 // Software WebGL is slow: loading alone can take a while.
 await page.goto(`http://localhost:8061/index.html?mode=play&prof&steps=${encodeURIComponent(steps)}`, { timeout: 180000 });
 // And a few seconds of game time can take a minute.
