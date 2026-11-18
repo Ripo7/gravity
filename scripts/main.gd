@@ -1,9 +1,9 @@
 class_name Main
 extends Node3D
 ## The test bench, in greybox: a bare ground, one giant brute, yours, seen
-## in third person, and a few pieces of one matter for it to break. What
+## in third person, and a few pieces of each matter for it to break. What
 ## breaks is worked out here one matter at a time (docs/CONCEPT.md):
-## concrete so far.
+## concrete on its right as it starts, metal on its left.
 
 ## Where the brute starts.
 const START := Vector3(0, 0.05, 0)
@@ -12,14 +12,23 @@ const GROUND := 400.0
 ## What stands on the bench, in concrete. A column on its own; a wall of
 ## WALL_PANELS panels side by side; a slab on four columns, SPAN m apart.
 const COLUMN := Vector3(0.4, 2.6, 0.4)
-const COLUMN_AT := Vector3(-3.5, 0, -6)
+const COLUMN_AT := Vector3(1.5, 0, -6)
 const PANEL := Vector3(1.2, 2.4, 0.35)
-const WALL_AT := Vector3(0, 0, -8)
+const WALL_AT := Vector3(4.5, 0, -8)
 const WALL_PANELS := 3
 const POST := Vector3(0.4, 2.2, 0.4)
 const SLAB := Vector3(3.6, 0.3, 3.6)
-const SLAB_AT := Vector3(5, 0, -7.5)
+const SLAB_AT := Vector3(9, 0, -7.5)
 const SPAN := 3.2
+## And in metal, the same three things: a post on its own; a fence of as
+## many sheets; a deck on four posts.
+const METAL_POST := Vector3(0.2, 2.6, 0.2)
+const METAL_POST_AT := Vector3(-1.5, 0, -6)
+const SHEET := Vector3(1.2, 2.4, 0.08)
+const FENCE_AT := Vector3(-4.5, 0, -8)
+const PIER := Vector3(0.2, 2.2, 0.2)
+const DECK := Vector3(3.6, 0.12, 3.6)
+const DECK_AT := Vector3(-9, 0, -7.5)
 
 var player: Player
 var structure: Structure
@@ -29,12 +38,19 @@ var hud: Hud
 ## set on the screen, kept when the bench is put back.
 var fall := Rubble.FALL:
 	set = set_fall
-## On the bench: the column that stands alone, the panels of the wall, the
-## four columns under the slab, the slab (the numbers of their pieces).
+## On the bench, in concrete: the column that stands alone, the panels of
+## the wall, the four columns under the slab, the slab (the numbers of
+## their pieces).
 var column := -1
 var panels := PackedInt32Array()
 var posts := PackedInt32Array()
 var slab := -1
+## And in metal: the post that stands alone, the sheets of the fence, the
+## four posts under the deck, the deck.
+var metal_post := -1
+var sheets := PackedInt32Array()
+var piers := PackedInt32Array()
+var deck := -1
 
 
 func _ready() -> void:
@@ -59,7 +75,7 @@ func _ready() -> void:
 		var touch := TouchControls.new()
 		touch.player = player
 		ui.add_child(touch)
-	print("BENCH ready: %d pieces, %d blocks" % [structure.pieces, structure.count])
+	print("BENCH ready: %d pieces, %d parts" % [structure.pieces, structure.count])
 	if options.has("mode"):
 		var director := Director.new()
 		director.options = options
@@ -89,29 +105,37 @@ func _on_blow(from: Vector3, to: Vector3, power: int) -> void:
 	structure.strike(from, to, power)
 
 
-## What stands on the bench, in concrete: a column, a wall, a slab on four
-## columns.
+## What stands on the bench: in concrete, a column, a wall, a slab on four
+## columns; in metal, a post, a fence of sheets, a deck on four posts.
 func _lay_bench() -> void:
 	structure = Structure.new()
 	add_child(structure)
 	structure.rubble.fall = fall
-	column = _stand(COLUMN, COLUMN_AT)
+	var corners: Array[Vector2] = [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]
+	column = _stand(Matter.CONCRETE, COLUMN, COLUMN_AT)
+	metal_post = _stand(Matter.METAL, METAL_POST, METAL_POST_AT)
 	panels.clear()
+	sheets.clear()
 	for k in WALL_PANELS:
-		var along := (k - (WALL_PANELS - 1) * 0.5) * PANEL.x
-		panels.append(_stand(PANEL, WALL_AT + Vector3(along, 0, 0)))
+		var along := Vector3((k - (WALL_PANELS - 1) * 0.5) * PANEL.x, 0, 0)
+		panels.append(_stand(Matter.CONCRETE, PANEL, WALL_AT + along))
+		sheets.append(_stand(Matter.METAL, SHEET, FENCE_AT + along))
 	posts.clear()
-	for corner: Vector2 in [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]:
-		posts.append(_stand(POST, SLAB_AT + Vector3(corner.x, 0, corner.y) * SPAN * 0.5))
-	slab = _stand(SLAB, SLAB_AT + Vector3.UP * POST.y)
+	piers.clear()
+	for corner in corners:
+		var out := Vector3(corner.x, 0, corner.y) * SPAN * 0.5
+		posts.append(_stand(Matter.CONCRETE, POST, SLAB_AT + out))
+		piers.append(_stand(Matter.METAL, PIER, DECK_AT + out))
+	slab = _stand(Matter.CONCRETE, SLAB, SLAB_AT + Vector3.UP * POST.y)
+	deck = _stand(Matter.METAL, DECK, DECK_AT + Vector3.UP * PIER.y)
 	structure.build()
 
 
-## A piece of concrete `size` across, its foot at `foot`. Returns its
-## number.
-func _stand(size: Vector3, foot: Vector3) -> int:
+## A piece made `of` a matter, `size` across, its foot at `foot`. Returns
+## its number.
+func _stand(of: int, size: Vector3, foot: Vector3) -> int:
 	var middle := Transform3D(Basis(), foot + Vector3.UP * size.y * 0.5)
-	return structure.add_piece(Matter.CONCRETE, middle, size)
+	return structure.add_piece(of, middle, size)
 
 
 func _build_world() -> void:

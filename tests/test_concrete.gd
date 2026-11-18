@@ -10,6 +10,7 @@ var s: Structure
 func test_walking_running_and_jumping_break_nothing() -> void:
 	await _load()
 	# Straight at the wall, at a sprint.
+	_face(Main.WALL_AT + Vector3(0, 0.05, 6), Main.WALL_AT + Vector3.UP)
 	p.touch_move = Vector2(0, -1)
 	p.touch_sprint = true
 	await frames(150)

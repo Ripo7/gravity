@@ -1,7 +1,7 @@
 class_name Director
 extends Node
 ## Scripted runs, for clips and measurements:
-##   --mode=play --steps="s-3.5,0.05,-4.6,-3.5,1,-6;h;w0.5;h" [--from=x,y,z]
+##   --mode=play --steps="s1.5,0.05,-4.55,1.5,1,-6;h;w0.5;h" [--from=x,y,z]
 ##        steps separated by ";": "w<seconds>" wait, "m<x,y,z>" go there,
 ##        "s<x,y,z>,<x,y,z>" stand there, facing the second point,
 ##        "a@x,y,z" look there, "f<seconds>" run forward, "r<seconds>"
@@ -203,14 +203,20 @@ func _rate(seconds: float) -> Vector2:
 
 func _end(tag: String) -> void:
 	var s := world.structure
+	# (Marked: what still stands but has taken something, cracked or bent.)
+	var marked := 0
+	for p in s.pieces:
+		if s.state[p] == Structure.STANDS and s.harm[p] > 0.0:
+			marked += 1
 	print(
 		(
-			"%s at=%s standing=%d/%d loose=%d most_awake=%d"
+			"%s at=%s standing=%d/%d marked=%d loose=%d most_awake=%d"
 			% [
 				tag,
 				player.global_position.snappedf(0.01),
 				s.standing_count,
 				s.pieces,
+				marked,
 				s.rubble.live,
 				_most_awake
 			]

@@ -1,9 +1,10 @@
 // Loads the web export in headless Chromium (software WebGL2), plays a short
-// scripted run on the bench (the brute runs, then breaks the column with
-// its four blows) and checks that the bench was built, that the brute went
-// where it was sent, that the column came down in blocks, and that nothing
-// failed on the way (a shader that does not compile in WebGL shows up
-// here, not on desktop).
+// scripted run on the bench (the brute runs, breaks the concrete column
+// with its four blows, then bends the metal post with four more) and
+// checks that the bench was built, that the brute went where it was sent,
+// that the column came down in blocks, that the post stands bent, and that
+// nothing failed on the way (a shader that does not compile in WebGL shows
+// up here, not on desktop).
 // Usage: node tools/web_probe.mjs build/web [screenshot.png]
 //        CHROME=/usr/bin/google-chrome to use an installed browser.
 import { createServer } from "node:http";
@@ -37,9 +38,11 @@ page.on("console", (m) => {
   if (/BENCH|WALKED|PROF|PLAY_DONE|ERROR|error|shader/i.test(t)) console.log(t);
 });
 page.on("pageerror", (e) => console.log("PAGE ERROR " + e.message));
-// Run forward a second, then stand in front of the column and throw the
-// four blows of the combination at it.
-const steps = "f1;w0.3;s-3.5,0.05,-4.55,-3.5,1,-6;w0.3;h;w0.4;h;w0.4;h;w0.4;h;w5";
+// Run forward a second, then stand in front of the concrete column and
+// throw the four blows of the combination at it; then the same at the
+// metal post.
+const blows = "w0.3;h;w0.4;h;w0.4;h;w0.4;h";
+const steps = `f1;w0.3;s1.5,0.05,-4.55,1.5,1,-6;${blows};w4;s-1.5,0.05,-4.6,-1.5,1,-6;${blows};w3`;
 // Software WebGL is slow: loading alone can take a while.
 await page.goto(`http://localhost:8061/index.html?mode=play&prof&steps=${encodeURIComponent(steps)}`, { timeout: 180000 });
 // And a few seconds of game time can take a minute.
@@ -65,9 +68,11 @@ const m = walked && walked.match(/\(([-\d.]+), ([-\d.]+), ([-\d.]+)\) \(on floor
 if (!done) failures.push("the run did not finish");
 else if (!m) failures.push("the brute did not report where it went");
 else if (Number(m[3]) > -2 || m[4] !== "true") failures.push(`the brute did not run forward on the ground: ${walked}`);
-// "PLAY_DONE at=... standing=8/9 loose=4 ...": the column is down, in blocks.
-const end = done && done.match(/standing=(\d+)\/(\d+) loose=(\d+)/);
-if (done && (!end || Number(end[1]) >= Number(end[2]) || Number(end[3]) < 2)) failures.push(`the column did not come down in blocks: ${done}`);
+// "PLAY_DONE at=... standing=17/18 marked=1 loose=4 ...": the column is
+// down, in blocks; the post stands, bent.
+const end = done && done.match(/standing=(\d+)\/(\d+) marked=(\d+) loose=(\d+)/);
+if (done && (!end || Number(end[1]) >= Number(end[2]) || Number(end[4]) < 2)) failures.push(`the column did not come down in blocks: ${done}`);
+if (end && Number(end[3]) < 1) failures.push(`the post was not bent: ${done}`);
 const errors = lines.filter((t) => /SCRIPT ERROR|shader.*(error|fail)|ERROR:/i.test(t));
 if (errors.length) failures.push(`${errors.length} errors, first: ${errors[0]}`);
 console.log(failures.length ? "WEB_FAIL " + failures.join("; ") : "WEB_OK");

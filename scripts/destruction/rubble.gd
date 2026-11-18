@@ -1,9 +1,9 @@
 class_name Rubble
 extends Node
-## What has come off a Structure and lies or flies about: a block, or a
-## piece that comes down in one piece until it lands. Each is a rigid body
-## made straight on the physics server (no node), drawn by the Structure's
-## mesh.
+## What has come off a Structure and lies or flies about: a block, a piece
+## that comes down in one piece until it lands, or a bent piece of metal
+## that has lain down. Each is a rigid body made straight on the physics
+## server (no node), drawn by the Structure's mesh.
 ##
 ## They fall slowly (`fall`): that is what makes the brute a giant. A body
 ## that has come to rest is frozen (static): it costs nothing, a heap stays
@@ -42,13 +42,11 @@ const SHOVE := 300.0
 const SHOVE_MOST := 2.5
 ## Contacts looked at per body.
 const CONTACTS := 4
-## How much a body rubs on what it touches; and for its first FRESH s, when
-## it has just come off: blocks cut one on top of the other slide apart
-## then, instead of staying there as a broken column that still stands and
-## still carries.
+## How much a body rubs on what it touches; and how much one that is made
+## to slip does, for SLIPS s (see `slip`).
 const FRICTION := 0.8
-const FRESH_FRICTION := 0.08
-const FRESH := 0.45
+const SLIPPERY := 0.08
+const SLIPS := 0.45
 
 var structure: Structure
 ## The share of real gravity that pulls what has come off (see FALL).
@@ -56,8 +54,7 @@ var fall := FALL:
 	set = set_fall
 ## Per body.
 var body: Array[RID] = []
-var slot := PackedInt32Array()  ## which body of the mesh it moves
-var origin := PackedVector3Array()  ## where its own origin was when its piece was whole
+var origin := PackedVector3Array()  ## where its own origin was when its piece stood
 var mass := PackedFloat32Array()
 var reach := PackedFloat32Array()  ## how far from its origin it goes (m)
 var piece := PackedInt32Array()  ## the piece it is, coming down whole; -1 for a block
@@ -71,8 +68,9 @@ var _xf: Array[Transform3D] = []
 var _lin := PackedVector3Array()
 var _ang := PackedVector3Array()
 var _quiet := PackedFloat32Array()
+var _rig: Array[Array] = []  # per body: the bodies of the mesh it moves, each [slot, pose, origin]
 var _by_body := {}  # RID -> body
-var _fresh: Array[Vector2] = []  # (body, s before it rubs as it should)
+var _slips: Array[Vector2] = []  # (body, s before it rubs as it should again)
 var _freeze := PackedInt32Array()
 var _hits: Array[Array] = []  # [body, how hard it was stopped (m/s), who by, how much each]
 
@@ -91,29 +89,32 @@ func set_fall(share: float) -> void:
 			PhysicsServer3D.body_set_param(body[i], PhysicsServer3D.BODY_PARAM_GRAVITY_SCALE, fall)
 
 
-## A new loose body with `shape` (turned by `turned` in it), at `xf`, going
-## at `velocity` and turning at `spin`. It moves body `mesh_slot` of the
-## mesh, whose blocks stood around `rest`: `xf` is where that point is now,
-## and how the body has turned since it stood. `whole`: the piece it is, if
-## it is one coming down whole. Returns its number.
+## A new loose body, at `xf`, going at `velocity` and turning at `spin`.
+## `rest` is where its origin was when its piece stood: `xf` is where that
+## point is now, and how the body has turned since. `shapes`: what it is
+## made of, each [shape, where it is in the body]. `rig`: the bodies of the
+## mesh it moves, each [slot, pose, origin], the pose being where that
+## body of the mesh was when the piece stood (see ShardMesh.set_body).
+## `whole`: the piece it is, if it is one coming down whole. Returns its
+## number.
 func add(
-	mesh_slot: int,
-	shape: RID,
-	turned: Basis,
+	shapes: Array,
 	xf: Transform3D,
 	rest: Vector3,
 	weight: float,
 	far: float,
 	velocity: Vector3,
 	spin: Vector3,
+	rig: Array,
 	whole := -1
 ) -> int:
 	var i := body.size()
 	var b := PhysicsServer3D.body_create()
-	PhysicsServer3D.body_add_shape(b, shape, Transform3D(turned, Vector3.ZERO))
+	for shape: Array in shapes:
+		PhysicsServer3D.body_add_shape(b, shape[0], shape[1])
 	PhysicsServer3D.body_set_mode(b, PhysicsServer3D.BODY_MODE_RIGID)
 	PhysicsServer3D.body_set_param(b, PhysicsServer3D.BODY_PARAM_MASS, weight)
-	PhysicsServer3D.body_set_param(b, PhysicsServer3D.BODY_PARAM_FRICTION, FRESH_FRICTION)
+	PhysicsServer3D.body_set_param(b, PhysicsServer3D.BODY_PARAM_FRICTION, FRICTION)
 	PhysicsServer3D.body_set_param(b, PhysicsServer3D.BODY_PARAM_BOUNCE, 0.05)
 	PhysicsServer3D.body_set_param(b, PhysicsServer3D.BODY_PARAM_ANGULAR_DAMP, 0.4)
 	PhysicsServer3D.body_set_param(b, PhysicsServer3D.BODY_PARAM_GRAVITY_SCALE, fall)
@@ -130,7 +131,6 @@ func add(
 	PhysicsServer3D.body_set_space(b, structure.get_world_3d().space)
 	PhysicsServer3D.body_set_state_sync_callback(b, _moved.bind(i))
 	body.append(b)
-	slot.append(mesh_slot)
 	origin.append(rest)
 	mass.append(weight)
 	reach.append(far)
@@ -141,12 +141,21 @@ func add(
 	_lin.append(velocity)
 	_ang.append(spin)
 	_quiet.append(0.0)
+	_rig.append(rig)
 	_by_body[b] = i
-	_fresh.append(Vector2(i, FRESH))
 	live += 1
 	awake += 1
-	structure.mesh.set_body(mesh_slot, xf, rest)
+	_draw(i)
 	return i
+
+
+## Body `i` hardly rubs on anything for a moment. For what has just come
+## off from under something: blocks cut one on top of the other slide out
+## from under it then, instead of staying there as a broken column that
+## still carries.
+func slip(i: int) -> void:
+	PhysicsServer3D.body_set_param(body[i], PhysicsServer3D.BODY_PARAM_FRICTION, SLIPPERY)
+	_slips.append(Vector2(i, SLIPS))
 
 
 ## Body `i` is no more (a piece that came down whole has broken up).
@@ -211,13 +220,13 @@ func thaw(i: int) -> void:
 
 
 func _physics_process(delta: float) -> void:
-	for k in range(_fresh.size() - 1, -1, -1):
-		_fresh[k].y -= delta
-		if _fresh[k].y <= 0.0:
-			var i := int(_fresh[k].x)
+	for k in range(_slips.size() - 1, -1, -1):
+		_slips[k].y -= delta
+		if _slips[k].y <= 0.0:
+			var i := int(_slips[k].x)
 			if alive[i] == 1:
 				PhysicsServer3D.body_set_param(body[i], PhysicsServer3D.BODY_PARAM_FRICTION, FRICTION)
-			_fresh.remove_at(k)
+			_slips.remove_at(k)
 	for i in _freeze:
 		if alive[i] == 1 and frozen[i] == 0 and _quiet[i] >= QUIET_TIME:
 			frozen[i] = 1
@@ -232,6 +241,13 @@ func _physics_process(delta: float) -> void:
 	_hits = []
 	for hit in hits:
 		_land(hit[0], hit[1], hit[2], hit[3])
+
+
+## Moves what body `i` moves of the mesh to where the body is.
+func _draw(i: int) -> void:
+	var now := _xf[i] * Transform3D(Basis(), -origin[i])
+	for part: Array in _rig[i]:
+		structure.mesh.set_body(part[0], now * (part[1] as Transform3D), part[2])
 
 
 ## Speeds go with the square root of the gravity that makes them: what is
@@ -250,7 +266,7 @@ func _moved(state: PhysicsDirectBodyState3D, i: int) -> void:
 	_xf[i] = state.transform
 	_lin[i] = lin
 	_ang[i] = ang
-	structure.mesh.set_body(slot[i], state.transform, origin[i])
+	_draw(i)
 	var touching := state.get_contact_count()
 	var slow := _slow()
 	if touching > 0 and lin.length() < QUIET_SPEED * slow and ang.length() < QUIET_SPIN * slow:

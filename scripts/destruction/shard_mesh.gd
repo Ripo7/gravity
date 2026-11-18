@@ -1,13 +1,19 @@
 class_name ShardMesh
 extends MeshInstance3D
-## Draws every block of a Structure in one draw call (see shards.gdshader).
-## The mesh never changes: breaking only changes two small textures, which
-## block goes with which body, and where each body is.
+## Draws everything a Structure is made of in one draw call (see
+## shards.gdshader). The mesh never changes: breaking and bending only
+## change two small textures, which part goes with which body, and where
+## each body is.
 ##
-## Body 0 is the world: a block that stands in a whole piece goes with it.
-## Body 1 + i is block i's own: taken when it stands cracked (drawn a little
-## smaller, see `set_body`) or lies loose. A piece that falls in one piece
-## moves all its blocks with the body of the first.
+## A part is a block of a piece that breaks (`add_shard`), or a ring of one
+## that bends (`add_skin`): the piece's skin is stretched from ring to ring,
+## so moving the rings bends it without a gap.
+##
+## Body 0 is the world: a part that stands as it was built goes with it.
+## Body 1 + i is part i's own: taken by a block when it stands cracked
+## (drawn a little smaller, see `set_body`) or lies loose, by a ring when
+## its piece is bent. A piece that falls in one piece and unbent moves all
+## its parts with the body of the first.
 
 const SHADER := preload("res://shaders/shards.gdshader")
 ## Texels per row of the two data textures.
@@ -84,7 +90,33 @@ func add_shard(
 			_indices.append(from + t)
 
 
-## Builds the mesh once every block is added: `shards` of them.
+## Adds a piece that bends: `rings[k]` are the four corners of its ring
+## `first + k` where it stands, in the same order round every ring
+## (clockwise seen from the last ring). Its skin goes from each ring to the
+## next, and closes over the first and the last.
+func add_skin(first: int, rings: Array[PackedVector3Array], tint: Color) -> void:
+	var last := rings.size() - 1
+	_face(first, rings[0][0], first, rings[0][1], first, rings[0][2], first, rings[0][3], tint)
+	var top := first + last
+	_face(top, rings[last][0], top, rings[last][3], top, rings[last][2], top, rings[last][1], tint)
+	for k in last:
+		var low := first + k
+		for j in 4:
+			var next := (j + 1) % 4
+			_face(
+				low,
+				rings[k][j],
+				low + 1,
+				rings[k + 1][j],
+				low + 1,
+				rings[k + 1][next],
+				low,
+				rings[k][next],
+				tint
+			)
+
+
+## Builds the mesh once every part is added: `shards` of them.
 func build(shards: int) -> void:
 	var arrays := []
 	arrays.resize(Mesh.ARRAY_MAX)
@@ -124,7 +156,28 @@ func build(shards: int) -> void:
 	_indices = PackedInt32Array()
 
 
-## Block `shard` now moves with body `slot` (0: the world).
+## A face of a skin: four corners, anticlockwise seen from outside, each
+## moving with the part it is given with.
+func _face(
+	ia: int, a: Vector3, ib: int, b: Vector3, ic: int, c: Vector3, id: int, d: Vector3, tint: Color
+) -> void:
+	var from := _verts.size()
+	var normal := (b - a).cross(c - a).normalized()
+	var parts: Array[int] = [ia, ib, ic, id]
+	var corners: Array[Vector3] = [a, b, c, d]
+	for k in 4:
+		_verts.append(corners[k])
+		_normals.append(normal)
+		_colors.append(tint)
+		# (-1: a skin. It is lit by how it lies now, not as it was built.)
+		_uvs.append(Vector2(parts[k], -1))
+	for t: int in [1, 2]:
+		_indices.append(from)
+		_indices.append(from + t + 1)
+		_indices.append(from + t)
+
+
+## Part `shard` now moves with body `slot` (0: the world).
 func set_slot(shard: int, slot: int) -> void:
 	_slots[shard] = slot
 	_slots_changed = true

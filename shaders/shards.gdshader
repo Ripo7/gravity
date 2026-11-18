@@ -1,9 +1,10 @@
 shader_type spatial;
-// Every block of a Structure, in one draw call. The mesh holds the blocks
-// where they stood when their piece was whole; each vertex knows its block,
-// a small texture says which body the block goes with now, and another
-// gives where that body is. So a wall standing, a slab falling in one piece
-// and loose blocks are all moved here, on the graphics card.
+// Everything a Structure is made of, in one draw call. The mesh holds the
+// parts (the blocks of what breaks, the rings of what bends) where they
+// stood when their piece was built; each vertex knows its part, a small
+// texture says which body the part goes with now, and another gives where
+// that body is. So a wall standing, a slab falling in one piece, loose
+// blocks and a bent post are all moved here, on the graphics card.
 // A face made by the cut is only drawn once the block on its other side has
 // gone its own way: while the two are together it is inside the piece. Such
 // a face is not flat (its middle is pushed in or out): it is lit facet by
@@ -11,6 +12,8 @@ shader_type spatial;
 // A body can also be drawn a little smaller than it is, about its own
 // middle: that is how a piece that still stands shows its cracks, each
 // block shrunk away from its neighbours, the gaps dark.
+// The skin of a piece that bends is stretched between its rings: its faces
+// are lit by how they lie now, worked out from the surface itself.
 
 uniform sampler2D slot_of : filter_nearest, repeat_disable;  // per block: its body (-1 hidden)
 uniform sampler2D bodies : filter_nearest, repeat_disable;   // per body: where it is (2 texels)
@@ -20,6 +23,7 @@ uniform float core = 0.7;
 uniform float crack = 0.22;
 
 varying float inside;   // 1 on a face made by the cut
+varying float facet;    // 1 on a face lit by how it lies now (a cut, a skin)
 varying float cracked;  // 1 on a block that still stands, shrunk
 
 vec3 turn(vec4 q, vec3 v) {
@@ -28,6 +32,7 @@ vec3 turn(vec4 q, vec3 v) {
 
 void vertex() {
 	inside = UV.y > 0.5 ? 1.0 : 0.0;
+	facet = abs(UV.y) > 0.5 ? 1.0 : 0.0;
 	cracked = 0.0;
 	int id = int(UV.x + 0.5);
 	int w = textureSize(slot_of, 0).x;
@@ -52,11 +57,11 @@ void vertex() {
 
 void fragment() {
 	ALBEDO = COLOR.rgb * mix(1.0, mix(core, crack, step(0.5, cracked)), step(0.5, inside));
-	// Each facet of a broken face faces its own way (worked out from the
-	// surface itself, and turned towards the eye).
-	vec3 facet = normalize(cross(dFdx(VERTEX), dFdy(VERTEX)));
-	facet = dot(facet, VERTEX) > 0.0 ? -facet : facet;
-	NORMAL = normalize(mix(NORMAL, facet, step(0.5, inside)));
+	// Each facet of a broken face, and of a skin, faces its own way (worked
+	// out from the surface itself, and turned towards the eye).
+	vec3 lies = normalize(cross(dFdx(VERTEX), dFdy(VERTEX)));
+	lies = dot(lies, VERTEX) > 0.0 ? -lies : lies;
+	NORMAL = normalize(mix(NORMAL, lies, step(0.5, facet)));
 	// Less light from below than from the sky: what faces down or sideways
 	// is darker, which gives rubble its shape without a shadow.
 	float skyward = (INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).y;

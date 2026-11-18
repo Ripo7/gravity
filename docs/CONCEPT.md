@@ -50,13 +50,23 @@ béton se fissure puis lâche, le métal plie.
 Qui porte : le béton et le métal portent des étages, le bois porte une
 maison, le verre ne porte rien.
 
-Note sur le béton (étape 2, à valider) : la page disait d'abord que ses
+Note sur le béton (étape 2, validée) : la page disait d'abord que ses
 blocs « tombent droit ». Au banc, des blocs laissés là où ils étaient
 restaient empilés : un poteau cassé tenait encore debout et portait encore
 sa dalle. C'est le même défaut que le morceau coincé dans son trou de la
 version précédente. La pièce bascule donc à l'opposé du coup, et ses blocs
 se séparent en tombant : l'ouverture est dégagée et les gravats sont
 couchés, bas.
+
+Précisions sur le métal (étape 3, à valider) :
+
+- Il plie à l'opposé du coup, là où le premier coup a porté. Un coup venu
+  de l'autre côté le redresse d'autant.
+- Une pièce qui porte quelque chose garde la tête en place et se cintre :
+  ce qu'elle porte reste posé dessus jusqu'à ce qu'elle se couche.
+- Une plaque posée à plat (un plancher) ne plie pas sous les coups : elle
+  descend d'un seul tenant quand ses poteaux se couchent.
+- Couché, le métal garde la forme qu'il a prise. Il ne plie plus.
 
 ## Maison, immeuble, tour
 
@@ -86,8 +96,8 @@ Le plan, une pull request par étape, chacune jouable sur le téléphone
 (béton d'abord : validé ; l'ordre des trois autres matières est proposé) :
 
 1. Banc vide : la brute seule sur un sol nu. (fait)
-2. Béton. (fait, à valider sur le téléphone)
-3. Métal : c'est la partie neuve, autant savoir tôt si le téléphone suit.
+2. Béton. (fait, validé)
+3. Métal. (fait, à valider sur le téléphone)
 4. Bois.
 5. Verre.
 6. Maison, immeuble, tour sur le banc.
