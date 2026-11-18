@@ -77,10 +77,16 @@ toute sa largeur. Corrigé :
   haut, et ses bras passaient à travers un poteau sans le toucher.)
 - Chaque coup d'une combinaison a donc son endroit : le crochet en haut à
   droite, le revers à gauche, le coup sauté tout en haut. Une combinaison
-  ne tape plus quatre fois au même point. (Combien de coups pour un trou :
-  à régler au banc.)
+  ne tape plus quatre fois au même point.
 - Si le poing n'a rien touché sur son trajet, le coup revient à ce que le
   bras traverse, puis à ce qui se trouve entre le corps et le poing.
+- Le corps de la brute ne traverse pas ce qui tient debout : ni la tête,
+  ni le buste, ni les jambes. Seul le membre qui frappe y entre. (Retour
+  du 18 novembre : collée au mur, la brute y plongeait jusqu'aux épaules.)
+- Combien de coups pour un trou : validé tel quel le 18 novembre (un
+  endroit cède au quatrième coup qu'il reçoit).
+- Les gestes de frappe eux-mêmes ne sont peut-être pas les bons (retour
+  du 18 novembre) : à revoir, pas encore décidé.
 - Au-dessus du trou d'un seul coup, ce qui reste tient. Au-dessus d'un
   trou plus large, ça tombe : des trous côte à côte ouvrent le mur
   jusqu'en haut.
