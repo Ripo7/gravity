@@ -8,17 +8,25 @@ extends CharacterBody3D
 ## there is a kick too. While such a move plays, the body goes where the
 ## move steps (Character.root_motion).
 ##
-## What a blow does to what it reaches is not decided here: when a fist or
-## a foot gets there, the brute says where it went and how hard (`blow`),
-## and whoever stands there takes it.
+## A blow lands where its fist or foot first touches something on its way,
+## not where the move ends: the fist is followed step by step from the
+## moment it is thrown (Character.reached). If it touches nothing, the
+## blow goes to what the arm behind it runs through, then, when the move
+## has it land, to what stands between the body and the fist.
+##
+## What a blow does to what it lands on is not decided here: the brute says
+## where it landed, on what and how hard (`blow`), and that takes it.
 
-## A fist or a foot gets there: it went from `from` (in the body, at its
-## height) to `to`, `power` hard (2 a blow, 3 a heavy one).
-signal blow(from: Vector3, to: Vector3, power: int)
+## A blow lands at `at`, on the body `on` (an empty RID: on nothing; `at`
+## is then where the fist or foot ended). It was thrown along `way`,
+## `power` hard (2 a blow, 3 a heavy one).
+signal blow(at: Vector3, way: Vector3, power: int, on: RID)
 
 const FOV := 70.0
-## Something up to this high (m) is stepped onto instead of stopping you.
+## Something up to this high (m) is stepped onto instead of stopping you,
+## with a stride of up to STRIDE (m).
 const STEP := 0.6
+const STRIDE := 0.35
 ## The camera turns about a point this high above the feet (m), and sits
 ## SHOULDER to the left of it (SIDE -1), BACK behind and RAISED above, less
 ## when something is in the way: ROOM is kept between it and that.
@@ -43,8 +51,12 @@ const EASE_OUT := 6.0
 const TURN := 12.0
 ## In the air this long (s) without having jumped: it is a fall.
 const FALL_AFTER := 0.12
-## A blow reaches this much farther than the wrist (m): the fist.
+## A fist, or a foot, is a ball this wide round the knuckles or the toes
+## (m, its radius).
 const FIST := 0.1
+## What stands between the body and a fist that touched nothing on its way
+## is looked for this wide (m, a radius): the arm and the shoulder.
+const ARM := 0.2
 ## What comes down on the brute pushes it out from under at this speed
 ## (m/s): it does not hold up what falls on it.
 const GIVE_WAY := 3.0
@@ -88,6 +100,8 @@ var _airborne := 0.0  # s since the feet left the ground
 var _fell := 0.0  # m/s down, just before landing
 var _wish := Vector3.ZERO  # where the stick pushes, in the world
 var _punch_to := 0.0  # where the strike under way is thrown (rad, like `facing`)
+var _fist_was := Vector3.INF  # where its fist or foot was a step ago (not thrown yet: INF)
+var _ball := SphereShape3D.new()
 var _sight := PhysicsRayQueryParameters3D.new()  # what the camera stays in front of
 
 
@@ -120,7 +134,7 @@ func _init() -> void:
 	# The camera stays in front of what stands, not of what lies about.
 	_sight.collision_mask = Layers.WORLD | Layers.STRUCTURE
 	character.swung.connect(_on_swung)
-	character.struck.connect(_on_struck)
+	character.reached.connect(_on_reached)
 	_pose_camera()
 
 
@@ -268,13 +282,77 @@ func _animate(wish: Vector3, delta: float) -> void:
 ## character faces.
 func _on_swung(_move: String) -> void:
 	_punch_to = atan2(-_wish.x, -_wish.z) if _wish.length() > 0.1 else facing
+	_fist_was = Vector3.INF
 
 
-## The fist or the foot of the strike under way gets there.
-func _on_struck(_move: String) -> void:
+## The fist or the foot of the strike under way is at the end of `limb`
+## (see Character.limb). What it touches on its way there takes the blow,
+## there and then; `there`: the move has it land now, on something or not.
+func _on_reached(limb: PackedVector3Array, there: bool) -> void:
+	var fist := limb[2]
+	var was := _fist_was if _fist_was.is_finite() else fist
+	_fist_was = fist
 	var ahead := Basis(Vector3.UP, facing) * Vector3.FORWARD
-	var from := global_position + Vector3.UP * character.height()
-	blow.emit(from, from + ahead * (character.reach() + FIST), character.power())
+	# It counts once it is in front of the body: not drawn back behind it.
+	var out := (fist - global_position).dot(ahead)
+	var out_was := (was - global_position).dot(ahead)
+	var met := {}
+	if out > 0.0:
+		if out_was < 0.0:
+			was = was.lerp(fist, out_was / (out_was - out))
+		met = _touched(was, fist, limb)
+	if met.is_empty() and there:
+		met = _between(limb)
+	if met.is_empty() and not there:
+		return
+	character.landed()
+	blow.emit(met.get("at", fist), ahead, character.power(), met.get("on", RID()))
+
+
+## What the fist touches as it goes from `from` to `to`, or else what the
+## arm behind it runs through as it is now (`limb`): where ("at") and what
+## ("on"). Empty: nothing.
+func _touched(from: Vector3, to: Vector3, limb: PackedVector3Array) -> Dictionary:
+	var met := _swept(from, to, FIST)
+	if not met.is_empty():
+		return met
+	var space := get_world_3d().direct_space_state
+	for k: int in [1, 0]:
+		var run := PhysicsRayQueryParameters3D.create(limb[k], limb[k + 1], Layers.STRUCTURE | Layers.RUBBLE)
+		var through := space.intersect_ray(run)
+		if not through.is_empty():
+			return {"at": through["position"], "on": through["rid"]}
+	return {}
+
+
+## What stands between the body and the end of `limb`, at the height the
+## limb leaves the body at: where ("at") and what ("on"). Empty: nothing.
+func _between(limb: PackedVector3Array) -> Dictionary:
+	return _swept(Vector3(global_position.x, limb[0].y, global_position.z), limb[2], ARM)
+
+
+## The first thing a ball `wide` in radius touches as it goes from `from`
+## to `to`: where ("at") and what ("on"). Empty: nothing.
+func _swept(from: Vector3, to: Vector3, wide: float) -> Dictionary:
+	var space := get_world_3d().direct_space_state
+	_ball.radius = wide
+	var query := PhysicsShapeQueryParameters3D.new()
+	query.shape = _ball
+	query.collision_mask = Layers.STRUCTURE | Layers.RUBBLE
+	query.transform = Transform3D(Basis(), from)
+	query.motion = to - from
+	var free := space.cast_motion(query)
+	if free[1] >= 1.0:
+		return {}
+	query.transform.origin = from + (to - from) * free[1]
+	query.motion = Vector3.ZERO
+	var rest := space.get_rest_info(query)
+	if not rest.is_empty():
+		return {"at": rest["point"], "on": rest["rid"]}
+	var touching := space.intersect_shape(query, 1)
+	if touching.is_empty():
+		return {}
+	return {"at": query.transform.origin, "on": touching[0]["rid"]}
 
 
 ## How far back the camera can go from `from` along `reach` (as a length
@@ -341,18 +419,23 @@ func _climb(wish: Vector3, delta: float) -> void:
 			blocked = true
 	if not blocked:
 		return
-	var stride := maxf(run_speed * delta, 0.15)
 	var xf := global_transform
 	if test_move(xf, Vector3.UP * STEP):
 		return  # no headroom
 	xf.origin.y += STEP
-	if test_move(xf, way * stride):
-		return  # too high to step onto
-	xf.origin += way * stride
+	# A short stride onto it; if all that is under the foot there is an
+	# edge (the uneven foot of a wall that was knocked open), a longer one.
 	var landing := KinematicCollision3D.new()
-	if not test_move(xf, Vector3.DOWN * STEP, landing) or landing.get_normal().y < 0.6:
+	var to := Vector3.INF
+	for stride: float in [maxf(run_speed * delta, 0.15), STRIDE]:
+		if test_move(xf, way * stride):
+			break  # too high to step onto
+		var over := xf.translated(way * stride)
+		if test_move(over, Vector3.DOWN * STEP, landing) and landing.get_normal().y >= 0.6:
+			to = over.origin + landing.get_travel()
+			break
+	if not to.is_finite():
 		return  # nothing flat enough up there
-	var to := xf.origin + landing.get_travel()
 	var rise := to.y - global_position.y
 	if rise < 0.03:
 		return

@@ -36,12 +36,13 @@ node with `main.gd`) and the test runner's.
   capsule and places the camera.
 - **`Character`** is a body you see and nothing else: it is told what
   happens (`move`, `jump`, `land`, `punch`, `kick`) and turns it into a
-  pose. It says when a strike starts and when its fist or foot gets
-  there (`swung`, `struck`), and what that blow is (`reach`, `height`,
-  `power`). It never decides what the blow does.
-- **`Player`** turns that into where the fist went and how hard
-  (`blow`); **`Main`** hands it to the structure (`Structure.strike`).
-  The brute knows nothing of what it breaks.
+  pose. It says when a strike starts (`swung`), where its fist or foot
+  is drawn at each step while it is thrown (`reached`, `limb`), and how
+  hard the blow is (`power`). It never decides what the blow does.
+- **`Player`** follows that fist and says where it first touched
+  something, what, and how hard (`blow`); **`Main`** hands it to the
+  structure (`Structure.strike`). The brute knows nothing of what it
+  breaks.
 - **`Structure`** owns what stands, its blocks and the `Rubble`. The
   rest of the game breaks things through `strike` (a blow of the brute)
   and `hit` (so many points of blows to a piece).
@@ -93,10 +94,11 @@ bends.
    holds on three columns, not on two on the same side: `_held`);
    otherwise it comes down in one, a loose body. (A wall or a column is
    looked at block by block, and a metal plate sags: see below.)
-4. **Only a blow breaks or bends.** From the brute: `Structure.strike`
-   follows the fist from the body to where it ends; the first piece on
-   its way takes the blow, there, and what lies loose near the end is
-   sent off (not far: it is heavy). Or from something heavy that lands
+4. **Only a blow breaks or bends.** From the brute: the blow lands
+   where its fist or foot first touches something (see "Where a blow
+   lands" below); that takes it, there (`Structure.strike`), and what
+   lies loose near there is sent off (not far: it is heavy). Or from
+   something heavy that lands
    on a piece (`Rubble._land`): a point for each 900 kg.m/s it loses
    against it, where it lands, and only on a face that looks up. What
    brushes past a wall on its way down does nothing to it. Walking,
@@ -222,7 +224,9 @@ piece (`Bend`): a post, a sheet or a plate.
 8. **It never breaks**, however hard it lands (`Structure.shatter`
    leaves it alone).
 
-Not there: what falls does nothing to the brute but push it (a deck that
+Not there: the brute's own body goes through what it strikes (its moves
+lunge 0.8 m ahead of where it stands: up against a wall its head and
+chest are in the wall); what falls does nothing to the brute but push it (a deck that
 comes down round a brute that cannot get out stays on its head); blocks
 that lie in one come apart under blows only once they have taken the
 strength of their piece in all; a hole is the blocks round the fist, two
@@ -232,9 +236,8 @@ to open a wall to the top depends on how the wall was cut (two or three
 side by side); a slab that tips onto
 what is left under it can stay whole, leaning; metal that lies there no
 longer takes a mark; a sheet that stands dented is
-still a flat wall to the brute; a plate takes nothing from a blow; the
-brute's fists all land between 0.7 and 1 m up, so a post it strikes has
-one kink; pieces are upright boxes, turned about the vertical at most.
+still a flat wall to the brute; a plate takes nothing from a blow;
+pieces are upright boxes, turned about the vertical at most.
 
 ## The bench
 
@@ -285,7 +288,7 @@ it jumps, lands, strikes or kicks.
   clips over as they are, joins each stroke to its recovery and measures
   it. One was made as a punch (the hook); the others are sword strokes
   thrown without the sword. What is measured on each is stored with it:
-  when the fist gets there (the blow counts then), when the next move may
+  when the fist gets there (the blow counts then at the latest), when the next move may
   start, how far and how high it reaches, and which way it is going.
 - **What is motion capture.** The kick is what a real person did (CMU
   motion capture database, free to use): the free library has none. The
@@ -307,12 +310,39 @@ it jumps, lands, strikes or kicks.
   the move up, whoever asked for it (a key between two steps, a button or
   the combination during one): `Character` counts from there, and the
   clips say their blow lands on one of their own frames. `struck` is sent
-  before the pose of that step is set: who wants the fist's place reads
-  it once the step is over.
+  before the pose of that step is set; `reached`, which says where the
+  limb is, once it is.
+- **Where a blow lands.** Where its fist or foot first touches
+  something, not where the move ends. From 0.1 s before a clip has its
+  blow land, and until it does, `Character` says at each step where the
+  limb that strikes is drawn (`reached`: shoulder, elbow, knuckles; or
+  hip, knee, toes), once the pose of the step is set. `Player` moves a
+  ball as wide as a fist (0.1 m in radius) from where the knuckles were
+  a step before to where they are, once they are in front of the body:
+  the first thing it touches, standing or loose, takes the blow, at that
+  point and in that step (`Player._touched`). If the fist touched
+  nothing, what the forearm, then the upper arm, runs through does. And
+  if nothing has by the pose in which the clip has the blow land, what
+  stands between the body and the fist (a ball 0.2 m in radius, from the
+  body's axis at the height of the shoulder): the brute's moves lunge so
+  far that its chest can be through a thin column while its fist is past
+  it. Nothing at all: the blow is said where the fist ended, on nothing,
+  and what a fist touches there (0.3 m round) takes it. A blow is thrown
+  along the way the brute faces, wherever it lands.
+  What this does: right up against a wall, the hook goes in 1.2 m up on
+  the right (in the open its fist ends 0.7 m up, straight ahead), the
+  blow back across 0.75 m up on the left, the swing up 0.45 m up on the
+  right, and the fist of the leap 2 m up, over the brute's head. The
+  blows of a combination no longer land on one place: each place takes
+  its own. Before, a blow was a thin line from the body's axis straight
+  ahead to where the fist ends in the open, at that height: 0.3 m to one
+  side of a column 0.4 m wide, every blow missed it.
 - **Stepping up.** Stopped by something no higher than 0.6 m, with room
-  above and something flat enough on top, the brute steps onto it
-  (`Player._climb`); the view and the body follow over a moment, so that
-  they do not jump.
+  above and something flat enough on top, the brute steps onto it: a
+  short stride first, then one of 0.35 m if all there is under the foot
+  after the short one is an edge: the foot of a wall that was knocked
+  open is uneven on top (`Player._climb`). The view and the body follow
+  over a moment, so that they do not jump.
 
 Not there: strafing and walking backwards (the free clips only go
 forward, so the character always turns to where it goes), feet placed on

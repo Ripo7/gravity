@@ -230,30 +230,24 @@ func standing(rid: RID) -> int:
 	return _by_body.get(rid, -1)
 
 
-## A blow of the brute: a fist or a foot goes from `from` to `to`, `power`
-## hard. The first piece on its way takes it; what lies loose near where it
-## ends is sent off. Returns true if it met something.
-func strike(from: Vector3, to: Vector3, power: int) -> bool:
-	var way := to - from
-	var space := get_world_3d().direct_space_state
-	var mask := Layers.STRUCTURE | Layers.RUBBLE
-	var met := space.intersect_ray(PhysicsRayQueryParameters3D.create(from, to, mask))
-	var at := to
+## A blow of the brute lands at `at`: its fist or foot touched the body
+## `on` there, thrown along `way`, `power` hard. That takes it. If it
+## touched nothing (`on` empty: `at` is where it ended), what a fist, as
+## wide as it is, touches there does. What lies loose near there is sent
+## off. Returns true if it met something.
+func strike(at: Vector3, way: Vector3, power: int, on := RID()) -> bool:
 	var found: Array[RID] = []
-	if met.is_empty():
-		# Nothing right on its way: what the fist, as wide as it is, touches
-		# where it ends.
+	if on.is_valid():
+		found.append(on)
+	else:
 		var ball := SphereShape3D.new()
 		ball.radius = FIST
 		var query := PhysicsShapeQueryParameters3D.new()
 		query.shape = ball
-		query.transform = Transform3D(Basis(), to)
-		query.collision_mask = mask
-		for touched in space.intersect_shape(query, 8):
+		query.transform = Transform3D(Basis(), at)
+		query.collision_mask = Layers.STRUCTURE | Layers.RUBBLE
+		for touched in get_world_3d().direct_space_state.intersect_shape(query, 8):
 			found.append(touched["rid"])
-	else:
-		at = met["position"]
-		found.append(met["rid"])
 	# One thing takes the blow: a piece that stands, rather than what lies.
 	var taker := -1
 	var lies := -1

@@ -101,8 +101,8 @@ func rebuild() -> void:
 	player.velocity = Vector3.ZERO
 
 
-func _on_blow(from: Vector3, to: Vector3, power: int) -> void:
-	structure.strike(from, to, power)
+func _on_blow(at: Vector3, way: Vector3, power: int, on: RID) -> void:
+	structure.strike(at, way, power, on)
 
 
 ## What stands on the bench: in concrete, a column, a wall, a slab on four
