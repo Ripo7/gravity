@@ -23,11 +23,12 @@ func test_the_bench_is_a_bare_ground_with_one_brute_and_things_to_break() -> voi
 			check(not (child as DirectionalLight3D).shadow_enabled, "the sun casts no shadow")
 	check_eq(brutes, 1, "one brute")
 	check_eq(suns, 1, "one sun")
-	# What stands, in concrete and again in metal: a column, a wall of
-	# three, a slab on four columns.
-	check_eq(s.pieces, 18, "eighteen pieces")
-	check_eq(s.standing_count, 18, "all standing")
-	check_eq(main.panels.size(), 3, "three panels to the wall")
+	# What stands, in concrete and again in metal: a column, a wall (in
+	# one piece in concrete, three sheets in metal), a slab on four
+	# columns.
+	check_eq(s.pieces, 16, "sixteen pieces")
+	check_eq(s.standing_count, 16, "all standing")
+	check(main.wall >= 0, "a wall")
 	check_eq(main.sheets.size(), 3, "three sheets to the fence")
 	check_eq(Array(s.rests_on[main.slab]).size(), 4, "the slab rests on its four columns")
 	check_eq(Array(s.rests_on[main.deck]).size(), 4, "the deck rests on its four posts")
@@ -35,8 +36,7 @@ func test_the_bench_is_a_bare_ground_with_one_brute_and_things_to_break() -> voi
 		check(post in s.rests_on[main.slab], "column %d carries the slab" % post)
 	for pier in main.piers:
 		check(pier in s.rests_on[main.deck], "post %d carries the deck" % pier)
-	var concrete: Array[int] = [main.column, main.slab]
-	concrete.append_array(Array(main.panels))
+	var concrete: Array[int] = [main.column, main.slab, main.wall]
 	concrete.append_array(Array(main.posts))
 	for q in s.pieces:
 		var made_of := Matter.CONCRETE if q in concrete else Matter.METAL
@@ -49,7 +49,7 @@ func test_the_bench_is_a_bare_ground_with_one_brute_and_things_to_break() -> voi
 		check(side > 0.5, "piece %d is on its matter's side" % q)
 		if made_of == Matter.CONCRETE:
 			check(
-				s.blocks[q] >= 2 and s.blocks[q] <= 9,
+				s.blocks[q] >= 2 and s.blocks[q] <= Matter.MOST_BLOCKS,
 				"piece %d is cut into a few blocks (%d)" % [q, s.blocks[q]]
 			)
 	check_eq(s.rubble.live, 0, "nothing lies loose")
@@ -106,13 +106,13 @@ func test_rebuilding_puts_the_bench_back() -> void:
 	s.hit(main.posts[1], s.strength[main.posts[1]], Vector3.FORWARD)
 	await frames(30)
 	s.hit(main.metal_post, s.strength[main.metal_post], Vector3.FORWARD)
-	check(s.standing_count < 18 and s.rubble.live > 0, "things are down")
+	check(s.standing_count < 16 and s.rubble.live > 0, "things are down")
 	main.fall = 0.6
 	main.player.global_position = Vector3(3, 0.05, 3)
 	main.rebuild()
 	await frames(5)
 	check(main.structure != s and not is_instance_valid(s), "what stood is gone")
-	check_eq(main.structure.standing_count, 18, "and stands again")
+	check_eq(main.structure.standing_count, 16, "and stands again")
 	check_eq(main.structure.harm[main.metal_post], 0.0, "what was bent is straight")
 	check_eq(main.structure.rubble.live, 0, "nothing lies loose")
 	check_near(main.structure.rubble.fall, 0.6, 0.001, "things still fall as fast as they were set to")

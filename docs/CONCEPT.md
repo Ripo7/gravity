@@ -64,6 +64,12 @@ toute sa largeur. Corrigé :
   est coupé là : le bas reste debout, le haut tombe.
 - Ce qui n'est plus tenu, ou plus en équilibre, tombe d'un bloc et se
   disloque en touchant le sol.
+- Le trou est centré sur le poing : environ 0,9 m de large, à la hauteur
+  où le poing touche. (Retour du 18 novembre : le trou partait du sol,
+  sous le poing.)
+- Au-dessus du trou d'un seul coup, ce qui reste tient. Au-dessus d'un
+  trou plus large, ça tombe : des trous côte à côte ouvrent le mur
+  jusqu'en haut.
 - Métal : une tôle se creuse sous le poing, le reste reste plat, les
   bosses s'ajoutent. Un poteau plie à chaque hauteur frappée. Un coup venu
   de l'autre côté redresse d'autant.
@@ -76,6 +82,9 @@ toute sa largeur. Corrigé :
   n'est plus portée, et se plie en tombant : elle ne reste pas raide.
 - Couché, le métal garde la forme qu'il a prise : les coups ne le
   déforment plus.
+- Ce qui tombe sur la brute la pousse de côté : elle ne le porte pas sur
+  la tête. (Les dégâts que la ville fait à la brute restent pour plus
+  tard, avec le combat.)
 - Verre et bois : inchangés.
 
 Note sur le béton (étape 2) : la page disait d'abord que ses blocs
@@ -104,7 +113,8 @@ Une matière à la fois, sur un banc d'essai en grey box, validée sur le
 téléphone avant la suivante.
 
 - Le banc d'essai : un sol vide, la brute, et quelques pièces de la matière
-  (un mur, un poteau, une dalle posée sur des poteaux).
+  (un mur, un poteau, une dalle posée sur des poteaux). Le mur en béton
+  est d'une seule pièce, assez large pour garder un trou.
 - Grey box : formes simples, couleurs unies, aucun décor, aucune texture.
   Le seul modèle est le mannequin de la brute.
 - La ville générée revient quand les quatre matières sont validées.
@@ -113,7 +123,8 @@ Le plan, une pull request par étape, chacune jouable sur le téléphone
 (béton d'abord : validé ; l'ordre des trois autres matières est proposé) :
 
 1. Banc vide : la brute seule sur un sol nu. (fait)
-2. Béton. (fait, validé ; repris pour casser là où le coup touche)
+2. Béton. (fait, validé ; repris pour casser là où le coup touche : à
+   valider sur le téléphone)
 3. Métal. (repris de même ; à valider sur le téléphone)
 4. Bois.
 5. Verre.

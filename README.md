@@ -7,13 +7,16 @@ comes before the code.
 
 **Where it is now: step 3 of 7, metal.** A bare ground, one brute that
 walks, runs, sprints, jumps, throws a four-blow combination and kicks, and
-on the bench in front of it the same three things twice: a column, a wall
-of three, a slab on four columns. In concrete on its right, in metal on
-its left.
+on the bench in front of it the same three things twice: a column, a
+wall, a slab on four columns. In concrete on its right, in metal on its
+left.
 
-Concrete cracks blow after blow, for all to see, then lets go: the piece
-goes over away from the blow and comes apart into a few big blocks, which
-come down slowly (that is what makes the brute a giant) and lie low.
+A blow harms the place it lands on, not the whole piece. Concrete cracks
+round the blow, for all to see, then lets go there: the few big blocks
+round the fist are knocked out, away from the blow, and a wall keeps a
+hole. What they held up comes down, slowly (that is what makes the brute
+a giant), breaks into its blocks when it lands and lies low; the rest
+stands.
 Metal never breaks: a blow leaves its mark where it lands, away from
 the blow, and the piece keeps it. A sheet takes a dent under the fist, a
 post kinks at the height it is struck at. Marked as deep as it goes in
@@ -59,8 +62,12 @@ back across from the left, then a leap that comes down fist first, then
 round again. A blow is thrown where the stick pushes, or where the
 character faces.
 
-A concrete column 0.4 m thick takes one whole combination: three blows
-crack it, wider each time, and the fourth, the heavy one, brings it down.
+A place of a concrete piece 0.4 m thick takes one whole combination:
+three blows crack it, wider each time, and the fourth, the heavy one,
+knocks out the blocks round it. A column is cut there: its foot stays,
+its top comes down. A wall keeps a hole about 0.9 m across where the
+fist landed; another one or two beside it, and what was over them comes
+down: the way is open.
 A metal post 0.2 m thick takes a combination and a half where the fists
 land: it leans more at each blow and lies down at the seventh. A sheet
 takes a dent at each blow and lies down at the third in the same place;
@@ -109,12 +116,15 @@ Add `--write-movie out.avi --fixed-fps 30` before `--path` to record a run.
   `test_*` (they may `await`). They play the real scene: the bench (one
   brute, what stands on it, no sun shadow, a round shadow that stays on
   the ground, putting it all back); concrete (walking, running and
-  jumping break nothing; a column cracks blow after blow then lets go in
-  a few blocks that lie low, away from the brute; a piece takes what its
-  matter and its size say, however it is cut; a slab holds on three
-  columns and comes down without two; what lands on a piece is a blow to
-  it; things fall as slowly as they are set to; a broken panel opens the
-  wall, and the brute walks through over its rubble); metal (walking
+  jumping break nothing; a column cracks where it is struck, then is cut
+  there; struck half way up, its foot stays and its top comes down in one
+  and breaks when it lands; a wall struck in the middle keeps a hole;
+  over the hole of one blow the wall holds, over a wider one it comes
+  down; a piece, and a place of it, take what its matter and its
+  size say however it is cut; a slab holds on three columns and comes
+  down without two; what lands on a piece is a blow to it; things fall
+  as slowly as they are set to; the brute knocks a hole in the wall,
+  round its fist, then a way through); metal (walking
   bends nothing; a post bends blow after blow, keeps the shape and never
   breaks; a blow from the other side straightens it; it kinks at each
   height it is struck at; a post that carries bows and keeps its head

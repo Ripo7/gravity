@@ -1,6 +1,7 @@
 extends TestCase
-## Concrete, on the bench: it cracks, then lets go in a few big blocks that
-## come down slowly and lie low; it carries; only a blow breaks it.
+## Concrete, on the bench: it cracks where it is struck, then the blocks
+## round the fist are knocked out and what they held up comes down, slowly,
+## and lies low; the rest stands; it carries; only a blow breaks it.
 
 var main: Main
 var p: Player
@@ -32,43 +33,193 @@ func test_walking_running_and_jumping_break_nothing() -> void:
 	await _unload()
 
 
-func test_a_column_cracks_blow_after_blow_then_lets_go_in_a_few_blocks() -> void:
+func test_a_column_cracks_where_it_is_struck_then_is_cut_there() -> void:
 	await _load()
 	var q := main.column
+	var all := s.blocks[q]
 	_face(Main.COLUMN_AT + Vector3(0, 0.05, 1.45), Main.COLUMN_AT + Vector3.UP)
 	await frames(5)
 	# What the column shows after each blow of the combination that lands.
 	var blows := [0]
-	p.blow.connect(func(_from: Vector3, _to: Vector3, _power: int) -> void: blows[0] += 1)
+	var fist := [0.0]
+	p.blow.connect(
+		func(_from: Vector3, to: Vector3, _power: int) -> void:
+			blows[0] += 1
+			fist[0] = to.y
+	)
 	var seen: Array[Array] = []
+	var cracked_high := 0
 	for k in 200:
 		if k % 6 == 0:
 			p.punch()
 		await frames(1)
 		if blows[0] > seen.size():
-			seen.append([s.state[q], s.cracks[q], s.harm[q]])
+			seen.append([s.cracks[q], s.harm[q], _standing(s, q)])
+			if seen.size() == 3:
+				for i in range(s.first[q], s.first[q] + all):
+					if s._shows[i] > 0 and s.centroid[i].y > fist[0] + 1.0:
+						cracked_high += 1
 		if seen.size() == 4:
 			break
 	check_eq(seen.size(), 4, "four blows landed")
 	if seen.size() == 4:
-		check_eq(seen[0], [Structure.STANDS, 1, 2.0], "after the first it stands, cracked")
-		check_eq(seen[1], [Structure.STANDS, 1, 4.0], "after the second too")
-		check_eq(seen[2], [Structure.STANDS, 2, 6.0], "after the third the cracks are wide")
-		check_eq(seen[3][0], Structure.BROKEN, "at the fourth, the heavy one, it lets go")
-	check_eq(s.standing_count, s.pieces - 1, "it no longer stands")
-	check_eq(s.rubble.live, s.blocks[q], "it is its few blocks now (%d)" % s.blocks[q])
-	check(s.blocks[q] >= 3 and s.blocks[q] <= 5, "three to five of them")
+		check_eq(seen[0], [1, 2.0, all], "after the first it stands, cracked")
+		check_eq(seen[1], [1, 4.0, all], "after the second too")
+		check_eq(seen[2], [2, 6.0, all], "after the third the cracks are wide")
+		check(seen[3][2] < all, "at the fourth, the heavy one, blocks are knocked out (%d left)" % seen[3][2])
+	check_eq(cracked_high, 0, "the cracks are round the fist: none a metre above it")
+	check(all >= 5 and all <= 8, "the column is five to eight blocks (%d)" % all)
 	for other in s.pieces:
 		check(other == q or s.harm[other] == 0.0, "piece %d took nothing" % other)
-	# They come down, away from the brute, and lie low.
+	# It is cut where it was struck: what was above comes down, away from
+	# the brute, and lies low; what is left standing is below the fist.
+	await frames(150)  # the blow runs its course
 	var rested := await _rest(900)
-	check(rested, "the blocks come to rest")
+	check(rested, "what came off comes to rest")
+	for i in range(s.first[q], s.first[q] + all):
+		if s.stands[i] == 1:
+			check(s.centroid[i].y < fist[0], "block %d still stands, below the fist" % i)
 	var loose := s.rubble
+	check(loose.live >= 2, "what came off is at least two bodies (%d)" % loose.live)
 	for i in loose.body.size():
+		if loose.alive[i] == 0:
+			continue
 		var at := loose.transform_of(i).origin
-		check(at.y < 0.45, "block %d lies on the ground (its middle %.2f m up)" % [i, at.y])
-		check(at.z < Main.COLUMN_AT.z + 0.4, "block %d went away from the brute (z %.2f)" % [i, at.z])
-		check(at.distance_to(Main.COLUMN_AT) < 5.0, "block %d did not fly off (%s)" % [i, at.snappedf(0.1)])
+		check(at.y < 0.8, "body %d lies low (its middle %.2f m up)" % [i, at.y])
+		check(at.z < Main.COLUMN_AT.z + 0.4, "body %d went away from the brute (z %.2f)" % [i, at.z])
+		check(at.distance_to(Main.COLUMN_AT) < 8.0, "body %d did not fly off (%s)" % [i, at.snappedf(0.1)])
+	await _unload()
+
+
+func test_a_column_struck_half_way_up_is_cut_there() -> void:
+	await _load()
+	# A tall column, struck 2 m up with all a place can take.
+	var built := _alone(1, [[Vector3(0.4, 3.9, 0.4), Vector3(60, 0, 0)]])
+	var all := built.blocks[0]
+	var at := Vector3(60, 2.0, 0.2)
+	built.hit(0, 4.0, Vector3.FORWARD, at)
+	check_eq(_standing(built, 0), all, "four points: every block stands")
+	var cracked := 0
+	for i in all:
+		if built._shows[i] > 0:
+			cracked += 1
+			check(absf(built.centroid[i].y - 2.0) < 0.8, "block %d, cracked, is by the blow" % i)
+	check(
+		cracked >= 1 and cracked < all, "the blocks round the blow show cracks, not the others (%d)" % cracked
+	)
+	built.hit(0, 5.0, Vector3.FORWARD, at)
+	check_eq(built.state[0], Structure.STANDS, "nine points there: the column still stands")
+	var stump := 0
+	for i in all:
+		if built.stands[i] == 1:
+			stump += 1
+			check(built.centroid[i].y < 2.0, "block %d stands, below the blow" % i)
+	check(stump >= 1, "its foot is left standing (%d blocks)" % stump)
+	var loose := built.rubble
+	var top := -1
+	for i in loose.body.size():
+		if loose.piece[i] == 0:
+			top = i
+	check(top >= 0, "what was above comes down in one")
+	check(loose.live < all - stump, "fewer bodies than blocks came off (%d)" % loose.live)
+	for k in 1500:
+		await frames(1)
+		if loose.awake == 0:
+			break
+	check_eq(loose.awake, 0, "everything comes to rest")
+	check_eq(loose.live, all - stump, "it broke into its blocks when it landed")
+	for i in loose.body.size():
+		if loose.alive[i] == 1:
+			var lies := loose.transform_of(i).origin
+			check(lies.y < 0.9, "body %d lies low (%.2f m up)" % [i, lies.y])
+	check_eq(built.state[0], Structure.STANDS, "and the foot of the column stands")
+	built.free()
+	await _unload()
+
+
+func test_a_wall_struck_in_the_middle_keeps_a_hole() -> void:
+	await _load()
+	var built := _alone(1, [[Vector3(3.0, 2.4, 0.35), Vector3(60, 0, 0)]])
+	var all := built.blocks[0]
+	check(all >= 30, "a wall 3 m wide is cut into blocks a blow can knock out (%d)" % all)
+	var middle := Vector3(60.4, 1.2, 0.18)
+	built.hit(0, built.strength[0], Vector3.FORWARD, middle)
+	check_eq(built.state[0], Structure.STANDS, "struck in the middle with all a place can take, it stands")
+	var left := _standing(built, 0)
+	check(
+		left >= all - 6 and left < all, "the blocks round the blow are knocked out, no more (%d left)" % left
+	)
+	var loose := built.rubble
+	check_eq(loose.live, all - left, "each a loose body")
+	await frames(3)
+	# A hole: nothing in the way through the middle, the wall still there
+	# beside it.
+	var space := main.get_world_3d().direct_space_state
+	var through := PhysicsRayQueryParameters3D.create(middle + Vector3(0, 0, 1), middle - Vector3(0, 0, 1))
+	through.collision_mask = Layers.STRUCTURE
+	check(space.intersect_ray(through).is_empty(), "nothing is in the way through the hole")
+	var beside := PhysicsRayQueryParameters3D.create(
+		Vector3(61.2, 2.0, 1), Vector3(61.2, 2.0, -1), Layers.STRUCTURE
+	)
+	check(not space.intersect_ray(beside).is_empty(), "the wall is still there beside it")
+	for k in 900:
+		await frames(1)
+		if loose.awake == 0:
+			break
+	check_eq(loose.awake, 0, "what was knocked out comes to rest")
+	check_eq(_standing(built, 0), left, "nothing else came down: the rest holds together")
+	for i in loose.body.size():
+		var lies := loose.transform_of(i).origin
+		check(lies.z < -0.3, "block %d went out the far side (z %.2f)" % [i, lies.z])
+		check(lies.y < 0.6, "and lies low (%.2f m up)" % lies.y)
+	built.free()
+	await _unload()
+
+
+func test_over_the_hole_of_one_blow_the_wall_holds_and_over_a_wider_one_it_comes_down() -> void:
+	await _load()
+	var built := _alone(1, [[Vector3(3.0, 2.4, 0.35), Vector3(60, 0, 0)]])
+	var all := built.blocks[0]
+	check_eq(built._unheld(0).size(), 0, "whole, every block of it holds")
+	# A hole as one blow makes it: 0.9 m wide, from 0.4 to 1.2 m up.
+	var narrow := _knock_out(built, Vector2(59.55, 0.4), Vector2(60.45, 1.2))
+	check(narrow >= 2 and narrow <= 6, "a few blocks knocked out (%d)" % narrow)
+	check_eq(_standing(built, 0), all - narrow, "nothing else comes down: what is over the hole holds")
+	check_eq(built.rubble.live, narrow, "each block knocked out a loose body")
+	# The same again beside it: a hole 1.8 m wide.
+	var wide := _knock_out(built, Vector2(60.45, 0.4), Vector2(61.35, 1.2))
+	check_eq(built.state[0], Structure.STANDS, "the wall stands on both sides")
+	var left := _standing(built, 0)
+	check(left < all - narrow - wide - 4, "what was over the two comes down (%d stand of %d)" % [left, all])
+	var loose := built.rubble
+	var in_one := 0
+	for i in loose.body.size():
+		if loose.alive[i] == 1 and loose.piece[i] == 0:
+			in_one += 1
+	check(in_one >= 1 and in_one <= 2, "in one, or two (%d)" % in_one)
+	check_eq(loose.live, narrow + wide + in_one, "the blocks knocked out, and that")
+	for k in 1500:
+		await frames(1)
+		if loose.awake == 0:
+			break
+	check_eq(loose.awake, 0, "everything comes to rest")
+	check_eq(loose.live, all - left, "it broke into its blocks when it landed")
+	check_eq(_standing(built, 0), left, "and nothing else came down")
+	# The way is open to the top, over the foot of the wall.
+	var space := main.get_world_3d().direct_space_state
+	for high: float in [0.7, 1.4, 2.2]:
+		var through := PhysicsRayQueryParameters3D.create(
+			Vector3(60.45, high, 1), Vector3(60.45, high, -1), Layers.STRUCTURE
+		)
+		check(space.intersect_ray(through).is_empty(), "nothing in the way %.1f m up" % high)
+	var sill := PhysicsRayQueryParameters3D.create(
+		Vector3(60.45, 0.2, 1), Vector3(60.45, 0.2, -1), Layers.STRUCTURE
+	)
+	check(
+		not space.intersect_ray(sill).is_empty(),
+		"the foot of the wall is still there, low enough to step over"
+	)
+	built.free()
 	await _unload()
 
 
@@ -92,6 +243,17 @@ func test_a_piece_takes_what_its_matter_and_size_say_however_it_is_cut() -> void
 		firsts[0].y != firsts[1].y and firsts[1].y != firsts[2].y,
 		"and the three were not cut the same (first blocks at %s)" % [firsts]
 	)
+	# The same for one place of it: struck there again and again.
+	var gave_at: Array[int] = []
+	for cut: int in [1, 7, 23]:
+		var built := _alone(cut, [[size, Vector3(60, 0, cut * 3.0)]])
+		var blows := 0
+		while _standing(built, 0) == built.blocks[0] and blows < 20:
+			built.hit(0, 2.0, Vector3.FORWARD, Vector3(60, 1.3, cut * 3.0 + 0.2))
+			blows += 1
+		gave_at.append(blows)
+		built.free()
+	check_eq(gave_at, [5, 5, 5] as Array[int], "cut three ways, a place of it gives at the same blow")
 	# Twice as thick, twice as much; and the thinnest way counts.
 	var thick := _alone(
 		1, [[Vector3(0.8, 2.6, 0.8), Vector3(60, 0, 40)], [Vector3(3, 0.3, 3), Vector3(70, 0, 40)]]
@@ -148,11 +310,13 @@ func test_what_lands_on_a_piece_is_a_blow_to_it() -> void:
 	built.hit(1, built.strength[1], Vector3.RIGHT)
 	check_eq(built.state[2], Structure.FALLS, "which gone, it comes down")
 	check_eq(built.harm[0], 0.0, "the low column has taken nothing yet")
+	var whole := built.blocks[0]
 	for k in 600:
 		await frames(1)
-		if built.state[0] == Structure.BROKEN:
+		if _standing(built, 0) < whole:
 			break
-	check_eq(built.state[0], Structure.BROKEN, "the slab lands on the low column and breaks it")
+	check(built.harm[0] > 0.0, "the slab lands on the low column: a blow to it (%.1f points)" % built.harm[0])
+	check(_standing(built, 0) < whole, "which knocks blocks out of it, where it landed")
 	built.free()
 	await _unload()
 
@@ -193,41 +357,95 @@ func test_things_fall_slowly_and_as_slowly_as_they_are_set_to() -> void:
 	await _unload()
 
 
-func test_a_broken_panel_opens_the_wall_and_its_rubble_lies_low() -> void:
+func test_the_brute_knocks_a_hole_in_the_wall_then_a_way_through() -> void:
 	await _load()
-	var middle := main.panels[1]
-	_face(Main.WALL_AT + Vector3(0, 0.05, 1.7), Main.WALL_AT + Vector3.UP)
+	var q := main.wall
+	var all := s.blocks[q]
+	var stand_at := Main.WALL_AT + Vector3(0, 0.05, 1.7)
+	_face(stand_at, Main.WALL_AT + Vector3.UP)
 	await frames(5)
-	for k in 200:
+	var blows := [0]
+	var fist := [Vector3.ZERO]
+	p.blow.connect(
+		func(_from: Vector3, to: Vector3, _power: int) -> void:
+			blows[0] += 1
+			if blows[0] == 1:
+				fist[0] = to
+	)
+	# The first hole: round the fist.
+	var first_hole := 0
+	for k in 300:
 		if k % 6 == 0:
 			p.punch()
 		await frames(1)
-		if s.state[middle] == Structure.BROKEN:
+		if _standing(s, q) < all:
+			first_hole = blows[0]
 			break
-	check_eq(s.state[middle], Structure.BROKEN, "the middle panel lets go")
+	check_eq(first_hole, 4, "one combination knocks a hole in it")
+	check_eq(s.state[q], Structure.STANDS, "the wall stands round the hole")
+	var out := all - _standing(s, q)
+	check(out >= 2 and out <= 6, "a few blocks knocked out, no more (%d of %d)" % [out, all])
+	var high := 0
+	for i in range(s.first[q], s.first[q] + all):
+		if s.stands[i] == 0:
+			var off := Vector2(s.centroid[i].x - fist[0].x, s.centroid[i].y - fist[0].y).length()
+			check(off < 0.6, "block %d, knocked out, was by the fist (%.2f m from it)" % [i, off])
+		elif s.centroid[i].y > 2.0:
+			high += 1
+	check(high >= 8, "the top of the wall holds over the hole (%d blocks of its top row)" % high)
 	await frames(150)  # the blow runs its course
 	var rested := await _rest(900)
-	check(rested, "its blocks come to rest")
-	check_eq(s.state[main.panels[0]], Structure.STANDS, "the panel on its left stands")
-	check_eq(s.state[main.panels[2]], Structure.STANDS, "the one on its right too")
-	check_eq(
-		s.harm[main.panels[0]] + s.harm[main.panels[2]], 0.0, "neither took anything from what fell past it"
-	)
+	check(rested, "what was knocked out comes to rest")
 	var loose := s.rubble
 	for i in loose.body.size():
-		var at := loose.transform_of(i).origin
-		check(at.y < 0.6, "block %d lies low (its middle %.2f m up)" % [i, at.y])
-		check_eq(loose.frozen[i], 1, "block %d is at rest: frozen" % i)
-	# The way is open: the brute goes through where the panel was, over
-	# what lies there.
-	_face(Main.WALL_AT + Vector3(0, 0.05, 2.0), Main.WALL_AT + Vector3.UP)
-	p.touch_move = Vector2(0, -1)
-	await frames(200)
-	p.touch_move = Vector2.ZERO
-	check(
-		p.global_position.z < Main.WALL_AT.z - 1.5, "the brute walks through (z %.2f)" % p.global_position.z
-	)
-	check_eq(s.standing_count, s.pieces - 1, "breaking nothing on its way")
+		if loose.alive[i] == 1:
+			var at := loose.transform_of(i).origin
+			check(at.z < Main.WALL_AT.z, "body %d went out the far side (z %.2f)" % [i, at.z])
+	# It goes on beside the hole, a combination at a time, until what is
+	# over it comes down; then walks through, striking aside what lies in
+	# its way.
+	var through := false
+	for more in 6:
+		var beside := Vector3(0.8 * (more / 2 + 1) * (1 if more % 2 == 0 else -1), 0, 0)
+		_face(stand_at + beside, Main.WALL_AT + beside + Vector3.UP)
+		await frames(5)
+		var before: int = blows[0]
+		for k in 300:
+			if k % 6 == 0:
+				p.punch()
+			await frames(1)
+			if blows[0] >= before + 4:
+				break
+		await frames(150)
+		await _rest(1200)
+		var top_left := 0
+		for i in range(s.first[q], s.first[q] + all):
+			if s.stands[i] == 1 and s.centroid[i].y > 2.0:
+				top_left += 1
+		if top_left > high - 2:
+			continue
+		for attempt in 4:
+			_face(
+				Main.WALL_AT + beside * 0.5 + Vector3(0, 0.05, 2.0), Main.WALL_AT + beside * 0.5 + Vector3.UP
+			)
+			p.touch_move = Vector2(0, -1)
+			await frames(220)
+			p.touch_move = Vector2.ZERO
+			if p.global_position.z < Main.WALL_AT.z - 1.0:
+				through = true
+				break
+			for k in 60:
+				if k % 6 == 0:
+					p.punch()
+				await frames(1)
+			await frames(90)
+		break
+	check(through, "the brute walks through (z %.2f)" % p.global_position.z)
+	check(blows[0] <= 45, "after a few combinations (%d blows in all)" % blows[0])
+	check_eq(s.state[q], Structure.STANDS, "what is left of the wall stands")
+	check(_standing(s, q) >= all / 4, "a good part of it (%d blocks of %d)" % [_standing(s, q), all])
+	for other in s.pieces:
+		check(other == q or s.harm[other] == 0.0, "piece %d took nothing" % other)
 	await _unload()
 
 
@@ -255,6 +473,29 @@ func _face(at: Vector3, target: Vector3) -> void:
 	p.velocity = Vector3.ZERO
 	p.facing = atan2(at.x - target.x, at.z - target.z)
 	p.look(Vector2(angle_difference(p.yaw, p.facing), 0.0))
+
+
+## Knocks out of piece 0 of `built` the blocks whose middle is between
+## `from` and `to` (x, and how high), as a blow that had landed on them
+## alone would. Returns how many.
+func _knock_out(built: Structure, from: Vector2, to: Vector2) -> int:
+	var out := 0
+	for i in built.blocks[0]:
+		var at := built.centroid[i]
+		if built.stands[i] == 1 and at.x >= from.x and at.x <= to.x and at.y >= from.y and at.y <= to.y:
+			built._expel(i, Vector3.FORWARD)
+			out += 1
+	built._refresh(0)
+	built._settle(0, Vector3.FORWARD)
+	return out
+
+
+## How many blocks of piece `q` of `built` still stand.
+func _standing(built: Structure, q: int) -> int:
+	var left := 0
+	for i in range(built.first[q], built.first[q] + built.blocks[q]):
+		left += built.stands[i]
+	return left
 
 
 ## Waits for everything loose to come to rest, `most` steps at most.

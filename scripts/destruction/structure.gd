@@ -4,13 +4,17 @@ extends Node3D
 ## panel of a wall): each one an upright box of one matter, which alone says
 ## how the piece answers a blow (Matter, docs/CONCEPT.md).
 ##
-## A piece takes blows as a whole: it has a strength of its own (Matter.
-## strength) and gives when it has taken that much, however it is cut or
-## drawn.
+## A blow harms the place it lands on, not the whole piece. A piece has a
+## strength of its own (Matter.strength), however it is cut or drawn: that
+## is what one place of it takes before it gives.
 ##
-## What breaks (concrete) cracks until then, for all to see; when it lets
-## go it breaks into the few blocks it was cut into when it was made
-## (Fracture), which become loose bodies (Rubble).
+## What breaks (concrete) was cut into a few blocks when it was made
+## (Fracture). The blocks round the place that is struck show cracks, for
+## all to see; when the place has taken what the piece can take they are
+## knocked out, away from the blow: loose bodies (Rubble), and a hole.
+## The rest stands as long as it holds together with something that
+## stands. What is cut off from below, or no longer in balance, comes
+## down in one and breaks into its blocks when it lands.
 ##
 ## What bends (metal) never breaks. A blow leaves its mark where it lands,
 ## away from the blow, and the piece keeps it: a post kinks at that height,
@@ -20,14 +24,14 @@ extends Node3D
 ## stays up under what it carried.
 ##
 ## What is no longer carried comes down: a piece rests on the pieces right
-## under it, and when those that are left no longer hold it up it falls, in
-## one piece; what breaks, breaks when it lands. A metal plate does not
+## under it, and when what is left of them no longer holds it up it falls,
+## in one piece; what breaks, breaks when it lands. A metal plate does not
 ## wait for that: as soon as one of the pieces under it goes, it sags
 ## there, and folds as it comes down. Only a blow breaks or bends: from the
 ## brute (`strike`), or from something heavy landing on a piece (Rubble).
 
-## What a piece is doing: it stands; it has come down, still one piece
-## (and lies there, if it is metal); it is in blocks.
+## What a piece is doing: some of it stands; none of it does, and some of
+## it lies in one (all of it, if it is metal); it is all in blocks.
 enum { STANDS, FALLS, BROKEN }
 
 ## Two pieces closer than this (m) touch; a piece this close to the ground
@@ -49,11 +53,23 @@ const TILT: Array[float] = [0.0, 0.012, 0.035]
 ## lies loose within REACH.
 const FIST := 0.3
 const REACH := 0.7
-## A piece that stood goes over as it lets go or lies down: it starts off
-## turning about its foot at TOPPLE rad/s, away from the blow. What breaks
-## comes apart as it goes down. (Left where they stood, blocks cut one on
-## top of the other stay there, a broken column still standing.) Each
-## block also gets up to SCATTER m/s of its own. Both as at real gravity.
+## A place is this far across (m) each way from where it was first
+## struck: a blow nearer than this to a place already struck adds to it,
+## and when the place gives, the blocks whose middle is within this of it
+## go (the nearest, at least).
+## They are knocked out at KNOCK m/s, as at real gravity.
+const HOLE := 0.45
+const KNOCK := 3.5
+## Blocks of a wall with nothing under them hold, side by side, between
+## two that sit, if those are no farther apart than LINTEL m: over the
+## hole one blow makes, not over two side by side.
+const LINTEL := 1.25
+## What a blow cuts off from below goes over: it starts off turning about
+## its foot at TOPPLE rad/s, away from the blow. (Left to drop straight,
+## it lands on what it stood on and stays there, a cut column still
+## standing.) So does metal that lies down, and a piece that is broken
+## all at once. Each block that comes off also gets up to SCATTER m/s of
+## its own. Both as at real gravity.
 const TOPPLE := 2.5
 const SCATTER := 0.4
 ## The triangles of a plate are this much smaller than drawn, as bodies:
@@ -61,9 +77,10 @@ const SCATTER := 0.4
 const TILE := 0.97
 
 ## How many pieces there are, and per piece: what it is made of, its size,
-## where its middle is, what it takes and has taken, what it is doing, how
-## cracked it shows (0 to 2), its parts in the mesh (the first, and how
-## many: blocks if it breaks, rings or nodes if it bends).
+## where its middle is, what one place of it takes, what it has taken
+## where it has taken the most, what it is doing, how cracked it shows
+## where it shows it the most (0 to 2), its parts in the mesh (the first,
+## and how many: blocks if it breaks, rings or nodes if it bends).
 var pieces := 0
 var matter := PackedInt32Array()
 var size := PackedVector3Array()
@@ -82,11 +99,12 @@ var carries: Array[PackedInt32Array] = []
 var bend: Array[Bend] = []
 ## How many parts there are in the mesh, and per part: where it stood (its
 ## centre of mass, or the middle of a ring, or a node), its volume, its
-## piece.
+## piece, and whether it still stands in it (a block).
 var count := 0
 var centroid := PackedVector3Array()
 var volume := PackedFloat32Array()
 var piece_of := PackedInt32Array()
+var stands := PackedByteArray()
 var mesh: ShardMesh
 var rubble: Rubble
 ## The cut depends on it: another number, other blocks.
@@ -94,6 +112,19 @@ var cut_seed := 1
 ## How many pieces still stand.
 var standing_count := 0
 
+var _shows := PackedByteArray()  # per block: how cracked it shows (0 to 2)
+var _bonds: Array[PackedInt32Array] = []  # per block: the blocks of its piece it was cut from
+var _foot: Array[Rect2] = []  # per block: where it is at the underside of its piece (x and z), if it is
+var _head: Array[Rect2] = []  # per block: the same at the top of its piece
+var _sits_on: Array[PackedInt32Array] = []  # per block of an upright piece: the blocks right under it
+var _beside: Array[PackedInt32Array] = []  # per block of an upright piece: those right beside it, one way
+var _other_side: Array[PackedInt32Array] = []  # and the other way
+var _reach: Array[Vector2] = []  # per block of an upright piece: from where to where it goes along it
+var _wound_at: Array[PackedVector3Array] = []  # per piece: the places it has been struck at
+var _wound_harm: Array[PackedFloat32Array] = []  # per piece: what each of them has taken
+var _whole := PackedFloat32Array()  # per piece: what it has taken nowhere in particular
+var _clumps := {}  # loose body -> the blocks it is made of, lying in one
+var _clump_harm := {}  # loose body -> the blows it has taken since
 var _corners: Array[PackedVector3Array] = []  # per block: its collision corners, around its centre
 var _radius := PackedFloat32Array()  # per block: how far its corners are from its centre
 var _hull: Array[RID] = []  # per block: its collision shape, once it is needed
@@ -101,6 +132,7 @@ var _box: Array[RID] = []  # per piece: its collision shape as it was built
 var _limbs: Array[Array] = []  # per post that has been kinked: the shapes of its limbs
 var _made: Array[RID] = []  # the shapes of metal that has lain down: sheets, the triangles of plates
 var _body: Array[RID] = []  # per piece: its static body while it stands
+var _in_body: Array[PackedInt32Array] = []  # per piece: the blocks its body is made of, once not its box
 var _loose: Array[PackedInt32Array] = []  # per piece: its bodies in the rubble once it has come down
 var _ties: Array[Array] = []  # per piece that stands: what ties to it a plate that has come loose
 var _by_body := {}  # RID -> piece that stands
@@ -148,9 +180,13 @@ func add_piece(of: int, xf: Transform3D, box: Vector3) -> int:
 	rests_on.append(PackedInt32Array())
 	carries.append(PackedInt32Array())
 	bend.append(null)
+	_wound_at.append(PackedVector3Array())
+	_wound_harm.append(PackedFloat32Array())
+	_whole.append(0.0)
 	_loose.append(PackedInt32Array())
 	_limbs.append([])
 	_ties.append([])
+	_in_body.append(PackedInt32Array())
 	if Matter.BENDS[of]:
 		blocks.append(_add_skin(p))
 	else:
@@ -218,88 +254,128 @@ func strike(from: Vector3, to: Vector3, power: int) -> bool:
 	else:
 		at = met["position"]
 		found.append(met["rid"])
-	# One piece takes the blow: one that stands, rather than one that lies.
+	# One thing takes the blow: a piece that stands, rather than what lies.
 	var taker := -1
+	var lies := -1
 	for rid in found:
-		var p := standing(rid)
-		if p < 0:
-			var lies := rubble.index_of(rid)
-			p = rubble.piece[lies] if lies >= 0 else -1
-			if p >= 0 and taker < 0:
-				taker = p
-		else:
-			taker = p
+		taker = standing(rid)
+		if taker >= 0:
 			break
+		if lies < 0:
+			lies = rubble.index_of(rid)
 	rubble.shove(at, REACH, way, power)
 	if taker >= 0:
 		hit(taker, power, way, at)
+	elif _clumps.has(lies):
+		# Blocks that lie there in one: they come apart once they have
+		# taken what their piece can.
+		_clump_harm[lies] = _clump_harm.get(lies, 0.0) + power
+		if _clump_harm[lies] >= strength[piece_of[_clumps[lies][0]]]:
+			break_up(lies)
 	return not found.is_empty()
 
 
 ## Piece `p` takes `points` of blows, from something going along `way`, at
-## `at` if that is known. What breaks cracks, and lets go when it has taken
-## all it can; what bends is marked that much deeper there, and lies down
-## when it is marked as deep as it goes.
+## `at` (nowhere in particular, if that is not told: the whole piece takes
+## it). What breaks cracks round there, and the blocks round there are
+## knocked out when the place has taken all it can; what bends is marked
+## that much deeper there, and lies down when it is marked as deep as it
+## goes.
 func hit(p: int, points: float, way := Vector3.ZERO, at := Vector3.INF) -> void:
 	if state[p] == BROKEN:
 		return
-	if Matter.BENDS[matter[p]]:
+	if bend[p] != null:
 		# (Once it lies there, it has its shape for good.)
 		if state[p] == STANDS:
 			_bend(p, points, way, at)
 		return
-	harm[p] += points
-	if harm[p] >= strength[p]:
-		shatter(p, way)
-	elif state[p] == STANDS:
-		_crack(p, 2 if harm[p] >= strength[p] * SPLIT else 1)
+	if state[p] != STANDS or not at.is_finite():
+		_whole[p] += points
+		harm[p] = maxf(harm[p], _whole[p])
+		if _whole[p] >= strength[p]:
+			shatter(p, way)
+		else:
+			for i in range(first[p], first[p] + blocks[p]):
+				if stands[i] == 1:
+					_crack(i, 2 if _whole[p] >= strength[p] * SPLIT else 1)
+		return
+	# That place takes it, on top of what it has taken already.
+	var w := _wound(p, at)
+	_wound_harm[p][w] += points
+	var taken := _wound_harm[p][w] + _whole[p]
+	harm[p] = maxf(harm[p], taken)
+	var there := _wound_at[p][w]
+	var near := _around(p, there)
+	if taken < strength[p]:
+		for i in near:
+			_crack(i, 2 if taken >= strength[p] * SPLIT else 1)
+		return
+	# It gives: the blocks round it are knocked out, and what they held
+	# up comes down.
+	_wound_at[p].remove_at(w)
+	_wound_harm[p].remove_at(w)
+	for i in near:
+		_expel(i, way)
+	_refresh(p)
+	rubble.thaw_in(AABB(there, Vector3.ZERO).grow(HOLE + 0.6))
+	_settle(p, way)
 
 
-## Piece `p` breaks into its blocks, where it is, going over along `way` if
-## it stood. What it carried comes down if nothing else holds it. (Not what
+## Piece `p` breaks into its blocks all at once, where it is: what stands
+## of it goes over along `way` and comes apart, what lies in one comes
+## apart. What it carried comes down if nothing else holds it. (Not what
 ## bends: it never breaks.)
 func shatter(p: int, way := Vector3.ZERO) -> void:
-	if state[p] == BROKEN or Matter.BENDS[matter[p]]:
+	if state[p] == BROKEN or bend[p] != null:
 		return
-	# Where a point of the piece as it stood is now, and how it moves.
-	var now := Transform3D.IDENTITY
-	var lin := Vector3.ZERO
-	var ang := Vector3.ZERO
-	var middle := place[p].origin
-	var stood := state[p] == STANDS
-	if stood:
-		_leave(p)
-	else:
-		var whole := _loose[p][0]
-		var xf := rubble.transform_of(whole)
-		now = xf * Transform3D(Basis(), -middle)
-		lin = rubble.velocity_of(whole)
-		ang = rubble.spin_of(whole)
-		rubble.remove(whole)
-		_loose[p] = PackedInt32Array()
+	for lying in _loose[p].duplicate():
+		break_up(lying)
+	if state[p] != STANDS:
+		return
 	var slow := sqrt(rubble.fall)
-	var over := _over(way) * slow if stood else Vector3.ZERO
-	var foot := middle - Vector3.UP * size[p].y * 0.5
-	state[p] = BROKEN
-	var under := stood and _carries(p)
-	var density := Matter.DENSITY[matter[p]]
+	var over := _over(way) * slow
+	var foot := place[p].origin - Vector3.UP * size[p].y * 0.5
+	var under := _carries(p)
 	for i in range(first[p], first[p] + blocks[p]):
-		var at := now * centroid[i]
+		if stands[i] == 0:
+			continue
+		stands[i] = 0
 		var own := Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * 2.0 * SCATTER * slow
-		mesh.set_slot(i, 1 + i)
-		var block := rubble.add(
-			[[_shape_of(i), Transform3D.IDENTITY]],
-			Transform3D(now.basis, at),
-			centroid[i],
-			volume[i] * density,
-			_radius[i],
-			lin + ang.cross(at - now * middle) + over.cross(centroid[i] - foot) + own,
-			ang + over + own,
-			[[1 + i, Transform3D(Basis(), centroid[i]), centroid[i]]]
+		var block := _free(
+			i, Transform3D(Basis(), centroid[i]), over.cross(centroid[i] - foot) + own, over + own
 		)
 		if under:
 			rubble.slip(block)
+	_refresh(p)
 	_let_go(p)
+
+
+## Loose body `lying` of the rubble, blocks that came down in one, breaks
+## into them where it is (it has landed hard, or been struck enough).
+func break_up(lying: int) -> void:
+	if not _clumps.has(lying):
+		return
+	var chunk: PackedInt32Array = _clumps[lying]
+	var p := piece_of[chunk[0]]
+	_clumps.erase(lying)
+	_clump_harm.erase(lying)
+	_loose[p].remove_at(_loose[p].find(lying))
+	if chunk.size() == 1:
+		# (One block: the body it has will do.)
+		rubble.piece[lying] = -1
+	else:
+		var xf := rubble.transform_of(lying)
+		var now := xf * Transform3D(Basis(), -rubble.origin[lying])
+		var lin := rubble.velocity_of(lying)
+		var ang := rubble.spin_of(lying)
+		rubble.remove(lying)
+		var slow := sqrt(rubble.fall)
+		for i in chunk:
+			var at := now * centroid[i]
+			var own := Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * 2.0 * SCATTER * slow
+			_free(i, Transform3D(now.basis, at), lin + ang.cross(at - xf.origin) + own, ang + own)
+	if state[p] == FALLS and _loose[p].is_empty():
+		state[p] = BROKEN
 
 
 ## Cuts piece `p`, which breaks, into its blocks. Returns how many.
@@ -318,8 +394,65 @@ func _add_blocks(p: int) -> int:
 			around.append((w - c) * SHRINK)
 			far = maxf(far, w.distance_to(c))
 		mesh.add_shard(count, base, world, sh, xf.basis, Matter.TINT[matter[p]])
+		var i := count
 		_add_part(p, c, sh.volume, around, far)
+		for f in sh.faces.size():
+			var other := sh.others[f]
+			if other >= 0:
+				_bonds[i].append(base + other)
+			elif other == -3 or other == -4:
+				# A face of the underside of the piece (-3), or of its top.
+				var corner := world[sh.faces[f][0]]
+				var over := Rect2(corner.x, corner.z, 0, 0)
+				for c2 in sh.faces[f]:
+					over = over.expand(Vector2(world[c2].x, world[c2].z))
+				if other == -3:
+					_foot[i] = over
+				else:
+					_head[i] = over
+	if Matter.upright(size[p]):
+		_lay_courses(p, base, cut)
 	return cut.size()
+
+
+## Works out, for each block of upright piece `p` (its blocks numbered
+## from `base`, as `cut`), which block is right under it and which are
+## right beside it, on each side. Under: of the blocks cut from it that
+## are lower, the one that is under the most of it, along the piece.
+## Beside: cut from it, and level with at least half of it (of the lower
+## of the two).
+func _lay_courses(p: int, base: int, cut: Array[Fracture.Shard]) -> void:
+	var along := 0 if size[p].x >= size[p].z else 2
+	var reach: Array[Vector2] = []  # per block: from where to where it goes along the piece
+	var rise: Array[Vector2] = []  # and from how high to how high
+	for sh in cut:
+		var wide := Vector2(INF, -INF)
+		var high := Vector2(INF, -INF)
+		for point in sh.points:
+			wide = Vector2(minf(wide.x, point[along]), maxf(wide.y, point[along]))
+			high = Vector2(minf(high.x, point.y), maxf(high.y, point.y))
+		reach.append(wide)
+		rise.append(high)
+		_reach[base + reach.size() - 1] = wide
+	for k in cut.size():
+		var i := base + k
+		var best := -1
+		var best_over := 0.0
+		for other in _bonds[i]:
+			var o := other - base
+			var over := minf(reach[k].y, reach[o].y) - maxf(reach[k].x, reach[o].x)
+			var level := minf(rise[k].y, rise[o].y) - maxf(rise[k].x, rise[o].x)
+			var lower := minf(rise[k].y - rise[k].x, rise[o].y - rise[o].x)
+			if cut[o].centroid.y < cut[k].centroid.y and over > best_over:
+				best = other
+				best_over = over
+			if level >= lower * 0.5:
+				if cut[o].centroid[along] < cut[k].centroid[along]:
+					_beside[i].append(other)
+				else:
+					_other_side[i].append(other)
+		if best >= 0 and not _foot[i].has_area():
+			_sits_on[i].append(best)
 
 
 ## Draws piece `p`, which bends: the parts its skin is stretched between
@@ -338,6 +471,15 @@ func _add_part(p: int, at: Vector3, of_volume: float, around: PackedVector3Array
 	centroid.append(at)
 	volume.append(of_volume)
 	piece_of.append(p)
+	stands.append(1)
+	_shows.append(0)
+	_bonds.append(PackedInt32Array())
+	_foot.append(Rect2())
+	_head.append(Rect2())
+	_sits_on.append(PackedInt32Array())
+	_beside.append(PackedInt32Array())
+	_other_side.append(PackedInt32Array())
+	_reach.append(Vector2.ZERO)
 	_corners.append(around)
 	_radius.append(far)
 	_hull.append(RID())
@@ -394,43 +536,304 @@ func _loaded(p: int) -> bool:
 	return not get_world_3d().direct_space_state.intersect_shape(probe, 1).is_empty()
 
 
-## Piece `p` no longer holds anything up: what rested on it comes down, in
-## one piece, unless what is left under it still holds it. A metal plate
-## comes loose whatever is left: it sags where `p` was.
+## Block `i` is a loose body from now on, at `xf`, going at `lin` and
+## turning at `ang`. Returns its number in the rubble.
+func _free(i: int, xf: Transform3D, lin: Vector3, ang: Vector3) -> int:
+	mesh.set_slot(i, 1 + i)
+	return rubble.add(
+		[[_shape_of(i), Transform3D.IDENTITY]],
+		xf,
+		centroid[i],
+		volume[i] * Matter.DENSITY[matter[piece_of[i]]],
+		_radius[i],
+		lin,
+		ang,
+		[[1 + i, Transform3D(Basis(), centroid[i]), centroid[i]]]
+	)
+
+
+## Block `i`, which stood, is knocked out of its piece by something going
+## along `way` (out from the middle of the piece, if that is not told:
+## something came down on it).
+func _expel(i: int, way: Vector3) -> void:
+	var p := piece_of[i]
+	var flat := Vector3(way.x, 0.0, way.z)
+	if flat.length() < 0.1:
+		flat = Vector3(centroid[i].x - place[p].origin.x, 0.0, centroid[i].z - place[p].origin.z)
+		if flat.length() < 0.05:
+			flat = Vector3.FORWARD.rotated(Vector3.UP, randf() * TAU)
+		if not Matter.upright(size[p]):
+			# (Out of a slab, from above: it drops.)
+			flat = Vector3.ZERO
+	var slow := sqrt(rubble.fall)
+	var own := Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * 2.0 * SCATTER * slow
+	stands[i] = 0
+	var block := _free(i, Transform3D(Basis(), centroid[i]), flat.normalized() * KNOCK * slow + own, own)
+	# (Whatever its shape, it gets clear of what is left of its piece; and
+	# from under what the piece carried, it slides out.)
+	rubble.let_through(block, p, Rubble.THROUGH)
+	if _carries(p):
+		rubble.slip(block)
+
+
+## The body piece `p` stands with, if it still does.
+func body_of(p: int) -> RID:
+	return _body[p]
+
+
+## The place of piece `p` that a blow at `at` lands on: one it has been
+## struck at within HOLE of there, or a new one. Returns its number.
+func _wound(p: int, at: Vector3) -> int:
+	var best := -1
+	for w in _wound_at[p].size():
+		var off := _wound_at[p][w].distance_to(at)
+		if off <= HOLE and (best < 0 or off < _wound_at[p][best].distance_to(at)):
+			best = w
+	if best < 0:
+		best = _wound_at[p].size()
+		_wound_at[p].append(at)
+		_wound_harm[p].append(0.0)
+	return best
+
+
+## The blocks of piece `p` that stand round `at`: the nearest, and those
+## whose middle is within HOLE of it.
+func _around(p: int, at: Vector3) -> PackedInt32Array:
+	var near := PackedInt32Array()
+	var nearest := -1
+	for i in range(first[p], first[p] + blocks[p]):
+		if stands[i] == 0:
+			continue
+		var off := centroid[i].distance_to(at)
+		if nearest < 0 or off < centroid[nearest].distance_to(at):
+			nearest = i
+		if off <= HOLE:
+			near.append(i)
+	if nearest >= 0 and not near.has(nearest):
+		near.append(nearest)
+	return near
+
+
+## The blocks `among` (of one piece, which breaks) as the lumps they are
+## in: blocks that hold together through the cuts between them.
+func _lumps(among: PackedInt32Array) -> Array[PackedInt32Array]:
+	var lumps: Array[PackedInt32Array] = []
+	var left := {}
+	for i in among:
+		left[i] = true
+	for from in among:
+		if not left.has(from):
+			continue
+		var lump := PackedInt32Array([from])
+		left.erase(from)
+		var next := 0
+		while next < lump.size():
+			for other in _bonds[lump[next]]:
+				if left.has(other):
+					left.erase(other)
+					lump.append(other)
+			next += 1
+		lumps.append(lump)
+	return lumps
+
+
+## The blocks of piece `p`, which breaks, that still stand.
+func _standing_of(p: int) -> PackedInt32Array:
+	var up := PackedInt32Array()
+	for i in range(first[p], first[p] + blocks[p]):
+		if stands[i] == 1:
+			up.append(i)
+	return up
+
+
+## The blocks of piece `p`, an upright piece that breaks (a wall, a
+## column), that nothing holds any more. A block holds if it sits on
+## something: the ground or what stands under the piece, or a block right
+## under it that sits. Or if it is in a row of blocks, side by side,
+## between two that sit no more than LINTEL apart: the lintel over the
+## hole of one blow. Over a wider hole, what is left comes down.
+func _unheld(p: int) -> PackedInt32Array:
+	var up: Array = Array(_standing_of(p))
+	up.sort_custom(func(a: int, b: int) -> bool: return centroid[a].y < centroid[b].y)
+	var on_ground := _bounds(p).position.y < TOUCH
+	var heads: Array[Rect2] = []
+	for q in rests_on[p]:
+		heads.append_array(_heads(q))
+	var sits := {}
+	for i: int in up:
+		if _foot[i].has_area() and (on_ground or not _meeting([_foot[i]], heads).is_empty()):
+			sits[i] = true
+		elif _any(_sits_on[i], sits):
+			sits[i] = true
+	var loose := PackedInt32Array()
+	for i: int in up:
+		if sits.has(i):
+			continue
+		# How far apart the nearest that sit are, on each side of it, along
+		# the blocks level with it that stand.
+		var from := _nearest_seat(i, _beside, sits)
+		var to := _nearest_seat(i, _other_side, sits)
+		if from < 0 or to < 0 or _reach[to].x - _reach[from].y > LINTEL:
+			loose.append(i)
+	return loose
+
+
+## The block that sits (is in `sits`) nearest block `i` on one side, going
+## from block to block level with it (`side`: `_beside` or `_other_side`)
+## through those that stand; -1 if there is none.
+func _nearest_seat(i: int, side: Array[PackedInt32Array], sits: Dictionary) -> int:
+	var seen := {i: true}
+	var row := PackedInt32Array([i])
+	var next := 0
+	while next < row.size():
+		for other in side[row[next]]:
+			if seen.has(other) or stands[other] == 0:
+				continue
+			if sits.has(other):
+				return other
+			seen[other] = true
+			row.append(other)
+		next += 1
+	return -1
+
+
+## Is one of `these` in `among`?
+func _any(these: PackedInt32Array, among: Dictionary) -> bool:
+	for i in these:
+		if among.has(i):
+			return true
+	return false
+
+
+## The blocks `chunk` of piece `p`, which stood, come down in one: a loose
+## body from now on, that breaks into them when it lands (`break_up`).
+## Cut off by a blow going along `way`, it starts off going over that way.
+func _fall(p: int, chunk: PackedInt32Array, way: Vector3) -> void:
+	var middle := Vector3.ZERO
+	var total := 0.0
+	var low := INF
+	for i in chunk:
+		middle += centroid[i] * volume[i]
+		total += volume[i]
+		low = minf(low, centroid[i].y - _radius[i])
+	middle /= total
+	var shapes: Array = []
+	var far := 0.0
+	var around := AABB(middle, Vector3.ZERO)
+	for i in chunk:
+		stands[i] = 0
+		_shows[i] = 0
+		# All of them move with the body of the first, as one.
+		mesh.set_slot(i, 1 + chunk[0])
+		shapes.append([_shape_of(i), Transform3D(Basis(), centroid[i] - middle)])
+		far = maxf(far, centroid[i].distance_to(middle) + _radius[i])
+		around = around.expand(centroid[i])
+	if chunk.size() == blocks[p]:
+		# (The whole piece: its box will do.)
+		shapes = [[_box[p], Transform3D(place[p].basis, place[p].origin - middle)]]
+	var turn := Vector3.ZERO
+	if way != Vector3.ZERO:
+		turn = _over(way) * sqrt(rubble.fall)
+	var lying := rubble.add(
+		shapes,
+		Transform3D(Basis(), middle),
+		middle,
+		total * Matter.DENSITY[matter[p]],
+		far,
+		turn.cross(middle - Vector3(middle.x, low, middle.z)),
+		turn,
+		[[1 + chunk[0], Transform3D(Basis(), middle), middle]],
+		p
+	)
+	_clumps[lying] = chunk
+	_loose[p].append(lying)
+	if _carries(p):
+		rubble.slip(lying)
+	_refresh(p)
+	if _body[p].is_valid():
+		# (Cut every which way, it would stay caught between what is left
+		# of its piece: that does not stop it.)
+		rubble.let_through(lying, p, INF)
+	rubble.thaw_in(around.grow(far + 0.4))
+
+
+## Piece `p`, which breaks, has lost blocks: what is left of it is what is
+## in the way from now on. Nothing left, and it no longer stands.
+func _refresh(p: int) -> void:
+	var left := 0
+	for i in range(first[p], first[p] + blocks[p]):
+		left += stands[i]
+	if left == 0:
+		if state[p] == STANDS:
+			_leave(p)
+		state[p] = BROKEN if _loose[p].is_empty() else FALLS
+		return
+	if _in_body[p].is_empty():
+		# Until now it was its box: from now on, the blocks that are left.
+		PhysicsServer3D.body_clear_shapes(_body[p])
+		var here := place[p].affine_inverse()
+		for i in range(first[p], first[p] + blocks[p]):
+			if stands[i] == 1:
+				PhysicsServer3D.body_add_shape(
+					_body[p], _shape_of(i), here * Transform3D(Basis(), centroid[i])
+				)
+				_in_body[p].append(i)
+		return
+	for k in range(_in_body[p].size() - 1, -1, -1):
+		if stands[_in_body[p][k]] == 0:
+			PhysicsServer3D.body_remove_shape(_body[p], k)
+			_in_body[p].remove_at(k)
+
+
+## Piece `p` has lost something, or something under it has: what of it is
+## no longer held comes down, and so on up through what rests on it.
+## `way`: where the blow that did it was going, if one did.
+func _settle(p: int, way: Vector3) -> void:
+	if state[p] == STANDS:
+		if bend[p] != null:
+			if not _held(p, PackedInt32Array()) or _sags(p):
+				_drop(p, Vector3.ZERO)
+		elif Matter.upright(size[p]):
+			for lump in _lumps(_unheld(p)):
+				_fall(p, lump, way)
+		else:
+			# What lies flat (a slab) holds in one, as long as its middle
+			# is over what is left under it.
+			for lump in _lumps(_standing_of(p)):
+				if not _held(p, lump):
+					_fall(p, lump, way)
+	_let_go(p)
+
+
+## What rests on piece `p` is looked at again: it comes down unless what
+## is left under it still holds it.
 func _let_go(p: int) -> void:
 	for q in carries[p]:
-		var sags := bend[q] != null and bend[q].kind == Bend.PLATE
-		if state[q] == STANDS and (sags or not _held(q)):
-			_drop(q, Vector3.ZERO)
-			_let_go(q)
+		if state[q] == STANDS:
+			_settle(q, Vector3.ZERO)
 
 
-## Piece `p`, which stood, comes down, in the shape it has: loose from now
-## on. It starts off turning at `turn` about its foot. What breaks is one
-## body until it lands; metal is as many as it can fold into.
+## Is piece `p` a metal plate with nothing left under it of one of the
+## pieces it rested on? It does not balance on the others: it sags there.
+func _sags(p: int) -> bool:
+	if bend[p].kind != Bend.PLATE:
+		return false
+	var feet := _feet(p, PackedInt32Array())
+	for q in rests_on[p]:
+		if _meeting(feet, _heads(q)).is_empty():
+			return true
+	return false
+
+
+## Piece `p`, which is metal and stood, comes down, in the shape it has:
+## loose from now on, as many bodies as it can fold into. It starts off
+## turning at `turn` about its foot.
 func _drop(p: int, turn: Vector3) -> void:
 	_leave(p)
 	state[p] = FALLS
 	var middle := place[p].origin
 	var foot := middle - Vector3.UP * size[p].y * 0.5
-	var weight := size[p].x * size[p].y * size[p].z * Matter.DENSITY[matter[p]]
-	if bend[p] == null:
-		# All its blocks move with the body of the first, as one.
-		for i in range(first[p], first[p] + blocks[p]):
-			mesh.set_slot(i, 1 + first[p])
-		var whole := rubble.add(
-			[[_box[p], Transform3D(place[p].basis, Vector3.ZERO)]],
-			Transform3D(Basis(), middle),
-			middle,
-			weight,
-			size[p].length() * 0.75,
-			turn.cross(middle - foot),
-			turn,
-			[[1 + first[p], Transform3D(Basis(), middle), middle]],
-			p
-		)
-		_loose[p] = PackedInt32Array([whole])
-	elif bend[p].kind == Bend.POST:
+	if bend[p].kind == Bend.POST:
 		_drop_post(p, turn, foot)
 	elif bend[p].kind == Bend.SHEET:
 		# One body, as dented as it is: what holds its corners and its dents.
@@ -447,7 +850,7 @@ func _drop(p: int, turn: Vector3) -> void:
 			[[_shape(around), Transform3D.IDENTITY]],
 			Transform3D(Basis(), middle),
 			middle,
-			weight,
+			size[p].x * size[p].y * size[p].z * Matter.DENSITY[matter[p]],
 			size[p].length() * 0.75,
 			turn.cross(middle - foot),
 			turn,
@@ -545,21 +948,20 @@ func _drop_plate(p: int) -> void:
 		rubble.join(made[fold[0]], made[fold[1]], (from + to) * 0.5, to - from, holds)
 	_loose[p] = made
 	# It stays tied to the pieces under it that still stand: it hangs
-	# from them, and sags where there is none.
-	var low := _bounds(p)
+	# from them, and sags where there is none. (Tied at the height of its
+	# folds: it can fold along a line that goes through there.)
+	var feet := _feet(p, PackedInt32Array())
 	for q in rests_on[p]:
-		if state[q] != STANDS:
+		var meet := _meeting(feet, _heads(q))
+		if meet.is_empty():
 			continue
-		# (At the height of its folds: it can fold along a line that goes
-		# through there.)
-		var touch := _contact(low, _bounds(q)).get_center()
-		var at := Vector3(touch.x, place[p].origin.y, touch.y)
+		var touch := meet[0].get_center()
 		for t in b.tiles.size():
-			var tile := b.tiles[t]
 			var corners := PackedVector2Array()
-			for n in tile:
+			for n in b.tiles[t]:
 				corners.append(Vector2(b.rest(n).x, b.rest(n).z))
 			if Geometry2D.point_is_inside_triangle(touch, corners[0], corners[1], corners[2]):
+				var at := Vector3(touch.x, place[p].origin.y, touch.y)
 				_ties[q].append(rubble.tie(made[t], _body[q], at))
 				break
 
@@ -572,42 +974,90 @@ func _shape(around: PackedVector3Array) -> RID:
 	return hull
 
 
-## Does what is left under piece `p` hold it up? It stands on the ground,
-## or its middle is over what it still rests on.
-func _held(p: int) -> bool:
-	var foot := _bounds(p)
-	if foot.position.y < TOUCH:
-		return true
-	var under := PackedVector2Array()
+## Does what is under the blocks `chunk` of piece `p` (all of `p`, if it
+## is metal) hold them up? Their middle has to be over where they stand:
+## on the ground, or on what stands at the top of the pieces `p` rests on.
+func _held(p: int, chunk: PackedInt32Array) -> bool:
+	var feet := _feet(p, chunk)
+	var under: Array[Rect2] = []
+	if _bounds(p).position.y < TOUCH:
+		under = feet
 	for q in rests_on[p]:
-		if state[q] != STANDS:
-			continue
-		var touch := _contact(foot, _bounds(q))
-		under.append(touch.position)
-		under.append(touch.end)
-		under.append(Vector2(touch.position.x, touch.end.y))
-		under.append(Vector2(touch.end.x, touch.position.y))
+		under.append_array(_meeting(feet, _heads(q)))
 	if under.is_empty():
 		return false
+	var corners := PackedVector2Array()
+	for touch in under:
+		corners.append(touch.position)
+		corners.append(touch.end)
+		corners.append(Vector2(touch.position.x, touch.end.y))
+		corners.append(Vector2(touch.end.x, touch.position.y))
 	var middle := Vector2(place[p].origin.x, place[p].origin.z)
-	return Geometry2D.is_point_in_polygon(middle, Geometry2D.convex_hull(under))
+	if not chunk.is_empty():
+		var weighed := Vector3.ZERO
+		var total := 0.0
+		for i in chunk:
+			weighed += centroid[i] * volume[i]
+			total += volume[i]
+		middle = Vector2(weighed.x, weighed.z) / total
+	return Geometry2D.is_point_in_polygon(middle, Geometry2D.convex_hull(corners))
 
 
-## Piece `p`, which stands, shows cracks: `level` 1, or 2 for wide ones.
-## Each of its blocks is drawn on its own, a little smaller and askew.
-func _crack(p: int, level: int) -> void:
-	if cracks[p] == level:
+## Where the blocks `chunk` of piece `p` are at its underside, seen from
+## above (all of its underside, if `p` is metal).
+func _feet(p: int, chunk: PackedInt32Array) -> Array[Rect2]:
+	var feet: Array[Rect2] = []
+	if bend[p] != null:
+		var box := _bounds(p)
+		feet.append(Rect2(box.position.x, box.position.z, box.size.x, box.size.z))
+	for i in chunk:
+		if _foot[i].has_area():
+			feet.append(_foot[i])
+	return feet
+
+
+## Where something still stands at the top of piece `q`, seen from above.
+func _heads(q: int) -> Array[Rect2]:
+	var heads: Array[Rect2] = []
+	if state[q] != STANDS:
+		return heads
+	if bend[q] != null:
+		var box := _bounds(q)
+		heads.append(Rect2(box.position.x, box.position.z, box.size.x, box.size.z))
+		return heads
+	for i in range(first[q], first[q] + blocks[q]):
+		if stands[i] == 1 and _head[i].has_area():
+			heads.append(_head[i])
+	return heads
+
+
+## Where `feet` are over `heads`.
+func _meeting(feet: Array[Rect2], heads: Array[Rect2]) -> Array[Rect2]:
+	var meet: Array[Rect2] = []
+	for foot in feet:
+		for head in heads:
+			var over := foot.intersection(head)
+			if over.size.x > TOUCH and over.size.y > TOUCH:
+				meet.append(over)
+	return meet
+
+
+## Block `i`, which stands, shows cracks: `level` 1, or 2 for wide ones.
+## It is drawn on its own, a little smaller and askew. (Cracks do not
+## close.)
+func _crack(i: int, level: int) -> void:
+	if _shows[i] >= level:
 		return
-	cracks[p] = level
-	for i in range(first[p], first[p] + blocks[p]):
-		# (Always the same way for the same block: wider cracks open the
-		# ones that were there.)
-		var rng := RandomNumberGenerator.new()
-		rng.seed = hash(i * 7919 + cut_seed)
-		var axis := Vector3(rng.randf() - 0.5, rng.randf() - 0.5, rng.randf() - 0.5).normalized()
-		var askew := Basis(axis, TILT[level] * rng.randf_range(0.4, 1.0))
-		mesh.set_slot(i, 1 + i)
-		mesh.set_body(1 + i, Transform3D(askew, centroid[i]), centroid[i], CRACKS[level])
+	_shows[i] = level
+	cracks[piece_of[i]] = maxi(cracks[piece_of[i]], level)
+	# (Always the same way for the same block: wider cracks open the ones
+	# that were there.)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(i * 7919 + cut_seed)
+	var axis := Vector3(rng.randf() - 0.5, rng.randf() - 0.5, rng.randf() - 0.5).normalized()
+	var askew := Basis(axis, TILT[level] * rng.randf_range(0.4, 1.0))
+	mesh.set_slot(i, 1 + i)
+	mesh.set_body(1 + i, Transform3D(askew, centroid[i]), centroid[i], CRACKS[level])
 
 
 ## Piece `p`, which stands and bends, takes `points` of blows from

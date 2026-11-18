@@ -55,8 +55,9 @@ const SLACK := 0.15
 ## A body stopped by less than this (m/s, as at real gravity) in a step has
 ## only scraped: nothing comes of it.
 const SCRAPE := 0.8
-## A piece that comes down whole breaks when it is stopped as hard as by a
-## drop from this high (m).
+## Blocks that come down in one break apart when something stops them
+## once they have come down this far (m), or as hard as a drop from this
+## high would.
 const BREAKS_FROM := 0.3
 ## What a body that lands on a standing piece does to it: a point of blows
 ## for each POINT kg.m/s it loses against it (as at real gravity); less
@@ -77,6 +78,9 @@ const CONTACTS := 4
 const FRICTION := 0.8
 const SLIPPERY := 0.08
 const SLIPS := 0.45
+## A block knocked out of a piece is not stopped by what is left of the
+## piece for this long (s).
+const THROUGH := 0.5
 
 var structure: Structure
 ## The brute, if there is one: nothing comes to rest on it (it would be
@@ -103,9 +107,11 @@ var _xf: Array[Transform3D] = []
 var _lin := PackedVector3Array()
 var _ang := PackedVector3Array()
 var _quiet := PackedFloat32Array()
+var _from_high := PackedFloat32Array()  # per body: how high its middle was when it came loose
 var _rig: Array[Array] = []  # per body: the bodies of the mesh it moves, each [slot, pose, origin]
 var _by_body := {}  # RID -> body
 var _slips: Array[Vector2] = []  # (body, s before it rubs as it should again)
+var _through: Array[Vector3] = []  # (body, piece it goes through, s before it no longer does)
 var _together: Array[PackedInt32Array] = []  # bodies joined to one another, directly or not
 var _joints: Array[RID] = []
 var _ties: Array[RID] = []  # what ties loose bodies to pieces that stand
@@ -192,6 +198,7 @@ func add(
 	_lin.append(velocity)
 	_ang.append(spin)
 	_quiet.append(0.0)
+	_from_high.append(xf.origin.y)
 	_rig.append(rig)
 	_by_body[b] = i
 	live += 1
@@ -291,7 +298,16 @@ func slip(i: int) -> void:
 	_slips.append(Vector2(i, SLIPS))
 
 
-## Body `i` is no more (a piece that came down whole has broken up).
+## Body `i`, which has come off piece `p`, and what is left standing of
+## `p` do not stop each other for `seconds`: whatever its shape, it gets
+## clear of the hole it leaves.
+func let_through(i: int, p: int, seconds: float) -> void:
+	PhysicsServer3D.body_add_collision_exception(body[i], structure.body_of(p))
+	if is_finite(seconds):
+		_through.append(Vector3(i, p, seconds))
+
+
+## Body `i` is no more (blocks that came down in one have broken up).
 func remove(i: int) -> void:
 	if alive[i] == 0:
 		return
@@ -367,6 +383,14 @@ func _physics_process(delta: float) -> void:
 			if alive[i] == 1:
 				PhysicsServer3D.body_set_param(body[i], PhysicsServer3D.BODY_PARAM_FRICTION, FRICTION)
 			_slips.remove_at(k)
+	for k in range(_through.size() - 1, -1, -1):
+		_through[k].z -= delta
+		if _through[k].z <= 0.0:
+			var i := int(_through[k].x)
+			var rest_of := structure.body_of(int(_through[k].y))
+			if alive[i] == 1 and rest_of.is_valid():
+				PhysicsServer3D.body_remove_collision_exception(body[i], rest_of)
+			_through.remove_at(k)
 	for i in _freeze:
 		# (Bodies joined to one another: only once all of them are quiet.)
 		var all := PackedInt32Array([i]) if joined[i] < 0 else _together[joined[i]]
@@ -492,5 +516,8 @@ func _land(
 	for stands: int in taken:
 		if taken[stands] >= WEAK:
 			structure.hit(stands, taken[stands], Vector3.ZERO, at[stands])
-	if alive[i] == 1 and piece[i] >= 0 and stopped >= sqrt(2.0 * GRAVITY * fall * BREAKS_FROM):
-		structure.shatter(piece[i])
+	if alive[i] == 0 or piece[i] < 0:
+		return
+	var down := _from_high[i] - _xf[i].origin.y
+	if down >= BREAKS_FROM or stopped >= sqrt(2.0 * GRAVITY * fall * BREAKS_FROM):
+		structure.break_up(i)

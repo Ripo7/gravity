@@ -3,9 +3,9 @@ extends RefCounted
 ## What things are made of. The matter of a piece alone says how the piece
 ## answers a blow (docs/CONCEPT.md). Two so far.
 ##
-## Concrete cracks for all to see, then lets go: it breaks into a few big,
-## heavy blocks. It carries: what stood on a piece of it comes down when the
-## piece is gone.
+## Concrete cracks where it is struck, for all to see, then lets go there:
+## the few big, heavy blocks round the place are knocked out. It carries:
+## what stood on it comes down when what was under it is gone.
 ##
 ## Metal bends and keeps the shape: each blow leaves its mark where it
 ## lands, a dent in a sheet, a kink in a post, away from the blow (a blow
@@ -29,10 +29,14 @@ const DENSITY: Array[float] = [2400.0, 7800.0]
 const STRENGTH: Array[float] = [22.5, 70.0]
 ## Does it bend (and never break), or break into blocks?
 const BENDS: Array[bool] = [false, true]
-## What breaks, breaks into blocks about this big (m), bigger if that would
-## make more than MOST_BLOCKS of them: a few big blocks, whatever the piece.
-const BLOCK := 0.7
-const MOST_BLOCKS := 9
+## What breaks is cut into blocks. An upright piece (a wall, a column)
+## takes blows: its blocks are about BLOCK m across, small enough for what
+## a blow knocks out to be round the fist. A piece that lies flat (a slab)
+## only comes down: its blocks are about SLAB_BLOCK m across. Bigger, both,
+## if that would make more than MOST_BLOCKS of them.
+const BLOCK := 0.4
+const SLAB_BLOCK := 0.9
+const MOST_BLOCKS := 60
 ## A post that bends is drawn as rings across it, RING m apart at most,
 ## that a kink moves. It kinks at the height it is struck at, over KINK m
 ## of its length; a blow nearer than KINK_APART m to a kink it has already
@@ -72,16 +76,16 @@ static func strength(of: int, size: Vector3) -> float:
 
 ## How big (m) the blocks of a piece that breaks, `size` across, are cut.
 static func grain(size: Vector3) -> float:
-	var across := BLOCK
+	var across := BLOCK if upright(size) else SLAB_BLOCK
 	while _cells(size, across) > MOST_BLOCKS:
 		across *= 1.1
 	return across
 
 
-## Does a piece `size` across stand upright (as high as it is wide, or
-## higher)?
+## Does a piece `size` across stand upright (a column, a wall, a sheet),
+## or lie flat (a slab, a deck: thinnest from top to bottom)?
 static func upright(size: Vector3) -> bool:
-	return size.y >= maxf(size.x, size.z)
+	return size.y > minf(size.x, size.z)
 
 
 ## How many blocks a piece `size` across is cut into, about `across` each.

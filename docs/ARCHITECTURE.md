@@ -76,29 +76,32 @@ bends.
 ### What all matters share
 
 1. **Pieces** (`Structure.add_piece`). A piece is an upright box: a
-   column, a slab, a panel of a wall. While it stands it is one static
-   box for the physics.
-2. **Strength belongs to the piece** (`Matter.strength`). So many points
-   of blows for each metre the piece is thick the way it is thinnest:
+   column, a slab, a wall. While it stands whole it is one static box
+   for the physics.
+2. **A blow harms the place it lands on**, not the whole piece. What a
+   place takes belongs to the piece (`Matter.strength`): so many points
+   of blows for each metre the piece is thick the way it is thinnest,
    22.5 for concrete, so 9 for a column 0.4 m thick; 70 for metal, so 14
    for a post 0.2 m thick. A blow is 2 points, a heavy one (the last of
    the combination, the kick) 3. How the piece is cut or drawn changes
-   nothing to it. Concrete takes it as a whole piece, wherever it is
-   hit; metal takes it in one place (below).
-3. **What is no longer carried comes down** (`Structure._held`). A piece
-   rests on the pieces right under it. When one of them goes, it holds
-   if it stands on the ground or if its middle is still over what is
-   left under it (a slab holds on three columns, not on two on the same
-   side). Otherwise it comes down in one piece, a loose body. (Not a
-   metal plate: see below.)
+   nothing to it.
+3. **What is no longer carried comes down** (`Structure._settle`). A
+   piece rests on the pieces right under it. When something under it
+   goes, what is left of it is looked at again, and so on up through
+   what rests on it. A slab or a metal piece holds if it stands on the
+   ground or if its middle is still over what is left under it (a slab
+   holds on three columns, not on two on the same side: `_held`);
+   otherwise it comes down in one, a loose body. (A wall or a column is
+   looked at block by block, and a metal plate sags: see below.)
 4. **Only a blow breaks or bends.** From the brute: `Structure.strike`
    follows the fist from the body to where it ends; the first piece on
-   its way takes the blow, and what lies loose near the end is sent off
-   (not far: it is heavy). Or from something heavy that lands on a piece
-   (`Rubble._land`): a point for each 900 kg.m/s it loses against it,
-   and only on a face that looks up. What brushes past a wall on its way
-   down does nothing to it. Walking, running and jumping break nothing:
-   what stands is a wall to the brute.
+   its way takes the blow, there, and what lies loose near the end is
+   sent off (not far: it is heavy). Or from something heavy that lands
+   on a piece (`Rubble._land`): a point for each 900 kg.m/s it loses
+   against it, where it lands, and only on a face that looks up. What
+   brushes past a wall on its way down does nothing to it. Walking,
+   running and jumping break nothing: what stands is a wall to the
+   brute.
 5. **The rubble** (`Rubble`). Loose bodies are made straight on the
    physics server, no nodes. They fall at a share of real gravity
    (`fall`, 0.3 to begin with, set by the slider): slowly, which is what
@@ -119,31 +122,51 @@ bends.
    each part goes with (and how far it is pushed in, for a dent) and
    another where each body is.
 
-### Concrete: it cracks, then lets go
+### Concrete: it cracks where it is struck, then lets go there
 
 1. **Cut once, when it is made** (`Fracture`, `Matter.grain`). Each piece
-   is cut into a few irregular convex blocks, about 0.7 m across, bigger
-   if that would make more than nine: 4 for the column, 6 for a panel, 9
-   for the slab. The cut only says what the piece looks like cracked and
-   what it breaks into.
-2. **Cracks** (`Structure._crack`). A piece that has taken a blow shows
-   its cut: each block is drawn a little smaller and askew, the gaps
-   dark. From half its strength on, wider. The cracks are where it will
-   break.
-3. **Letting go** (`Structure.shatter`). A piece that has taken all it
-   can breaks into its blocks, which become loose bodies. They start off
-   as if the whole piece turned about its foot, away from the blow, and
-   come apart as they go down: the piece goes over and ends as blocks
-   lying on the ground. Left where they stood, blocks cut one on top of
-   the other stayed there, a broken column still standing and still
-   carrying.
-4. **From under something** (`Rubble.slip`). The blocks of a piece that
-   carried something hardly rub on anything for 0.45 s: caught under a
-   slab, they slide out from under it. (Not the others: a block on the
-   ground has to rub on it to go over.)
-5. **Coming down whole.** A piece that is no longer carried is a loose
-   body with the shape of the piece, and breaks into its blocks when it
-   is stopped as hard as by a drop of 0.3 m.
+   is cut into irregular convex blocks. A wall or a column takes blows:
+   its blocks are about 0.4 m across, small enough for what a blow
+   knocks out to be round the fist (6 for the column, 54 for the wall).
+   A slab only comes down: about 0.9 m (16). Bigger, both, if that would
+   make more than sixty. (With blocks 0.7 m across, the block a fist
+   landed on went whole: the hole was under the fist, down to the
+   ground.)
+2. **Places** (`Structure.hit`, `_wound`). A blow lands on a place: one
+   the piece has been struck at within 0.45 m of there, or a new one.
+   What the place has taken is what counts, not what the piece has taken
+   in all. The blocks round it (the nearest, and those whose middle is
+   within 0.45 m) show cracks (`_crack`): each is drawn a little smaller
+   and askew, the gaps dark, wider from half the strength on. The others
+   show nothing.
+3. **Letting go** (`Structure._expel`). When the place has taken what the
+   piece can take, those blocks are knocked out, away from the blow, at
+   3.5 m/s as at real gravity: loose bodies, and a hole about 0.9 m
+   across where the fist landed. For half a
+   second what is left of the piece does not stop them (`Rubble.
+   let_through`): cut every which way, a block would stay caught in its
+   hole. From under something the piece carried, they hardly rub on
+   anything for 0.45 s and slide out (`Rubble.slip`). What stands of the
+   piece is, from then on, the blocks that are left, each in the way as
+   it is (`_refresh`).
+4. **What holds** (`Structure._unheld`, for a wall or a column). A block
+   holds if it sits on something: the ground or what stands under the
+   piece, or the block right under it, if that one sits. Or if it is in
+   a row of blocks, side by side, between two that sit no more than
+   1.25 m apart: the lintel over the hole of one blow. Over a wider hole
+   what is left comes down: holes side by side open a wall to the top.
+   Which block is right under and which are right beside which is worked
+   out once, when the piece is cut (`_lay_courses`).
+5. **Coming down in one** (`Structure._fall`, `break_up`). What no
+   longer holds comes down as one loose body, the blocks that hold
+   together through their cuts. Cut off by a blow, it starts off going
+   over away from it. It breaks into its blocks when something stops it
+   once it has come down 0.3 m. A slab that loses its columns comes down
+   the same way, whole.
+6. **All at once** (`Structure.shatter`). A blow that lands nowhere in
+   particular (`hit` without a place: the measure, some tests) is taken
+   by the whole piece, which cracks all over and, at its strength, goes
+   over and comes apart, as every piece did before places.
 
 ### Metal: a blow leaves its mark where it lands
 
@@ -199,10 +222,15 @@ piece (`Bend`): a post, a sheet or a plate.
    leaves it alone).
 
 Not there: what falls does nothing to the brute but push it (a deck that
-comes down round a brute that cannot get out stays on its head); a blow
-on a concrete piece that lies whole breaks it only once it has taken its
-strength in all; concrete still takes a blow as a whole piece; metal
-that lies there no longer takes a mark; a sheet that stands dented is
+comes down round a brute that cannot get out stays on its head); blocks
+that lie in one come apart under blows only once they have taken the
+strength of their piece in all; a hole is the blocks round the fist, two
+to five of them, not a fist's exact shape; what holds over a hole goes
+by which block is over which, not by weight, so how many holes it takes
+to open a wall to the top depends on how the wall was cut (two or three
+side by side); a slab that tips onto
+what is left under it can stay whole, leaning; metal that lies there no
+longer takes a mark; a sheet that stands dented is
 still a flat wall to the brute; a plate takes nothing from a blow; the
 brute's fists all land between 0.7 and 1 m up, so a post it strikes has
 one kink; pieces are upright boxes, turned about the vertical at most.
@@ -220,9 +248,9 @@ its shadows were what cost the most. The brute has a round shadow
 physics step, and gets smaller and fainter as the brute goes up.
 
 On it, a few steps in front of the brute, the same three things twice.
-In concrete, on its right: a column 2.6 m high on its own; a wall of
-three panels (1.2 m wide, 2.4 high, 0.35 thick); a slab 3.6 m across on
-four columns 2.2 m high. In metal, on its left: a post 0.2 m thick; a
+In concrete, on its right: a column 2.6 m high on its own; a wall in one
+piece (3.6 m wide, 2.4 high, 0.35 thick: wide enough to keep a hole); a
+slab 3.6 m across on four columns 2.2 m high. In metal, on its left: a post 0.2 m thick; a
 fence of three sheets 0.08 m thick; a deck 0.12 m thick on four posts.
 "Reconstruire" puts them back and the brute where it started, without
 loading anything again (`Main.rebuild`).
