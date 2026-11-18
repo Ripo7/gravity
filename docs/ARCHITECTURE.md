@@ -18,7 +18,7 @@ and the branch `archive/v1` for the code.
 | `scripts/player/` | `Player` (controls, camera) and `Character` (the animated body) |
 | `scripts/fx/` | the round shadow under the brute |
 | `scripts/ui/` | HUD and touch controls |
-| `scripts/destruction/` | what breaks: `Matter`, `Structure` (what stands), `Rubble` (what has come off), `Fracture` (the cut), `ShardMesh` (the picture) |
+| `scripts/destruction/` | what breaks: `Matter`, `Structure` (what stands), `Bend` (how a piece of metal is bent), `Rubble` (what has come off), `Fracture` (the cut), `ShardMesh` (the picture) |
 | `shaders/` | the ground's grid; the one shader that draws everything that stands or has come off |
 | `assets/` | the mannequin and its blows (made by `tools/moves`) |
 | `tools/` | CI and build scripts, the web probe, the asset tools |
@@ -82,13 +82,15 @@ bends.
    of blows for each metre the piece is thick the way it is thinnest:
    22.5 for concrete, so 9 for a column 0.4 m thick; 70 for metal, so 14
    for a post 0.2 m thick. A blow is 2 points, a heavy one (the last of
-   the combination, the kick) 3. Where the piece is hit and how it is
-   cut or drawn change nothing to it.
+   the combination, the kick) 3. How the piece is cut or drawn changes
+   nothing to it. Concrete takes it as a whole piece, wherever it is
+   hit; metal takes it in one place (below).
 3. **What is no longer carried comes down** (`Structure._held`). A piece
    rests on the pieces right under it. When one of them goes, it holds
    if it stands on the ground or if its middle is still over what is
    left under it (a slab holds on three columns, not on two on the same
-   side). Otherwise it comes down in one piece, a loose body.
+   side). Otherwise it comes down in one piece, a loose body. (Not a
+   metal plate: see below.)
 4. **Only a blow breaks or bends.** From the brute: `Structure.strike`
    follows the fist from the body to where it ends; the first piece on
    its way takes the blow, and what lies loose near the end is sent off
@@ -105,10 +107,13 @@ bends.
    any setting, only slower. A body that touches something and has been
    still for half a second is frozen (static): a heap costs nothing,
    stays put, and the brute steps onto it. It moves again when a piece
-   near it breaks or when a blow lands by it.
+   near it breaks or when a blow lands by it. Nothing rests on the brute
+   itself: what comes down on it pushes it out from under
+   (`Rubble.bears_down`, `Player.give_way`).
 6. **One draw call** (`ShardMesh`, `shaders/shards.gdshader`). Everything
    is in one mesh that never changes; a small texture says which body
-   each part goes with and another where each body is.
+   each part goes with (and how far it is pushed in, for a dent) and
+   another where each body is.
 
 ### Concrete: it cracks, then lets go
 
@@ -136,39 +141,67 @@ bends.
    body with the shape of the piece, and breaks into its blocks when it
    is stopped as hard as by a drop of 0.3 m.
 
-### Metal: it bends, and keeps the shape
+### Metal: a blow leaves its mark where it lands
 
-1. **Rings, not blocks** (`Structure._add_rings`, `ShardMesh.add_skin`).
-   A piece that bends is drawn as rings across it, 0.3 m apart, with its
-   skin stretched from each ring to the next. Moving the rings bends the
-   piece without a gap; its faces are lit by how they lie now.
-2. **The bend** (`Structure._bend`, `lean`, `knee`). Each blow is added
-   to what the piece has taken as an arrow along the blow, as long as its
-   points: the piece is bent along the sum of them, by its length. So it
-   bends away from the blow, more at each one, and a blow from the other
-   side straightens it by as much. The bend sits where the first blow
-   landed.
-3. **Its shape** (`Structure._bent`). A piece that stands free leans from
-   the bend up, by up to 1.25 rad when it has taken all it can, the turn
-   coming on over a metre of its height. A piece that carries something
-   keeps its head where it is and bows instead, its middle up to 0.55 m
-   aside: what it carries stays on it.
-4. **In the way as it is.** While it stands bent, the brute and the
-   camera meet it where it is: two boxes, below and above the bend
-   (`Structure._limbs_of`).
-5. **Lying down.** Bent as far as it goes, it becomes one loose body in
-   the shape it has (the same two boxes), starts off going over along
-   its bend, and what it carried comes down. It never breaks, however
-   hard it lands (`Structure.shatter` leaves it alone).
-6. **Plates.** A piece that lies flat (a deck) has no way to bend that a
-   blow could send it: blows do nothing to it. It comes down in one
-   piece when its posts lie down.
+Metal never breaks. What a blow does to it depends on the shape of the
+piece (`Bend`): a post, a sheet or a plate.
 
-Not there: what falls does nothing to the brute (it is stopped by it as
-by a wall); a blow on a concrete piece that lies whole breaks it only
-once it has taken its strength in all; metal that lies there no longer
-bends; a bent post ends as an arch on its foot and its head, not flat on
-its side; pieces are upright boxes, turned about the vertical at most.
+1. **A skin, not blocks** (`Bend.draw`, `ShardMesh.add_skin`,
+   `add_face`). A piece that bends is drawn as a skin stretched between
+   points that move: the rings of a post, 0.3 m apart; the nodes of a
+   sheet, 0.2 m apart; the corners of the triangles of a plate. Moving
+   them bends it without a gap; its faces are lit by how they lie now.
+2. **A post kinks** (`Bend._kink`). Upright and no wider than 0.5 m. A
+   blow is added, as an arrow along it as long as its points, to the
+   kink at the height it lands at: a new one, or the one the post has
+   within 0.5 m of there (three at most). So a kink goes away from the
+   blow, deeper at each one, and a blow from the other side takes as
+   much back. A post that stands free leans from each kink up, by up to
+   1.25 rad at a kink that has taken all it can, the turn coming on over
+   a metre; one that carries something keeps its head where it is and
+   bows instead, up to 0.55 m aside (`Bend.ring_poses`). While it stands
+   kinked, the brute and the camera meet it where it is: a box between
+   its foot, its kinks and its head (`Structure._limbs_of`).
+3. **A sheet takes a dent** (`Bend._dent`). Upright and wider. A blow
+   pushes the nodes within 0.55 m of it in, away from the blow: 0.06 m a
+   point under the fist, less farther off; its foot stays where it is.
+   The rest stays flat, dents add up, and a blow from the other side
+   pushes back. A dent is not a body: each node is drawn pushed in, in
+   the sheet, wherever the sheet goes (`ShardMesh.set_offset`).
+4. **In one place.** What a piece has taken is what it has taken where
+   it has taken the most: its deepest kink, its deepest dent. Blows
+   elsewhere start another mark; they do not bring it down sooner.
+5. **Lying down** (`Structure._drop`). Marked as deep as it goes, a
+   sheet becomes one loose body, dents and all, and goes over away from
+   the blows. A post becomes its limbs, each a body, joined at its
+   kinks.
+6. **Folds** (`Rubble.join`). Where two bodies of one piece of metal are
+   joined, the piece folds: a hinge held by a motor told to stay still,
+   with only so much force (`Matter.FOLD`: 450 000 N.m for each metre the
+   fold is long and each metre squared the piece is thick, at real
+   gravity). Under less it holds; under more it gives, slowly, and stays
+   as it ends up. So a post that lies down keeps its shape, and one that
+   gives under a deck folds under it instead of staying up. Bodies
+   joined to one another are frozen, and move again, together.
+7. **A plate sags** (`Structure._drop_plate`). A piece that lies flat (a
+   deck) takes nothing from a blow. It is made of triangles, two to a
+   square about 1.8 m across, cut one way and the other in turn so that
+   it can fold along its diagonals too. As soon as one of the pieces
+   under it goes, they become bodies joined by folds: the plate sags
+   where nothing holds it, and folds as it comes down. It stays tied to
+   the pieces under it that still stand (`Rubble.tie`, with 0.15 m of
+   play to fold over their edge): it hangs from them until they go too.
+8. **It never breaks**, however hard it lands (`Structure.shatter`
+   leaves it alone).
+
+Not there: what falls does nothing to the brute but push it (a deck that
+comes down round a brute that cannot get out stays on its head); a blow
+on a concrete piece that lies whole breaks it only once it has taken its
+strength in all; concrete still takes a blow as a whole piece; metal
+that lies there no longer takes a mark; a sheet that stands dented is
+still a flat wall to the brute; a plate takes nothing from a blow; the
+brute's fists all land between 0.7 and 1 m up, so a post it strikes has
+one kink; pieces are upright boxes, turned about the vertical at most.
 
 ## The bench
 

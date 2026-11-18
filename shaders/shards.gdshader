@@ -12,10 +12,12 @@ shader_type spatial;
 // A body can also be drawn a little smaller than it is, about its own
 // middle: that is how a piece that still stands shows its cracks, each
 // block shrunk away from its neighbours, the gaps dark.
-// The skin of a piece that bends is stretched between its rings: its faces
-// are lit by how they lie now, worked out from the surface itself.
+// The skin of a piece that bends is stretched between its parts (the rings
+// of a post, the nodes of a sheet): its faces are lit by how they lie now,
+// worked out from the surface itself. A part can also be pushed aside in
+// its piece: that is a dent, and it goes wherever the piece goes.
 
-uniform sampler2D slot_of : filter_nearest, repeat_disable;  // per block: its body (-1 hidden)
+uniform sampler2D slot_of : filter_nearest, repeat_disable;  // per part: its body (-1 hidden), how far it is pushed
 uniform sampler2D bodies : filter_nearest, repeat_disable;   // per body: where it is (2 texels)
 // How light a broken face is beside the paint of its piece, and the inside
 // of a crack.
@@ -36,7 +38,8 @@ void vertex() {
 	cracked = 0.0;
 	int id = int(UV.x + 0.5);
 	int w = textureSize(slot_of, 0).x;
-	float slot = texelFetch(slot_of, ivec2(id % w, id / w), 0).r;
+	vec4 part = texelFetch(slot_of, ivec2(id % w, id / w), 0);
+	float slot = part.r;
 	bool hidden = slot < -0.5;
 	if (!hidden && UV.y > 0.5) {
 		int other = int(UV.y - 0.5);
@@ -50,7 +53,7 @@ void vertex() {
 		vec4 at = texelFetch(bodies, ivec2(t % bw, t / bw), 0);
 		vec4 q = texelFetch(bodies, ivec2((t + 1) % bw, (t + 1) / bw), 0);
 		cracked = at.w < 0.999 ? 1.0 : 0.0;
-		VERTEX = at.xyz + turn(q, VERTEX * at.w);
+		VERTEX = at.xyz + turn(q, (VERTEX + part.gba) * at.w);
 		NORMAL = turn(q, NORMAL);
 	}
 }

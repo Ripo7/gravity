@@ -58,11 +58,11 @@ func _ready() -> void:
 	add_child(clock)
 	var options: Dictionary = get_node("/root/Launch").options
 	_build_world()
-	_lay_bench()
 	player = Player.new()
 	add_child(player)
 	player.global_position = START
 	player.blow.connect(_on_blow)
+	_lay_bench()
 	add_child(BlobShadow.new(player))
 	var ui := CanvasLayer.new()
 	add_child(ui)
@@ -111,6 +111,9 @@ func _lay_bench() -> void:
 	structure = Structure.new()
 	add_child(structure)
 	structure.rubble.fall = fall
+	# What comes down on the brute pushes it out of the way.
+	structure.rubble.brute = player
+	structure.rubble.bears_down.connect(player.give_way)
 	var corners: Array[Vector2] = [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]
 	column = _stand(Matter.CONCRETE, COLUMN, COLUMN_AT)
 	metal_post = _stand(Matter.METAL, METAL_POST, METAL_POST_AT)

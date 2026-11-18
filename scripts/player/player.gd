@@ -45,6 +45,9 @@ const TURN := 12.0
 const FALL_AFTER := 0.12
 ## A blow reaches this much farther than the wrist (m): the fist.
 const FIST := 0.1
+## What comes down on the brute pushes it out from under at this speed
+## (m/s): it does not hold up what falls on it.
+const GIVE_WAY := 3.0
 
 ## Full tilt of the stick, or the keys: a jog. The clips' feet do not slide
 ## at these speeds (see Character).
@@ -74,6 +77,8 @@ var camera: Camera3D
 var character: Character
 
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
+var _pushed := Vector3.ZERO  # the way something that came down on it pushes it, this step
+var _pushed_by := 0.0  # how heavy that is (kg): the heaviest has its way
 var _lift := 0.0  # the view and the body lag behind a step up, so they do not jump
 var _pivot: Node3D  # turns with `yaw`, at head height
 var _arm: Node3D  # tilts with `pitch`
@@ -161,6 +166,20 @@ func look_at_point(target: Vector3) -> void:
 		_pose_camera()
 
 
+## Something has come down on the brute, `weight` kg of it, its middle at
+## `from`: the brute is pushed out from under it, away from that middle
+## (under a plate that sags, that is towards where it is still high). If
+## several things do, the heaviest has its way.
+func give_way(from: Vector3, weight: float) -> void:
+	if weight <= _pushed_by:
+		return
+	var out := Vector3(global_position.x - from.x, 0.0, global_position.z - from.z)
+	if out.length() < 0.05:
+		out = Basis(Vector3.UP, facing) * Vector3.BACK
+	_pushed = out.normalized()
+	_pushed_by = weight
+
+
 ## Throws a blow, or asks for the next of the combination (see
 ## Character.punch). Returns false if it cannot: only feet on the ground.
 func punch() -> bool:
@@ -200,6 +219,12 @@ func _physics_process(delta: float) -> void:
 		horizontal.y = 0.0
 	else:
 		horizontal = horizontal.move_toward(wish * speed, accel * delta)
+	var pushed := _pushed
+	_pushed = Vector3.ZERO
+	_pushed_by = 0.0
+	if pushed != Vector3.ZERO:
+		# Under something that comes down, it goes where that sends it.
+		horizontal = pushed * GIVE_WAY
 	velocity.x = horizontal.x
 	velocity.z = horizontal.z
 	if is_on_floor():
@@ -212,7 +237,7 @@ func _physics_process(delta: float) -> void:
 	touch_jump = false
 	move_and_slide()
 	# A blow that steps in steps up like any other step.
-	_climb(horizontal.limit_length(1.0) if busy else wish, delta)
+	_climb(horizontal.limit_length(1.0) if busy or pushed != Vector3.ZERO else wish, delta)
 	_lift = move_toward(_lift, 0.0, delta * 3.0)
 	_animate(wish, delta)
 	_pose_camera(delta)

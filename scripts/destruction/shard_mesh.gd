@@ -2,18 +2,20 @@ class_name ShardMesh
 extends MeshInstance3D
 ## Draws everything a Structure is made of in one draw call (see
 ## shards.gdshader). The mesh never changes: breaking and bending only
-## change two small textures, which part goes with which body, and where
-## each body is.
+## change two small textures, which part goes with which body (and how far
+## it has been pushed from where it was built), and where each body is.
 ##
-## A part is a block of a piece that breaks (`add_shard`), or a ring of one
-## that bends (`add_skin`): the piece's skin is stretched from ring to ring,
-## so moving the rings bends it without a gap.
+## A part is a block of a piece that breaks (`add_shard`), or a point of
+## the skin of one that bends: a ring of a post (`add_skin`), a node of a
+## sheet or a plate (`add_face`). The skin is stretched between them, so
+## moving them bends it without a gap.
 ##
 ## Body 0 is the world: a part that stands as it was built goes with it.
 ## Body 1 + i is part i's own: taken by a block when it stands cracked
 ## (drawn a little smaller, see `set_body`) or lies loose, by a ring when
-## its piece is bent. A piece that falls in one piece and unbent moves all
-## its parts with the body of the first.
+## its piece is bent. A piece that falls in one piece moves all its parts
+## with the body of the first. A dent is not a body: the part is pushed
+## aside in the piece (`set_offset`), wherever the piece goes.
 
 const SHADER := preload("res://shaders/shards.gdshader")
 ## Texels per row of the two data textures.
@@ -32,7 +34,7 @@ var _normals := PackedVector3Array()
 var _colors := PackedColorArray()
 var _uvs := PackedVector2Array()
 var _indices := PackedInt32Array()
-var _slots := PackedFloat32Array()
+var _slots := PackedFloat32Array()  # per part: its body, and how far it is pushed (x, y, z)
 var _slot_image: Image
 var _slot_texture: ImageTexture
 var _slots_changed := false
@@ -90,30 +92,43 @@ func add_shard(
 			_indices.append(from + t)
 
 
-## Adds a piece that bends: `rings[k]` are the four corners of its ring
+## Adds a post that bends: `rings[k]` are the four corners of its ring
 ## `first + k` where it stands, in the same order round every ring
 ## (clockwise seen from the last ring). Its skin goes from each ring to the
 ## next, and closes over the first and the last.
 func add_skin(first: int, rings: Array[PackedVector3Array], tint: Color) -> void:
 	var last := rings.size() - 1
-	_face(first, rings[0][0], first, rings[0][1], first, rings[0][2], first, rings[0][3], tint)
+	var low := PackedInt32Array([first, first, first, first])
+	add_face(low, rings[0], tint)
 	var top := first + last
-	_face(top, rings[last][0], top, rings[last][3], top, rings[last][2], top, rings[last][1], tint)
+	var high := PackedInt32Array([top, top, top, top])
+	add_face(high, PackedVector3Array([rings[last][0], rings[last][3], rings[last][2], rings[last][1]]), tint)
 	for k in last:
-		var low := first + k
+		var at := first + k
 		for j in 4:
 			var next := (j + 1) % 4
-			_face(
-				low,
-				rings[k][j],
-				low + 1,
-				rings[k + 1][j],
-				low + 1,
-				rings[k + 1][next],
-				low,
-				rings[k][next],
+			add_face(
+				PackedInt32Array([at, at + 1, at + 1, at]),
+				PackedVector3Array([rings[k][j], rings[k + 1][j], rings[k + 1][next], rings[k][next]]),
 				tint
 			)
+
+
+## Adds a face of a skin: its corners, anticlockwise seen from outside,
+## each moving with the part it is given with.
+func add_face(parts: PackedInt32Array, corners: PackedVector3Array, tint: Color) -> void:
+	var from := _verts.size()
+	var normal := (corners[1] - corners[0]).cross(corners[2] - corners[0]).normalized()
+	for k in corners.size():
+		_verts.append(corners[k])
+		_normals.append(normal)
+		_colors.append(tint)
+		# (-1: a skin. It is lit by how it lies now, not as it was built.)
+		_uvs.append(Vector2(parts[k], -1))
+	for t in range(1, corners.size() - 1):
+		_indices.append(from)
+		_indices.append(from + t + 1)
+		_indices.append(from + t)
 
 
 ## Builds the mesh once every part is added: `shards` of them.
@@ -132,9 +147,9 @@ func build(shards: int) -> void:
 	custom_aabb = AABB(Vector3.ONE * -500.0, Vector3.ONE * 1000.0)
 	vertex_count = _verts.size()
 	var rows := maxi(ceili(float(shards) / WIDTH), 1)
-	_slots.resize(WIDTH * rows)
+	_slots.resize(WIDTH * rows * 4)
 	_slots.fill(0.0)
-	_slot_image = Image.create_from_data(WIDTH, rows, false, Image.FORMAT_RF, _slots.to_byte_array())
+	_slot_image = Image.create_from_data(WIDTH, rows, false, Image.FORMAT_RGBAF, _slots.to_byte_array())
 	_slot_texture = ImageTexture.create_from_image(_slot_image)
 	var body_rows := maxi(ceili((shards + 1) * 2.0 / WIDTH), 1)
 	_bodies.resize(WIDTH * body_rows * 4)
@@ -156,30 +171,18 @@ func build(shards: int) -> void:
 	_indices = PackedInt32Array()
 
 
-## A face of a skin: four corners, anticlockwise seen from outside, each
-## moving with the part it is given with.
-func _face(
-	ia: int, a: Vector3, ib: int, b: Vector3, ic: int, c: Vector3, id: int, d: Vector3, tint: Color
-) -> void:
-	var from := _verts.size()
-	var normal := (b - a).cross(c - a).normalized()
-	var parts: Array[int] = [ia, ib, ic, id]
-	var corners: Array[Vector3] = [a, b, c, d]
-	for k in 4:
-		_verts.append(corners[k])
-		_normals.append(normal)
-		_colors.append(tint)
-		# (-1: a skin. It is lit by how it lies now, not as it was built.)
-		_uvs.append(Vector2(parts[k], -1))
-	for t: int in [1, 2]:
-		_indices.append(from)
-		_indices.append(from + t + 1)
-		_indices.append(from + t)
-
-
 ## Part `shard` now moves with body `slot` (0: the world).
 func set_slot(shard: int, slot: int) -> void:
-	_slots[shard] = slot
+	_slots[shard * 4] = slot
+	_slots_changed = true
+
+
+## Part `shard` is pushed `by` from where it was built in its piece (a
+## dent): it is drawn there, wherever its body is.
+func set_offset(shard: int, by: Vector3) -> void:
+	_slots[shard * 4 + 1] = by.x
+	_slots[shard * 4 + 2] = by.y
+	_slots[shard * 4 + 3] = by.z
 	_slots_changed = true
 
 
@@ -205,7 +208,9 @@ func set_body(slot: int, xf: Transform3D, origin: Vector3, drawn := 1.0) -> void
 func _process(_delta: float) -> void:
 	if _slots_changed:
 		_slots_changed = false
-		_slot_image.set_data(WIDTH, _slot_image.get_height(), false, Image.FORMAT_RF, _slots.to_byte_array())
+		_slot_image.set_data(
+			WIDTH, _slot_image.get_height(), false, Image.FORMAT_RGBAF, _slots.to_byte_array()
+		)
 		_slot_texture.update(_slot_image)
 	if _bodies_changed:
 		_bodies_changed = false

@@ -47,14 +47,24 @@ Headless on a 2-core cloud machine, one physics step per frame
 (`--fixed-fps 60`), things falling at 0.3 of real gravity.
 
 The run at the top of this page (both sides of the bench taken apart:
-3891 steps), three times: a physics step costs 0.12 to 0.13 ms at the
-median, 99% of the steps are under 0.34 to 0.41 ms, the slowest takes
-2.8 to 6.3 ms. At the end 30 to 36 bodies lie loose, 20 at most having
-moved at once. (How the slab and the deck end is not the same every
-time: a column or a post left under them may give or not.)
+3930 steps), three times, with metal marked where the blow lands (dents,
+kinks, folds, the deck in triangles): a physics step costs 0.14 ms at the
+median, 99% of the steps are under 0.35 to 0.46 ms, the slowest takes 2.2
+to 8.3 ms (one step over 6 ms, in one run of the three). At the end 38
+to 44 bodies lie loose, 19 at most having moved at once.
+
+The same run, the same hour, on the commit before (metal bent as a whole
+piece, the deck one rigid body): 0.13 to 0.18 ms at the median, 99% under
+0.39 to 0.60 ms, the slowest 3.0 to 4.6 ms. The two cannot be told apart
+at the median on this machine; the slowest step is not better.
+
+Not measured: what a fold costs on a phone. A piece of metal that has
+come loose is up to 8 bodies and as many folds while it moves (the deck),
+frozen like the rest once it lies still.
 
 The bench is 18 pieces: 9 in concrete, cut into 43 blocks, and 9 in
-metal, drawn with 78 rings.
+metal, drawn with 46 rings (the posts) and 282 nodes (the sheets, the
+deck): 371 parts.
 
 ### Concrete alone (step 2)
 
@@ -85,7 +95,7 @@ the two swings, 1.04 m for the leap; the foot 0.95 m out and 1.14 m up.
 
 What a browser downloads besides the engine (`index.pck`): 0.69 MB then,
 for 2.56 MB in the version before (both exported here with the same
-Godot); 0.72 MB with concrete, and with metal too. The engine itself
+Godot); 0.72 MB with concrete, 0.74 MB with metal too. The engine itself
 (`index.wasm`, 39.5 MB before compression) is the same.
 
 ### What the version before measured on the phone
