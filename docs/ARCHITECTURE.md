@@ -104,10 +104,11 @@ bends.
    brute.
 5. **The rubble** (`Rubble`). Loose bodies are made straight on the
    physics server, no nodes. They fall at a share of real gravity
-   (`fall`, 0.3 to begin with, set by the slider): slowly, which is what
-   makes the brute a giant. Speeds told "as at real gravity" in the code
-   go with the square root of that share, so the same things happen at
-   any setting, only slower. A body that touches something and has been
+   (`fall`, set by the slider): all of it to begin with, which is what
+   the owner settled on, on the phone; less was tried, to make the brute
+   a giant. Speeds told "as at real gravity" in the code go with the
+   square root of that share, so the same things happen at any setting,
+   only slower. A body that touches something and has been
    still for half a second is frozen (static): a heap costs nothing,
    stays put, and the brute steps onto it. It moves again when a piece
    near it breaks or when a blow lands by it. Nothing rests on the brute
