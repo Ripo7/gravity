@@ -51,6 +51,12 @@ const EASE_OUT := 6.0
 const TURN := 12.0
 ## In the air this long (s) without having jumped: it is a fall.
 const FALL_AFTER := 0.12
+## The brute is this wide where it stands (m, the radius of its capsule).
+const RADIUS := 0.35
+## No part of it goes farther ahead of where it stands than this in a move
+## (m; the most is its head in the hook, 0.9 m, and the head is 0.16 m
+## round).
+const LUNGE := 1.1
 ## A fist, or a foot, is a ball this wide round the knuckles or the toes
 ## (m, its radius).
 const FIST := 0.1
@@ -112,7 +118,7 @@ func _init() -> void:
 	# A block that goes off under its feet does not take it along.
 	platform_floor_layers = 0
 	var capsule := CapsuleShape3D.new()
-	capsule.radius = 0.35
+	capsule.radius = RADIUS
 	capsule.height = 1.8
 	var shape := CollisionShape3D.new()
 	shape.shape = capsule
@@ -134,6 +140,7 @@ func _init() -> void:
 	# The camera stays in front of what stands, not of what lies about.
 	_sight.collision_mask = Layers.WORLD | Layers.STRUCTURE
 	character.swung.connect(_on_swung)
+	character.posed.connect(_on_posed)
 	character.reached.connect(_on_reached)
 	_pose_camera()
 
@@ -283,6 +290,41 @@ func _animate(wish: Vector3, delta: float) -> void:
 func _on_swung(_move: String) -> void:
 	_punch_to = atan2(-_wish.x, -_wish.z) if _wish.length() > 0.1 else facing
 	_fist_was = Vector3.INF
+
+
+## The pose of a step of a strike is set. The moves lunge well ahead of
+## where the brute stands (its head 0.9 m, its front knee 0.8 m in the
+## hook): it is held back from what stands, so that only the limb that
+## strikes goes into it.
+func _on_posed() -> void:
+	var ahead := Basis(Vector3.UP, facing) * Vector3.FORWARD
+	var space := get_world_3d().direct_space_state
+	var query := PhysicsShapeQueryParameters3D.new()
+	query.shape = _ball
+	query.collision_mask = Layers.STRUCTURE
+	# (Nothing stands within a lunge of it: nothing to look for.)
+	_ball.radius = LUNGE
+	query.transform = Transform3D(Basis(), global_position + ahead * LUNGE * 0.5 + Vector3.UP)
+	if space.intersect_shape(query, 1).is_empty():
+		return
+	var deep := 0.0
+	for part in character.bulk():
+		var at := Vector3(part.x, part.y, part.z)
+		var out := (at - global_position).dot(ahead)
+		if out + part.w <= RADIUS:
+			continue  # the body, where it stands, keeps that out already
+		# As wide as it is, from beside the brute where it stands, straight
+		# ahead, to where it is drawn: how far before it meets something.
+		_ball.radius = part.w
+		query.transform = Transform3D(Basis(), at - ahead * out)
+		query.motion = ahead * out
+		var free := space.cast_motion(query)
+		# (Nothing in the way, or in something from the start: beside a
+		# column, say. Neither is the lunge going into what is ahead.)
+		if free[1] < 1.0 and free[1] > 0.0:
+			deep = maxf(deep, out * (1.0 - free[0]))
+	if deep > 0.0:
+		move_and_collide(-ahead * deep)
 
 
 ## The fist or the foot of the strike under way is at the end of `limb`

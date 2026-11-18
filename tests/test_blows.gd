@@ -268,6 +268,83 @@ func test_a_blow_that_touches_nothing_says_where_its_fist_ended() -> void:
 	await _unload()
 
 
+func test_the_body_stays_out_of_what_stands_while_it_strikes() -> void:
+	# Right up against the wall, the column and the thinner metal post: the
+	# combination, then a kick. The moves lunge 0.9 m ahead of where the
+	# brute stands.
+	for target: Array in [
+		["the wall", Main.WALL_AT, 0.6],
+		["the column", Main.COLUMN_AT, 0.6],
+		["the metal post", Main.METAL_POST_AT, 0.5]
+	]:
+		await _load()
+		var c := p.character
+		var s := main.structure
+		var at: Vector3 = target[1]
+		_stand(at + Vector3(0, 0.05, target[2]), at + Vector3.UP)
+		await frames(10)
+		var thrown := [0]
+		var on_it := [0]
+		p.blow.connect(
+			func(_at: Vector3, _way: Vector3, _power: int, on: RID) -> void:
+				thrown[0] += 1
+				if on.is_valid() and s.standing(on) >= 0:
+					on_it[0] += 1
+		)
+		var steps := 0
+		var inside := 0
+		var kicked := false
+		var farthest := 0.0
+		for k in 700:
+			if k % 6 == 0 and thrown[0] < 4:
+				p.punch()
+			elif thrown[0] >= 4 and not c.striking() and not kicked:
+				kicked = p.kick()
+			await frames(1)
+			if c.striking():
+				steps += 1
+				inside += _in_what_stands(c)
+				farthest = maxf(farthest, p.global_position.z - at.z)
+			elif kicked:
+				break
+		check(steps > 100 and kicked, "against %s: a combination and a kick (%d steps)" % [target[0], steps])
+		check_eq(
+			inside, 0, "against %s, nothing of the body but the limb that strikes goes into it" % target[0]
+		)
+		check(on_it[0] >= 3, "against %s, its blows land all the same (%d)" % [target[0], on_it[0]])
+		check(
+			farthest > target[2] + 0.2,
+			"against %s, it is held back to lunge (%.2f m from it)" % [target[0], farthest]
+		)
+		check(farthest < 1.6, "no farther than its lunge is long")
+		await _unload()
+	# In the open nothing holds it back: it goes where its moves step.
+	await _load()
+	var from := p.global_position
+	for k in 200:
+		if k % 6 == 0 and k < 110:
+			p.punch()
+		await frames(1)
+	check(p.global_position.distance_to(from) > 1.5, "in the open the body follows the steps of its blows")
+	await _unload()
+
+
+## How many parts of the body of `c`, but for the limb that strikes, are in
+## something that stands (a ball a little smaller than each).
+func _in_what_stands(c: Character) -> int:
+	var count := 0
+	var ball := SphereShape3D.new()
+	var query := PhysicsShapeQueryParameters3D.new()
+	query.shape = ball
+	query.collision_mask = Layers.STRUCTURE
+	for part in c.bulk():
+		ball.radius = part.w - 0.03
+		query.transform = Transform3D(Basis(), Vector3(part.x, part.y, part.z))
+		if not p.get_world_3d().direct_space_state.intersect_shape(query, 1).is_empty():
+			count += 1
+	return count
+
+
 ## How far `at` is from the stretch between `from` and `to`.
 func _off(at: Vector3, from: Vector3, to: Vector3) -> float:
 	var along := to - from

@@ -35,6 +35,8 @@ signal swung(move: String)
 signal reached(limb: PackedVector3Array, there: bool)
 ## The clip of the strike under way has its fist or foot there.
 signal struck(move: String)
+## The pose of this step of a strike is set (said before `reached`).
+signal posed
 
 const SCENE := "res://assets/mannequin/AnimationLibrary_Godot_Standard.gltf"
 const MOVES := "res://assets/fight/moves.tres"
@@ -73,6 +75,20 @@ const SWING := 0.1
 ## body, its middle joint, and what lands (the knuckles, the toes).
 const ARM: Array[String] = ["DEF-upper_arm.R", "DEF-forearm.R", "DEF-f_middle.01.R"]
 const LEG: Array[String] = ["DEF-thigh.R", "DEF-shin.R", "DEF-toe.R"]
+## The rest of the body, which goes into nothing that stands: its parts
+## (bones), and how far round its bone each reaches (m). Not the forearm
+## and fist that strike; in a kick, not the right leg below the hip.
+const BULK := {
+	"DEF-head": 0.16,
+	"DEF-spine.003": 0.2,
+	"DEF-upper_arm.L": 0.1,
+	"DEF-upper_arm.R": 0.1,
+	"DEF-hand.L": 0.06,
+	"DEF-shin.L": 0.08,
+	"DEF-toe.L": 0.05,
+	"DEF-shin.R": 0.08,
+	"DEF-toe.R": 0.05,
+}
 ## The bone the steps of the moves are given to.
 const ROOT := "Rig/Skeleton3D:root"
 ## What the body can be doing (see `state`), in the order of the tree's
@@ -96,6 +112,7 @@ var _move_out := false  # its clip has had its fist or foot there
 var _spent := false  # its blow has landed, or has had its time
 var _arm := PackedInt32Array()  # the bones of ARM
 var _leg := PackedInt32Array()
+var _bulk := PackedInt32Array()  # the bones of BULK
 var _then := ""  # the move asked for next: "punch" or "kick"
 
 
@@ -125,6 +142,8 @@ func _ready() -> void:
 		_arm.append(skeleton.find_bone(bone))
 	for bone in LEG:
 		_leg.append(skeleton.find_bone(bone))
+	for bone: String in BULK:
+		_bulk.append(skeleton.find_bone(bone))
 	tree.set("parameters/land_pace/scale", LAND_PACE)
 	move(0.0)
 
@@ -200,6 +219,20 @@ func limb() -> PackedVector3Array:
 	for bone in _leg if state == "kick" else _arm:
 		at.append(skeleton.global_transform * skeleton.get_bone_global_pose(bone).origin)
 	return at
+
+
+## The body but for the limb that strikes in the move under way: where
+## each part of BULK is drawn now (x, y, z, in the world) and how far
+## round that it reaches (w).
+func bulk() -> PackedVector4Array:
+	var parts := PackedVector4Array()
+	var k := 0
+	for bone: String in BULK:
+		if state != "kick" or not bone in LEG:
+			var at := skeleton.global_transform * skeleton.get_bone_global_pose(_bulk[k]).origin
+			parts.append(Vector4(at.x, at.y, at.z, BULK[bone]))
+		k += 1
+	return parts
 
 
 ## The blow of the strike under way has landed: it lands no more.
@@ -291,7 +324,10 @@ func _move(delta: float) -> void:
 ## The pose of this step is set. While a fist or a foot is thrown, says
 ## where it is.
 func _posed() -> void:
-	if not striking() or _spent or _move_for < _about("hit") - SWING - LATE:
+	if not striking():
+		return
+	posed.emit()
+	if _spent or _move_for < _about("hit") - SWING - LATE:
 		return
 	# (Its last say is in the pose in which the clip has it land.)
 	_spent = _move_out
