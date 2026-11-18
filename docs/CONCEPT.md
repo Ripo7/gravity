@@ -28,14 +28,16 @@ La matière seule dit comment une pièce répond à un choc.
 
 ## L'effet géant
 
-Les morceaux tombent lentement, comme de vrais immeubles vus de loin. C'est
-ce qui donne sa taille à la brute.
+Idée de départ : les morceaux tombent lentement, comme de vrais immeubles
+vus de loin, pour donner sa taille à la brute. Essayé sur le téléphone le
+18 novembre 2026 : c'est la chute réelle (curseur à 1,00) qui plaît. Elle
+devient le réglage par défaut.
 
-La vitesse de chute est un seul réglage, le même pour toutes les matières.
-Sa valeur se choisit au banc d'essai, sur le téléphone.
+La vitesse de chute reste un seul réglage, le même pour toutes les
+matières. Le curseur du banc reste là pour comparer.
 
-Choix fait : la brute garde ses mouvements actuels. Seuls les morceaux
-tombent lentement.
+Conséquence : la taille de la brute devra se sentir autrement, par
+l'échelle de la ville autour d'elle. À voir quand la ville reviendra.
 
 ## Les quatre matières
 
@@ -140,7 +142,8 @@ Cinq vérifications, en grey box, sur le téléphone :
    métal jamais en morceaux.
 3. Marcher ne casse rien.
 4. Les gravats ne cachent jamais la brute.
-5. La chute des morceaux fait sentir la taille de la brute.
+5. On sent la taille de la brute, par l'échelle de la ville et non plus
+   par une chute ralentie.
 
 ## Gardé pour plus tard
 
