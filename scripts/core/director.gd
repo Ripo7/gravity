@@ -6,7 +6,7 @@ extends Node
 ##        "s<x,y,z>,<x,y,z>" stand there, facing the second point,
 ##        "a@x,y,z" look there, "f<seconds>" run forward, "r<seconds>"
 ##        sprint forward, "p<x>,<y>,<seconds>[,1]" push the stick (y -1 is
-##        forward; 1: sprint), "j" jump, "h" punch, "k" kick,
+##        forward; 1: sprint), "j" jump, "h" punch,
 ##        "t<degrees>,<seconds>" turn the camera to the left,
 ##        "c<share>" set how fast things fall (see Rubble.fall).
 ##   --mode=still [--pos=x,y,z --at=x,y,z --wait=S]   just look
@@ -112,8 +112,6 @@ func _play() -> void:
 			player.touch_jump = true
 		elif kind == "h":
 			player.touch_punch = true
-		elif kind == "k":
-			player.touch_kick = true
 		elif kind == "c":
 			world.fall = float(spec.substr(1))
 		elif kind == "t":

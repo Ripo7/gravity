@@ -47,6 +47,31 @@ Since then, on that phone, with concrete and metal on the bench: 48 to
 53 frames a second while it is broken (see below). The measure above is
 still the way to compare two builds.
 
+### Three blows, one button
+
+Same machine, same way (headless, 2 cores, `--fixed-fps 60`, real
+gravity). The kick is out; nothing else of the game changes but one
+landing that was dropped and now counts (see ARCHITECTURE.md).
+
+The run at the top of this page (it never kicked), three times: a
+physics step cost 0.12 to 0.13 ms at the median, 99% of the steps were
+under 0.45 to 0.48 ms, the slowest took 5.3 to 7.5 ms (one step over
+6 ms in two of the three runs); 84 to 88 loose bodies at the end. The
+build before (glass), three times the same morning: 0.14 ms, 99% under
+0.39 to 0.46 ms, the slowest 2.5 to 4.9 ms, none over 6 ms; 84 to 87
+loose bodies. The slowest steps fall in seconds where little moves
+(7.5 ms with six loose bodies, all asleep), in the build before too
+(3.2 ms with none), which points at the machine; three runs do not tell
+whether the steps over 6 ms are the machine's as well.
+
+What the fists do alone, measured in the tests: the straights land 1.4 m
+up and the fist of the leap 1.9 m up; once the straights meet nothing,
+the leap lands on what is left, about 0.9 m up. Thirteen blows at one
+spot of the palisade and the brute walks through. Thirteen at one spot
+of the wall leave a sill 0.8 m high (it got through with a jump, tried
+once); 65 blows, at three spots side by side, and it walks through. Not
+measured on the phone.
+
 ### Glass (step 5)
 
 Headless on a 2-core cloud machine, one physics step per frame

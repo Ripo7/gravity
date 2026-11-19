@@ -35,10 +35,10 @@ node with `main.gd`) and the test runner's.
   gamepad and the thumbs (`TouchControls` sets its `touch_*`), moves the
   capsule and places the camera.
 - **`Character`** is a body you see and nothing else: it is told what
-  happens (`move`, `jump`, `land`, `punch`, `kick`) and turns it into a
-  pose. It says when a strike starts (`swung`), where its fist or foot
-  is drawn at each step while it is thrown (`reached`, `limb`), and how
-  hard the blow is (`power`). It never decides what the blow does.
+  happens (`move`, `jump`, `land`, `punch`) and turns it into a pose.
+  It says when a strike starts (`swung`), where its fist is drawn at
+  each step while it is thrown (`reached`, `limb`), and how hard the
+  blow is (`power`). It never decides what the blow does.
 - **`Player`** follows that fist and says where it first touched
   something, what, and how hard (`blow`); **`Main`** hands it to the
   structure (`Structure.strike`). The brute knows nothing of what it
@@ -84,7 +84,7 @@ which bends; glass, which bursts.
    of blows for each metre the piece is thick the way it is thinnest,
    22.5 for concrete, so 9 for a column 0.4 m thick; 70 for metal, so 14
    for a post 0.2 m thick. A blow is 2 points, a heavy one (the last of
-   the combination, the kick) 3. How the piece is cut or drawn changes
+   the combination) 3. How the piece is cut or drawn changes
    nothing to it.
 3. **What is no longer carried comes down** (`Structure._settle`). A
    piece rests on the pieces right under it. When something under it
@@ -165,7 +165,11 @@ which bends; glass, which bursts.
    together through their cuts. Cut off by a blow, it starts off going
    over away from it. It breaks into its blocks when something stops it
    once it has come down 0.3 m. A slab that loses its columns comes down
-   the same way, whole.
+   the same way, whole. (Stopped: it lost speed in a step in which it
+   touched something. The engine can tell of the contacts a step before
+   it tells what they took; the stop counts all the same, shared out
+   evenly among them. Until 19 November such a landing was dropped, and
+   a length of wall could be left lying whole.)
 6. **All at once** (`Structure.shatter`). A blow that lands nowhere in
    particular (`hit` without a place: the measure, some tests) is taken
    by the whole piece, which cracks all over and, at its strength, goes
@@ -331,7 +335,7 @@ figure, 46 clips, of which 7 are played. The blows are not from that
 library: see below. `scripts/player/character.gd` builds the tree that
 blends all of them; `scripts/player/player.gd` moves the capsule and
 tells the character how fast it goes, whether it is in the air, and when
-it jumps, lands, strikes or kicks.
+it jumps, lands or strikes.
 
 - **Legs that keep pace.** Each clip has one ground speed at which its feet
   do not slide: 1.05 m/s for the walk, 5.2 for the jog, 7.8 for the sprint
@@ -361,16 +365,19 @@ it jumps, lands, strikes or kicks.
   The owner chose these on 19 November, having tried them beside the
   four the brute had (a lunging hook and three sword strokes, which all
   dived: fists 0.7 to 0.85 m up) and an uppercut from motion capture.
-- **What is motion capture.** The kick is what a real person did (CMU
-  motion capture database, free to use): the free library has none. The
-  tool puts it on the mannequin's skeleton and retimes it (a slow
-  wind-up, the last 0.12 s in two thirds of their time, the pose all but
-  held for an instant after).
+- **Three blows, one button.** The owner decided on 19 November to keep
+  only the combination. The kick, which was what a real person did (CMU
+  motion capture database), is out: its animation was wrong. A lower,
+  quicker kick from the same database (branch `refonte/coup-de-pied`)
+  and a blow of both fists brought down, made by the tool out of a throw
+  (branch `refonte/marteau`), were tried the same day and set aside. The
+  tool still reads captures (`tools/moves/bvh.py`, `retarget.py`): its
+  list of them is empty.
 - **The combination.** A straight left, a straight right, a leap that
   comes down fist first, then round again. The next blow starts when the
   one before lets it (`next` in its clip).
 - **Steps that are real.** The straights stay where they are; the leap
-  and the kick step (the leap 1.4 m). The steps are on the skeleton's
+  steps (1.4 m). The steps are on the skeleton's
   root bone; the game moves the body by them (root motion), so a planted
   foot stays planted. A blow is thrown where the stick pushes, or where
   the character faces.
@@ -382,11 +389,11 @@ it jumps, lands, strikes or kicks.
   clips say their blow lands on one of their own frames. `struck` is sent
   before the pose of that step is set; `reached`, which says where the
   limb is, once it is.
-- **Where a blow lands.** Where its fist or foot first touches
-  something, not where the move ends. From 0.1 s before a clip has its
-  blow land, and until it does, `Character` says at each step where the
-  limb that strikes is drawn (`reached`: shoulder, elbow, knuckles; or
-  hip, knee, toes), once the pose of the step is set. `Player` moves a
+- **Where a blow lands.** Where its fist first touches something, not
+  where the move ends. From 0.1 s before a clip has its blow land, and
+  until it does, `Character` says at each step where the arm that
+  strikes is drawn (`reached`: shoulder, elbow, knuckles), once the pose
+  of the step is set. `Player` moves a
   ball as wide as a fist (0.1 m in radius) from where the knuckles were
   a step before to where they are, once they are in front of the body:
   the first thing it touches, standing or loose, takes the blow, at that
@@ -401,8 +408,13 @@ it jumps, lands, strikes or kicks.
   along the way the brute faces, wherever it lands.
   What this does: a step from a wall, the two straights go in 1.4 m up,
   straight ahead, and the fist of the leap 1.9 m up, over the brute's
-  head: the fists land high. What is below the shoulder (the foot of a
-  wall, of a plank) is for the kick, which goes in 0.4 to 0.8 m up.
+  head: the fists land high. Nothing aims at what is below the
+  shoulder. Only the leap comes down: its clip has its fist land 0.85 m
+  up, so once the straights meet nothing it lands on what is left and
+  lowers it. Measured on the bench: the planks of the palisade are low
+  enough to walk over after a dozen blows; the wall keeps a sill 0.8 m
+  high, which the brute clears with a jump, and it takes 65 blows, at
+  three spots side by side, before it walks through.
   Before, a blow was a thin line from the body's axis straight ahead to
   where the fist ends in the open, at that height: 0.3 m to one side of
   a column 0.4 m wide, every blow missed it.

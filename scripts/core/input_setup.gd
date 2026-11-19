@@ -18,7 +18,6 @@ var _bindings := {
 	"sprint": [_key(KEY_SHIFT), _button(JOY_BUTTON_LEFT_STICK)],
 	"punch":
 	[_mouse(MOUSE_BUTTON_LEFT), _key(KEY_F), _axis(JOY_AXIS_TRIGGER_RIGHT, 1.0), _button(JOY_BUTTON_X)],
-	"kick": [_mouse(MOUSE_BUTTON_RIGHT), _key(KEY_E), _button(JOY_BUTTON_Y)],
 	"rebuild": [_key(KEY_R), _button(JOY_BUTTON_BACK)],
 	"release_mouse": [_key(KEY_ESCAPE), _button(JOY_BUTTON_START)],
 }
