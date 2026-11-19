@@ -337,6 +337,51 @@ each answers as it does elsewhere. What is new is what rests on what
    The porch is lower (1.0 to 1.4 m): from in front of it only the leap
    lands on it; from beside it the straights take its boards.
 
+### A building that stands turned
+
+The streets of the city will not be straight (docs/CONCEPT.md), so a
+building stands turned any way about the vertical. It is still laid out
+straight. Its pieces are added in a frame (`Structure.frame`): where the
+building stands, and how it is turned. `add_piece` takes the place of a
+piece in that frame; `place` is where that puts it in the world.
+
+1. **What rests on what is worked out in the frame**, where the pieces
+   of a building are straight: the top and the underside of each piece
+   and of each block, as rectangles (`_face`, `_foot`, `_head`); where
+   they meet (`_meeting`); whether the middle of what is left is over
+   what holds it (`_held`); which triangle of a plate is over a pier
+   (`_tile_over`). It is the same arithmetic on the same numbers however
+   the building is turned, so a building turned holds and comes down as
+   it does straight.
+2. **A blow comes in the world and is taken there**: which piece, where
+   on it, which way its blocks go. Bodies, blocks, loose pieces, the
+   dent of a sheet (along its own normal) and the kink of a post were in
+   the world already.
+3. **Pieces rest on one another within one frame only**
+   (`Structure.build`). Two buildings do not carry one another: each
+   stands on the ground.
+4. **On the bench the house stands 30 degrees askew**
+   (`Main.HOUSE_TURN`, `Main.house_frame`), its door still towards the
+   start. `Main.house_turn` turns it another way the next time the bench
+   is put back: the tests lay it five ways.
+5. **A plate hangs from its piers wherever it stands.** A deck that
+   comes loose is tied to each pier by the triangle that is over it. It
+   was found by asking of each triangle whether the middle of the pier
+   was inside it; the piers of the bench stand right under a fold,
+   between two triangles, where the answer hung on the last digit of
+   where the deck stood. Laid out 40 m from the middle of the bench, the
+   same deck was tied to none of its piers. It is tied by the nearest
+   triangle now.
+6. **The shape of a block is laid out straight too.** Its collision
+   corners are kept as its piece is laid out, and the shape is turned as
+   the piece is where it is put in a body (`_shape_of`, `_free`, `_fall`,
+   `_refresh`). Kept as they stood in the world, the corners of a flat
+   face of a turned block were flat to the last digit but one, and such
+   a block did not come to rest on that face: it rocked on the ground
+   for good, 4 to 5 cm into it (in 6 of 12 turned walls that were holed;
+   in none of 16 since, see docs/PERFORMANCE.md). A block of a piece that
+   is not turned has the shape it had.
+
 Not there: what falls does nothing to the brute but push it (a deck that
 comes down round a brute that cannot get out stays on its head); blocks
 that lie in one come apart under blows only once they have taken the
@@ -357,9 +402,10 @@ pieces are boxes that stand upright or lie flat; only one that lies flat
 can be tilted, about one level axis; what holds a tilted piece goes by
 where it is over what it rests on, seen from above, not by how it leans
 or where it would slide (the stub of a cut rafter balances on its
-plate); the house has no floor, its door does not open, its gables show
-small steps under the end rafters (a plank's top is level), and it
-stands one way only (its ridge from front to back).
+plate); a building is turned about the vertical only (nothing stands on
+a slope), and its pieces do not rest on those of another; the house has
+no floor, its door does not open, and its gables show small steps under
+the end rafters (a plank's top is level).
 
 ## The bench
 
@@ -387,7 +433,8 @@ In glass, behind the brute as it starts (8 m away: the other sides are
 taken): three panes side by side, 1.2 m wide, 2.4 high, 0.04 thick.
 And a house on its right as it starts and level with it (its porch 5 m
 away): 2.4 m across, 3 m along its ridge, 2.4 m high, of 70 pieces (see
-"A house" above). In all 114 pieces, drawn as 887 parts.
+"A house" above). It stands 30 degrees askew (see "A building that
+stands turned"). In all 114 pieces, drawn as 907 parts.
 "Reconstruire" puts them back and the brute where it started, without
 loading anything again (`Main.rebuild`).
 

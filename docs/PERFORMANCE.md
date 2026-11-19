@@ -47,11 +47,67 @@ Since then, on that phone, with concrete and metal on the bench: 48 to
 53 frames a second while it is broken (see below). The measure above is
 still the way to compare two builds.
 
+### A building that stands turned
+
+Same machine, same way (headless, 2 cores, `--fixed-fps 60`, real
+gravity). The bench is the same 114 pieces and 907 parts; the house
+stands 30 degrees askew.
+
+The run at the top of this page (it never goes near the house), three
+times, turn about with the build before. This build: 0.13 to 0.15 ms at
+the median, 99% of the steps under 0.50 to 0.53 ms, the slowest 3.1 to
+6.8 ms (one step over 6 ms in one run); 85 or 86 loose bodies at the
+end. The build before: 0.13 to 0.14 ms, 99% under 0.43 to 0.52 ms, the
+slowest 3.2 to 8.0 ms (one step over 6 ms in two runs); 85 to 87 loose
+bodies. No difference that these runs can show.
+
+The house taken apart, three times each, turn about with the build
+before (the run under "The house"): the same blows from the same four
+places round it, told where they are now that it is turned (to the
+centimetre).
+
+```sh
+M() { python3 -c "print(';'.join(['h;w0.25']*round($1/0.25)))"; }
+godot --headless --fixed-fps 60 --path . -- --mode=play --prof --steps="\
+s5.65,0.05,4.34,7,1,2;w0.3;$(M 2);w3;s9.12,0.05,3.22,7,1,2;w0.3;$(M 6);w3;\
+s4.18,0.05,0.89,6.78,1,2.39;w0.3;$(M 6);w3;s8.35,0.05,-0.34,7,1,2;w0.3;$(M 6);w4"
+```
+
+Askew: 0.22 ms at the median, 99% of the steps under 0.66 to 0.67 ms,
+the slowest 2.4 to 6.9 ms (one step over 6 ms in one run); 59 to 67
+loose bodies at the end, all asleep. Straight, the build before: 0.19 to
+0.22 ms, 99% under 0.65 to 0.76 ms, the slowest 2.1 to 3.1 ms; 56 to 59
+loose bodies, all asleep. In all six runs 90 of the 114 pieces stand at
+the end.
+
+Does what comes off a turned piece come to rest? A concrete wall holed
+in three places (36 blows), four of them straight and four turned (137,
+137, 150 and 210 degrees) in one run, 1800 steps, with three starts of
+the random numbers. With the corners of a block kept as they stood in
+the world, a block of the turned wall was still moving at the end in 6
+of the 12 turned walls, and in none of the 12 straight ones: it lay 4 to
+5 cm into the ground (the same block of a straight wall rests 2 cm into
+it, which is what the engine allows) and rocked there, once a second.
+With its corners kept as the piece is laid out (this build), four
+starts: none of 16 turned, none of 16 straight. The same with a sheet, a
+post and a deck brought down beside the wall, three starts: none of 12,
+none of 12.
+
+A deck 40 m from the middle of the bench, one of its piers gone: in the
+build before it was tied to none of the three piers that stood (to none
+at 120 m, to one at 15 m, to the three where the bench has it); in this
+build to the three, straight or turned.
+
+`index.pck` is 0.66 MB, as before. Nothing was measured on the phone.
+What the picture costs was not measured: it is not drawn in these runs
+(the same 907 parts are drawn).
+
 ### The house
 
 Same machine, same way (headless, 2 cores, `--fixed-fps 60`, real
-gravity). The bench has 114 pieces, drawn as 887 parts (44 and 597
-before): the house is 70 pieces and 290 parts.
+gravity). The bench has 114 pieces, drawn as 907 parts (44 and 597
+before): the house is 70 pieces and 310 parts. (This page said 887 and
+290: the build prints 907.)
 
 What the 70 more standing cost when nothing touches them: the run at the
 top of this page (it never goes near the house), three times, turn
@@ -78,7 +134,7 @@ under 0.62 to 0.69 ms, the slowest took 2.2 ms, none over 6 ms. At the
 end 90 of the 114 pieces still stand (the feet of the walls, the corner
 posts, the plates) and 57 to 60 loose bodies lie there, all asleep.
 
-`index.pck` is 0.66 MB (0.65 before). What drawing 290 more parts costs
+`index.pck` is 0.66 MB (0.65 before). What drawing 310 more parts costs
 was not measured: the picture is not drawn in these runs. Nothing was
 measured on the phone.
 

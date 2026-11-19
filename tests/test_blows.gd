@@ -263,19 +263,22 @@ func test_a_blow_that_touches_nothing_says_where_its_fist_ended() -> void:
 
 func test_the_body_stays_out_of_what_stands_while_it_strikes() -> void:
 	# Right up against the wall, the column, the thinner metal post and a
-	# gable of the house, under its roof: the combination. The moves lunge
-	# 0.9 m ahead of where the brute stands in the leap.
+	# gable of the house, under its roof (which stands askew): the
+	# combination. The moves lunge 0.9 m ahead of where the brute stands in
+	# the leap. [what, where, how far from it the brute stands, which way]
+	var house := Transform3D(Basis(Vector3.UP, deg_to_rad(Main.HOUSE_TURN)), Main.HOUSE_AT)
 	for target: Array in [
-		["the wall", Main.WALL_AT, 0.6],
-		["the column", Main.COLUMN_AT, 0.6],
-		["the metal post", Main.METAL_POST_AT, 0.5],
-		["the house", Main.HOUSE_AT + Vector3(0, 0, Main.HOUSE.y * 0.5), 0.6]
+		["the wall", Main.WALL_AT, 0.6, Vector3.BACK],
+		["the column", Main.COLUMN_AT, 0.6, Vector3.BACK],
+		["the metal post", Main.METAL_POST_AT, 0.5, Vector3.BACK],
+		["the house", house * Vector3(0, 0, Main.HOUSE.y * 0.5), 0.6, house.basis * Vector3.BACK]
 	]:
 		await _load()
 		var c := p.character
 		var s := main.structure
 		var at: Vector3 = target[1]
-		_stand(at + Vector3(0, 0.05, target[2]), at + Vector3.UP)
+		var out: Vector3 = target[3]
+		_stand(at + out * target[2] + Vector3.UP * 0.05, at + Vector3.UP)
 		await frames(10)
 		var thrown := [0]
 		var on_it := [0]
@@ -295,7 +298,7 @@ func test_the_body_stays_out_of_what_stands_while_it_strikes() -> void:
 			if c.striking():
 				steps += 1
 				inside += _in_what_stands(c)
-				farthest = maxf(farthest, p.global_position.z - at.z)
+				farthest = maxf(farthest, (p.global_position - at).dot(out))
 			elif thrown[0] >= 3:
 				break
 		check(steps > 100, "against %s: a whole combination (%d steps)" % [target[0], steps])

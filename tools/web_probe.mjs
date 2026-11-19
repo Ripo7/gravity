@@ -54,10 +54,11 @@ const steps =
   // One blow at a pane of glass, behind where it started: it bursts
   // (its glitter is drawn by a shader of its own).
   `s0,0.05,7.1,0,1,8;w0.3;h;w2.5;` +
-  // A combination at the middle of a gable of the house: it cuts the post
+  // A combination at the middle of a gable of the house, which stands
+  // 30 degrees askew: it cuts the post
   // under the ridge, and the roof (the ridge, its rafters and its boards,
   // which are tilted: seventeen pieces) comes down.
-  `s7,0.05,4.7,7,1,2;w0.3;${mash(2)};w3.5`;
+  `s5.65,0.05,4.34,7,1,2;w0.3;${mash(2)};w3.5`;
 // Software WebGL is slow: loading alone can take a while.
 await page.goto(`http://localhost:8061/index.html?mode=play&prof&steps=${encodeURIComponent(steps)}`, { timeout: 180000 });
 // And a few seconds of game time can take a minute.

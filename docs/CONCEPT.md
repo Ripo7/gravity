@@ -18,6 +18,26 @@ précédente était plus petite (les maisons lui arrivaient aux genoux) :
 ses trois coups, qui touchent à 1,4 m et 1,9 m, n'atteindraient pas ces
 maisons-là.
 
+## La ville
+
+Dit le 19 novembre :
+
+- Il y a de tout dedans : des maisons en bois, des maisons en dur, des
+  immeubles, des tours.
+- Elle n'est pas en quadrillage : ses rues ne sont pas droites. Une grande
+  avenue courbe, et des petites rues qui en partent.
+- Les immeubles et les tours bordent l'avenue ; les maisons sont dans les
+  petites rues.
+- Pas d'eau pour l'instant. (Un fleuve le long de l'avenue a été choisi
+  puis écarté le même jour.)
+
+Conséquence : le long d'une rue courbe, un bâtiment est posé tourné dans
+n'importe quel sens. Il se dessine droit, puis se pose tourné d'un bloc
+autour de la verticale ; tourné, il tient, casse et tombe exactement comme
+droit. Sur le banc, la maison est posée de travers pour le prouver. (Deux
+bâtiments tournés différemment ne s'appuient pas l'un sur l'autre : chacun
+tient sur le sol.)
+
 ## Le principe
 
 La matière seule dit comment une pièce répond à un choc.
@@ -253,7 +273,9 @@ Le plan, une pull request par étape, chacune jouable sur le téléphone
 3. Métal. (repris de même ; validé le 18 novembre)
 4. Bois. (fait ; validé le 19 novembre)
 5. Verre. (fait ; validé le 19 novembre)
-6. Maison, immeuble, tour sur le banc. (en cours : la maison d'abord)
+6. Maison, immeuble, tour sur le banc. (en cours : la maison d'abord ;
+   puis un bâtiment qu'on peut poser tourné, prouvé avec la maison ; puis
+   l'immeuble et la tour)
 7. La ville générée revient, faite de ces bâtiments.
 
 ## Ce qui prouvera que c'est bon

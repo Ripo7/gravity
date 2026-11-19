@@ -5,6 +5,12 @@ extends Node3D
 ## piece answers a blow (Matter, docs/CONCEPT.md). A box stands upright or
 ## lies flat; one that lies flat may be tilted (a board of a roof).
 ##
+## A building is laid out straight, and may stand turned: its pieces are
+## added in a frame (`frame`), which is turned about the vertical as the
+## building is to stand. Turned, it holds, breaks and falls as it does
+## straight: what rests on what is worked out in the frame, where its
+## pieces are straight. Pieces rest on one another within one frame only.
+##
 ## A blow harms the place it lands on, not the whole piece. A piece has a
 ## strength of its own (Matter.strength), however it is cut or drawn: that
 ## is what one place of it takes before it gives.
@@ -112,6 +118,11 @@ var glitter: Glitter
 var cut_seed := 1
 ## How many pieces still stand.
 var standing_count := 0
+## The frame what is added from now on is placed in: where a building
+## stands and how it is turned, about the vertical only. (As it is given,
+## what is added stands where it is told, straight.)
+var frame := Transform3D.IDENTITY:
+	set = set_frame
 
 var _shows := PackedByteArray()  # per block: how cracked it shows (0 to 2)
 var _bonds: Array[PackedInt32Array] = []  # per block: the blocks of its piece it was cut from
@@ -126,7 +137,8 @@ var _wound_harm: Array[PackedFloat32Array] = []  # per piece: what each of them 
 var _whole := PackedFloat32Array()  # per piece: what it has taken nowhere in particular
 var _clumps := {}  # loose body -> the blocks it is made of, lying in one
 var _clump_harm := {}  # loose body -> the blows it has taken since
-var _corners: Array[PackedVector3Array] = []  # per block: its collision corners, around its centre
+# Per block: its collision corners, around its centre, as its piece is laid out.
+var _corners: Array[PackedVector3Array] = []
 var _radius := PackedFloat32Array()  # per block: how far its corners are from its centre
 var _hull: Array[RID] = []  # per block: its collision shape, once it is needed
 var _box: Array[RID] = []  # per piece: its collision shape as it was built
@@ -138,6 +150,11 @@ var _loose: Array[PackedInt32Array] = []  # per piece: its bodies in the rubble 
 var _ties: Array[Array] = []  # per piece that stands: what ties to it a plate that has come loose
 var _by_body := {}  # RID -> piece that stands
 var _shade := PackedFloat32Array()  # per piece: how much darker than its matter it is drawn
+var _frames: Array[Transform3D] = [Transform3D.IDENTITY]  # the frames pieces were added in
+var _into: Array[Transform3D] = [Transform3D.IDENTITY]  # per frame: from the world into it
+var _now := 0  # the frame what is added goes in
+var _frame := PackedInt32Array()  # per piece: the frame it was added in
+var _within: Array[Transform3D] = []  # per piece: where its middle is in its frame
 var _built := false
 
 
@@ -168,18 +185,31 @@ func _exit_tree() -> void:
 			PhysicsServer3D.free_rid(rid)
 
 
-## Adds a piece made `of` a matter: a box `box` across, its middle at `xf`,
-## turned as `xf` is (not at all, for all but the rafters and boards of a
-## roof, which are tilted). `shade`: how much darker than its matter it is
-## drawn (0 to 1), to tell the parts of a building apart: its frame, its
-## roof. Call build() once every piece is in. Returns its number.
+func set_frame(to: Transform3D) -> void:
+	assert(to.basis.y.is_equal_approx(Vector3.UP), "a frame is turned about the vertical only")
+	frame = to
+	_now = _frames.find(to)
+	if _now < 0:
+		_now = _frames.size()
+		_frames.append(to)
+		_into.append(to.affine_inverse())
+
+
+## Adds a piece made `of` a matter: a box `box` across, its middle at `xf`
+## in the frame (see `frame`), turned as `xf` is (not at all, for all but
+## the rafters and boards of a roof, which are tilted). `shade`: how much
+## darker than its matter it is drawn (0 to 1), to tell the parts of a
+## building apart: its frame, its roof. Call build() once every piece is
+## in. Returns its number.
 func add_piece(of: int, xf: Transform3D, box: Vector3, shade := 0.0) -> int:
 	var p := pieces
 	pieces += 1
 	matter.append(of)
 	_shade.append(shade)
 	size.append(box)
-	place.append(xf)
+	place.append(frame * xf)
+	_within.append(xf)
+	_frame.append(_now)
 	strength.append(Matter.strength(of, box))
 	harm.append(0.0)
 	state.append(STANDS)
@@ -219,14 +249,14 @@ func build() -> void:
 		PhysicsServer3D.body_set_space(body, space)
 		_body.append(body)
 		_by_body[body] = p
-	# Who rests on whom: a piece whose underside is on the top of another.
-	# Where the two are over one another, the underside passes at the
-	# height of that top: all over, if neither is tilted or both lean the
-	# same way; along a line, if one leans on the other.
+	# Who rests on whom: a piece whose underside is on the top of another
+	# of its frame. Where the two are over one another, the underside
+	# passes at the height of that top: all over, if neither is tilted or
+	# both lean the same way; along a line, if one leans on the other.
 	for a in pieces:
 		var foot := _face(a, -1.0)
 		for b in pieces:
-			if a == b:
+			if a == b or _frame[a] != _frame[b]:
 				continue
 			var over := foot.intersection(_face(b, 1.0))
 			if over.size.x <= TOUCH or over.size.y <= TOUCH:
@@ -428,6 +458,7 @@ func break_up(lying: int) -> void:
 ## Cuts piece `p`, which breaks, into its blocks. Returns how many.
 func _add_blocks(p: int) -> int:
 	var xf := place[p]
+	var inside := _within[p]
 	var cut := Fracture.cut(size[p], Matter.grain(matter[p], size[p]), cut_seed * 7919 + p * 104729, 0.0)
 	var base := count
 	var tint := Matter.TINT[matter[p]].darkened(_shade[p])
@@ -442,7 +473,9 @@ func _add_blocks(p: int) -> int:
 		for point in sh.points:
 			var w := xf * point
 			world.append(w)
-			around.append((w - c) * SHRINK)
+			# (As the piece is laid out: the shape is the same wherever the
+			# piece stands and however it is turned, its flat faces flat.)
+			around.append((point - sh.centroid) * SHRINK)
 			far = maxf(far, w.distance_to(c))
 		mesh.add_shard(count, base, world, sh, xf.basis, tint)
 		var i := count
@@ -452,11 +485,13 @@ func _add_blocks(p: int) -> int:
 			if other >= 0:
 				_bonds[i].append(base + other)
 			elif other == -3 or other == -4:
-				# A face of the underside of the piece (-3), or of its top.
-				var corner := world[sh.faces[f][0]]
+				# A face of the underside of the piece (-3), or of its top:
+				# where it is in the frame.
+				var corner := inside * sh.points[sh.faces[f][0]]
 				var over := Rect2(corner.x, corner.z, 0, 0)
 				for c2 in sh.faces[f]:
-					over = over.expand(Vector2(world[c2].x, world[c2].z))
+					corner = inside * sh.points[c2]
+					over = over.expand(Vector2(corner.x, corner.z))
 				if other == -3:
 					_foot[i] = over
 				else:
@@ -592,7 +627,7 @@ func _loaded(p: int) -> bool:
 func _free(i: int, xf: Transform3D, lin: Vector3, ang: Vector3) -> int:
 	mesh.set_slot(i, 1 + i)
 	return rubble.add(
-		[[_shape_of(i), Transform3D.IDENTITY]],
+		[[_shape_of(i), Transform3D(place[piece_of[i]].basis, Vector3.ZERO)]],
 		xf,
 		centroid[i],
 		volume[i] * Matter.DENSITY[matter[piece_of[i]]],
@@ -778,7 +813,7 @@ func _fall(p: int, chunk: PackedInt32Array, way: Vector3) -> void:
 		_shows[i] = 0
 		# All of them move with the body of the first, as one.
 		mesh.set_slot(i, 1 + chunk[0])
-		shapes.append([_shape_of(i), Transform3D(Basis(), centroid[i] - middle)])
+		shapes.append([_shape_of(i), Transform3D(place[p].basis, centroid[i] - middle)])
 		far = maxf(far, centroid[i].distance_to(middle) + _radius[i])
 		around = around.expand(centroid[i])
 	if chunk.size() == blocks[p]:
@@ -832,7 +867,7 @@ func _refresh(p: int) -> void:
 		for i in range(first[p], first[p] + blocks[p]):
 			if stands[i] == 1:
 				PhysicsServer3D.body_add_shape(
-					_body[p], _shape_of(i), here * Transform3D(Basis(), centroid[i])
+					_body[p], _shape_of(i), here * Transform3D(place[p].basis, centroid[i])
 				)
 				_in_body[p].append(i)
 		return
@@ -1016,15 +1051,34 @@ func _drop_plate(p: int) -> void:
 		var meet := _meeting(feet, _heads(q))
 		if meet.is_empty():
 			continue
+		# By the triangle that is over the middle of where they meet.
 		var touch := meet[0].get_center()
-		for t in b.tiles.size():
-			var corners := PackedVector2Array()
-			for n in b.tiles[t]:
-				corners.append(Vector2(b.rest(n).x, b.rest(n).z))
-			if Geometry2D.point_is_inside_triangle(touch, corners[0], corners[1], corners[2]):
-				var at := Vector3(touch.x, place[p].origin.y, touch.y)
-				_ties[q].append(rubble.tie(made[t], _body[q], at))
-				break
+		var at := _frames[_frame[p]] * Vector3(touch.x, _within[p].origin.y, touch.y)
+		_ties[q].append(rubble.tie(made[_tile_over(p, touch)], _body[q], at))
+
+
+## The triangle of plate `p` that is over the point `at` of its frame (x
+## and z): the nearest, the first of those as near (a pier may well stand
+## right under a fold, between two).
+func _tile_over(p: int, at: Vector2) -> int:
+	var b := bend[p]
+	var over := -1
+	var least := INF
+	for t in b.tiles.size():
+		var tile := PackedVector2Array()
+		for n in b.tiles[t]:
+			var node := _into[_frame[p]] * b.rest(n)
+			tile.append(Vector2(node.x, node.z))
+		var off := 0.0
+		if not Geometry2D.point_is_inside_triangle(at, tile[0], tile[1], tile[2]):
+			off = INF
+			for k in 3:
+				var on_edge := Geometry2D.get_closest_point_to_segment(at, tile[k], tile[(k + 1) % 3])
+				off = minf(off, at.distance_to(on_edge))
+		if off < least - 0.001:
+			over = t
+			least = off
+	return over
 
 
 ## A collision shape that holds the points `around`, kept to be freed.
@@ -1038,6 +1092,7 @@ func _shape(around: PackedVector3Array) -> RID:
 ## Does what is under the blocks `chunk` of piece `p` (all of `p`, if it
 ## is metal) hold them up? Their middle has to be over where they stand:
 ## on the ground, or on what stands at the top of the pieces `p` rests on.
+## (All seen from above, in the frame of `p`.)
 func _held(p: int, chunk: PackedInt32Array) -> bool:
 	var feet := _feet(p, chunk)
 	var under: Array[Rect2] = []
@@ -1053,38 +1108,37 @@ func _held(p: int, chunk: PackedInt32Array) -> bool:
 		corners.append(touch.end)
 		corners.append(Vector2(touch.position.x, touch.end.y))
 		corners.append(Vector2(touch.end.x, touch.position.y))
-	var middle := Vector2(place[p].origin.x, place[p].origin.z)
+	var middle := _within[p].origin
 	if not chunk.is_empty():
 		var weighed := Vector3.ZERO
 		var total := 0.0
 		for i in chunk:
 			weighed += centroid[i] * volume[i]
 			total += volume[i]
-		middle = Vector2(weighed.x, weighed.z) / total
-	return Geometry2D.is_point_in_polygon(middle, Geometry2D.convex_hull(corners))
+		middle = _into[_frame[p]] * (weighed / total)
+	return Geometry2D.is_point_in_polygon(Vector2(middle.x, middle.z), Geometry2D.convex_hull(corners))
 
 
 ## Where the blocks `chunk` of piece `p` are at its underside, seen from
-## above (all of its underside, if `p` is metal).
+## above in its frame (all of its underside, if `p` is metal).
 func _feet(p: int, chunk: PackedInt32Array) -> Array[Rect2]:
 	var feet: Array[Rect2] = []
 	if bend[p] != null:
-		var box := _bounds(p)
-		feet.append(Rect2(box.position.x, box.position.z, box.size.x, box.size.z))
+		feet.append(_face(p, -1.0))
 	for i in chunk:
 		if _foot[i].has_area():
 			feet.append(_foot[i])
 	return feet
 
 
-## Where something still stands at the top of piece `q`, seen from above.
+## Where something still stands at the top of piece `q`, seen from above
+## in its frame.
 func _heads(q: int) -> Array[Rect2]:
 	var heads: Array[Rect2] = []
 	if state[q] != STANDS:
 		return heads
 	if bend[q] != null:
-		var box := _bounds(q)
-		heads.append(Rect2(box.position.x, box.position.z, box.size.x, box.size.z))
+		heads.append(_face(q, 1.0))
 		return heads
 	for i in range(first[q], first[q] + blocks[q]):
 		if stands[i] == 1 and _head[i].has_area():
@@ -1180,7 +1234,8 @@ func _limbs_of(p: int, poses: Array[Transform3D]) -> Array[Array]:
 	return limbs
 
 
-## The collision shape of block `i`.
+## The collision shape of block `i`, as its piece is laid out: it is
+## turned as the piece is where it is put in a body.
 func _shape_of(i: int) -> RID:
 	if not _hull[i].is_valid():
 		_hull[i] = PhysicsServer3D.convex_polygon_shape_create()
@@ -1194,23 +1249,23 @@ func _tilted(p: int) -> bool:
 
 
 ## Where the top of piece `p` (`side` 1) or its underside (-1) is, seen
-## from above (x and z).
+## from above in its frame (x and z there).
 func _face(p: int, side: float) -> Rect2:
 	var half := size[p] * 0.5
-	var first_corner := place[p] * Vector3(-half.x, side * half.y, -half.z)
+	var first_corner := _within[p] * Vector3(-half.x, side * half.y, -half.z)
 	var over := Rect2(first_corner.x, first_corner.z, 0, 0)
 	for x: float in [-half.x, half.x]:
 		for z: float in [-half.z, half.z]:
-			var corner := place[p] * Vector3(x, side * half.y, z)
+			var corner := _within[p] * Vector3(x, side * half.y, z)
 			over = over.expand(Vector2(corner.x, corner.z))
 	return over
 
 
 ## How high the top of piece `p` (`side` 1) or its underside (-1) is over
-## the point `at` (x and z).
+## the point `at` of its frame (x and z).
 func _face_at(p: int, side: float, at: Vector2) -> float:
-	var up := place[p].basis.y
-	var middle := place[p] * Vector3(0, side * size[p].y * 0.5, 0)
+	var up := _within[p].basis.y
+	var middle := _within[p] * Vector3(0, side * size[p].y * 0.5, 0)
 	return middle.y - (up.x * (at.x - middle.x) + up.z * (at.y - middle.z)) / up.y
 
 
