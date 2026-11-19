@@ -5,7 +5,7 @@ is being rebuilt from its concept, one step at a time, in greybox:
 [docs/CONCEPT.md](docs/CONCEPT.md) (in French) says what it is to be, and
 comes before the code.
 
-**Where it is now: step 6 of 7, the house first.** A bare ground, one brute that
+**Where it is now: step 6 of 7, the house first, set askew.** A bare ground, one brute that
 walks, runs, sprints, jumps and throws a three-blow combination, and
 on the bench in front of it the same three things three times: a column,
 a wall, a slab on four columns. In concrete on its right, in metal on its
@@ -47,7 +47,9 @@ rafters) clad in planks, a roof that overhangs, three windows of glass,
 a door, a porch. A blow on the roof leaves a hole. Cut the beam at the
 top of a wall, or a post under it, and that slope of the roof comes
 down; cut a post under the ridge and the whole roof falls into the
-house.
+house. It stands askew: the streets of the city will not be straight, so
+a building is laid out straight and set down turned any way, and turned
+it holds, breaks and comes down as it does straight.
 
 What breaks is worked out one material at a time, each on this bench and
 each tried on a phone before the next: concrete, then metal, wood, glass;
@@ -163,6 +165,9 @@ Add `--write-movie out.avi --fixed-fps 30` before `--path` to record a run.
   roof comes down when its plate loses a post, the whole roof when the
   ridge does; a pane bursts at a blow and when nothing holds it; its
   porch; what the brute brings down from a gable and from a long wall);
+  what stands turned (a house rests on the same things however it is
+  turned; turned, concrete, metal, wood and glass answer the same blows
+  as they do straight; two buildings do not rest on one another);
   the character
   (where the camera sits and how it comes in at a wall, the character
   turning to where it goes, its planted foot not sliding from a slow walk
