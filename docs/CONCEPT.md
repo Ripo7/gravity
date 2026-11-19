@@ -12,10 +12,11 @@ de combat pour l'instant : on règle d'abord la destruction.
 l'échelle géante.
 
 L'échelle, revue le 19 novembre : une maison arrive à la tête de la
-brute, un immeuble fait deux fois sa taille, une tour quatre fois. La
-version précédente était plus petite (les maisons lui arrivaient aux
-genoux) : ses trois coups, qui touchent à 1,4 m et 1,9 m, n'atteindraient
-pas ces maisons-là.
+brute (ses murs à ses épaules, son faîte au-dessus de sa tête), un
+immeuble fait deux fois sa taille, une tour quatre fois. La version
+précédente était plus petite (les maisons lui arrivaient aux genoux) :
+ses trois coups, qui touchent à 1,4 m et 1,9 m, n'atteindraient pas ces
+maisons-là.
 
 ## Le principe
 
@@ -180,33 +181,56 @@ Les quatre matières sont validées (le béton et le métal le 18 novembre,
 le bois et le verre le 19) : ces mélanges se construisent maintenant, un
 bâtiment à la fois, chacun validé sur le téléphone avant le suivant.
 
-Une pièce peut être inclinée (une planche de toit) : elle repose là où
-son dessous passe à la hauteur de ce qui est sous elle, et ne porte rien
-elle-même.
+Une pièce peut être inclinée (un chevron, une planche de toit) : elle
+repose là où son dessous passe à la hauteur du dessus de ce qui est sous
+elle, et elle porte à son tour ce qui est posé sur elle (les planches
+d'un toit sur ses chevrons).
 
 La maison sur le banc (étape 6). Choisis le 19 novembre : sa taille (à la
-tête de la brute) et son toit à deux pentes. Le reste est de ma part, à
-valider au banc :
+tête de la brute) et son toit à deux pentes ; puis, la première version
+ressemblant à un dessin d'enfant (une boîte, une porte, un toit) : une
+ossature visible, un vrai toit, des fenêtres et une porte, une forme
+moins cube. Tout ce qui s'ajoute est une pièce qui casse, pas du décor.
+Le détail est de ma part, à valider au banc :
 
-- Elle est en bois et creuse : des murs de planches debout, chaque
-  planche une pièce comme à la palissade, sans plancher. Une ouverture de
-  porte dans le mur tourné vers le départ, trop étroite pour la brute.
-- Le toit : des planches inclinées, posées en bas sur le haut des deux
-  longs murs, en haut sur une poutre de faîte que portent les deux
-  pignons. Pas de débord : un direct trouve le mur, pas le bord du toit.
-- Elle est à droite de la brute quand elle démarre, à 6 m.
-- Ce qui n'est plus porté tombe, comme partout. Une planche de toit
-  descend, entière, quand toutes les planches du mur sous elle sont
-  coupées. Si le faîte perd un de ses deux appuis, il tombe, et tout le
-  toit avec lui, dans la maison.
-- Une planche de toit frappée casse là, et rien n'en reste en l'air :
-  aucun de ses deux bouts ne tient seul.
+- L'ossature, en bois plus sombre : quatre poteaux d'angle ; une poutre
+  en haut de chaque long mur (la sablière), posée sur deux poteaux ; un
+  poteau plus haut au milieu de chaque pignon, sous la poutre de faîte ;
+  quatre chevrons par pente, de la sablière au faîte.
+- Le toit : une pente de 30 degrés, quatre longues planches par pente
+  posées sur les chevrons, d'un brun entre celui des murs et celui de
+  l'ossature. Il déborde des murs de 25 cm et des pignons de 20 cm.
+- Les murs : des planches debout entre les poteaux. Elles habillent, elles
+  ne portent rien.
+- Trois fenêtres (une vitre posée sur deux planches basses) et une porte
+  en bois, dans le mur tourné vers le départ. La maison reste en bois ;
+  seules ses vitres sont en verre.
+- Un auvent devant la porte : trois planches inclinées sur deux poutres
+  et quatre poteaux. (Plutôt qu'une cheminée : elle aurait traversé le
+  débord du toit.)
+- Sa taille : murs à 1,5 m (les épaules de la brute), faîte à 2,4 m,
+  soit 60 cm au-dessus de sa tête. Avec des murs plus bas, les directs
+  touchaient le bord du toit et la sablière avant le mur.
+- Elle est à droite de la brute quand elle démarre, à 5 m.
+
+Ce qui tombe, comme partout, c'est ce qui n'est plus porté :
+
+- Une planche de toit frappée garde un trou ; le reste tient sur ses
+  chevrons.
+- Un chevron cassé ne fait rien tomber : les planches tiennent sur les
+  trois autres.
+- Une sablière cassée, ou qui perd un poteau, tombe : ses quatre chevrons
+  et les planches de cette pente tombent avec elle.
+- Le faîte qui perd un poteau tombe, et tout le toit avec lui.
 - Les murs restent debout quand le toit tombe : ils se coupent planche
   par planche.
-- Mesuré au banc : depuis un pignon, le toit entier tombe dès la première
-  combinaison (au deuxième coup) ; depuis un long mur, trois combinaisons
-  coupent quelques planches et font tomber les planches de toit qui
-  étaient dessus.
+- Une vitre éclate au premier coup ; elle éclate aussi dès que plus rien
+  ne la porte.
+- L'auvent tombe quand un poteau de devant est cassé.
+- Mesuré au banc : au milieu d'un pignon, le toit entier tombe au premier
+  coup qui porte (il casse le poteau de faîte) ; devant un long mur, la
+  pente tombe après 4 à 9 coups selon l'endroit (des trous dans le bord
+  du toit, des planches du mur, une vitre, puis la sablière).
 
 ## Comment on avance
 
