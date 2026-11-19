@@ -50,8 +50,11 @@ const PANE := Vector3(1.2, 2.4, 0.04)
 const PANES := 3
 const GLASS_AT := Vector3(0, 0, 8)
 ## A house, on the brute's right as it starts: its eaves at the brute's
-## shoulders, its ridge over its head. HOUSE across (x) and along its ridge
-## (z), between the outer faces of its corner posts.
+## shoulders, its ridge over its head. It is laid out straight, the middle
+## of its floor at HOUSE_AT, and stands turned HOUSE_TURN degrees about
+## the vertical there: askew, as buildings along a street that is not
+## straight will stand. HOUSE across (x, as it is laid out) and along its
+## ridge (z), between the outer faces of its corner posts.
 ## Its frame, in dark wood: four corner posts HOUSE_POST thick and
 ## HOUSE_WALL high; along the top of each long wall a plate, a beam PLATE
 ## high; in the middle of each gable a taller post, under the ridge beam;
@@ -63,12 +66,13 @@ const GLASS_AT := Vector3(0, 0, 8)
 ## nothing: they stop SLACK m short of what is over them. Each long wall
 ## is WALL_BAYS planks wide; a window takes two of them (planks up to
 ## SILL, a pane of glass on those), the door two more, in the wall that
-## faces the start. Each gable has GABLE_BAYS planks on each side of its
+## faces the start (-x). Each gable has GABLE_BAYS planks on each side of its
 ## post, which rise with the roof.
 ## And a porch over the door: a lean-to PORCH out from the wall and wide,
 ## of boards on two beams, on posts PORCH_HIGH high (at the wall, in
 ## front).
 const HOUSE_AT := Vector3(7, 0, 2)
+const HOUSE_TURN := -30.0
 const HOUSE := Vector2(2.4, 3.0)
 const HOUSE_POST := 0.14
 const HOUSE_WALL := 1.5
@@ -143,6 +147,8 @@ var house_gables := PackedInt32Array()
 var house_panes := PackedInt32Array()
 var house_door := -1
 var house_porch := PackedInt32Array()
+## How the house is turned when the bench is laid (degrees, see HOUSE_TURN).
+var house_turn := HOUSE_TURN
 
 
 func _ready() -> void:
@@ -245,15 +251,25 @@ func _lay_bench() -> void:
 	panes.clear()
 	for k in PANES:
 		panes.append(_stand(Matter.GLASS, PANE, GLASS_AT + Vector3((k - (PANES - 1) * 0.5) * PANE.x, 0, 0)))
-	_lay_house(HOUSE_AT)
+	structure.frame = house_frame()
+	_lay_house()
+	structure.frame = Transform3D.IDENTITY
 	structure.build()
 
 
-## The house, the middle of its floor at `at` (see HOUSE). The underside
-## of its rafters is one plane on each side, which passes over the outer
-## edge of the top of the plate and over the edge of the ridge beam; the
-## roof boards lie on the top of the rafters.
-func _lay_house(at: Vector3) -> void:
+## Where the house stands and how it is turned: what takes a point of the
+## house as it is laid out (see HOUSE), from the middle of its floor, to
+## where it is on the bench.
+func house_frame() -> Transform3D:
+	return Transform3D(Basis(Vector3.UP, deg_to_rad(house_turn)), HOUSE_AT)
+
+
+## The house (see HOUSE), laid out straight round the middle of its floor,
+## in the frame of the structure. The underside of its rafters is one
+## plane on each side, which passes over the outer edge of the top of the
+## plate and over the edge of the ridge beam; the roof boards lie on the
+## top of the rafters.
+func _lay_house() -> void:
 	var half := HOUSE * 0.5
 	var slope := atan(HOUSE_PITCH)
 	var plate_top := HOUSE_WALL + PLATE
@@ -276,17 +292,17 @@ func _lay_house(at: Vector3) -> void:
 		var x := side * (half.x - HOUSE_POST * 0.5)
 		for end: float in [-1.0, 1.0]:
 			var foot := Vector3(x, 0, end * (half.y - HOUSE_POST * 0.5))
-			house_posts.append(_stand(Matter.WOOD, post, at + foot, FRAME_SHADE))
+			house_posts.append(_stand(Matter.WOOD, post, foot, FRAME_SHADE))
 		var plate := Vector3(HOUSE_POST, PLATE, HOUSE.y + 2.0 * RAFTER.x)
-		house_plates.append(_stand(Matter.WOOD, plate, at + Vector3(x, HOUSE_WALL, 0), FRAME_SHADE))
+		house_plates.append(_stand(Matter.WOOD, plate, Vector3(x, HOUSE_WALL, 0), FRAME_SHADE))
 	# The ridge beam, on a post in the middle of each gable.
 	var ridge_top := plate_top + (half.x - RIDGE.x * 0.5) * HOUSE_PITCH
 	for end: float in [-1.0, 1.0]:
 		var foot := Vector3(0, 0, end * (half.y - HOUSE_POST * 0.5))
 		var tall := Vector3(HOUSE_POST, ridge_top - RIDGE.y, HOUSE_POST)
-		house_ridge_posts.append(_stand(Matter.WOOD, tall, at + foot, FRAME_SHADE))
+		house_ridge_posts.append(_stand(Matter.WOOD, tall, foot, FRAME_SHADE))
 	var ridge := Vector3(RIDGE.x, RIDGE.y, HOUSE.y + 2.0 * RAKE)
-	house_ridge = _stand(Matter.WOOD, ridge, at + Vector3.UP * (ridge_top - RIDGE.y), FRAME_SHADE)
+	house_ridge = _stand(Matter.WOOD, ridge, Vector3.UP * (ridge_top - RIDGE.y), FRAME_SHADE)
 	# The roof, one slope then the other: rafters from just short of the
 	# middle to past the wall, then the boards across them.
 	var out := half.x + EAVE
@@ -297,7 +313,7 @@ func _lay_house(at: Vector3) -> void:
 		var under := Vector3(side * middle, plate_top + (half.x - middle) * HOUSE_PITCH, 0)
 		var rafter := Vector3((out - from) / cos(slope), RAFTER.y, RAFTER.x)
 		for z in RAFTER_AT:
-			var xf := Transform3D(turn, at + under + Vector3(0, 0, z) + turn.y * RAFTER.y * 0.5)
+			var xf := Transform3D(turn, under + Vector3(0, 0, z) + turn.y * RAFTER.y * 0.5)
 			house_rafters.append(structure.add_piece(Matter.WOOD, xf, rafter, FRAME_SHADE))
 		from = 0.03
 		var wide := (out - from) / BOARDS_A_SLOPE
@@ -306,7 +322,7 @@ func _lay_house(at: Vector3) -> void:
 			middle = from + (k + 0.5) * wide
 			under = Vector3(side * middle, plate_top + (half.x - middle) * HOUSE_PITCH, 0)
 			var lift := RAFTER.y + ROOF_BOARD * 0.5
-			var xf := Transform3D(turn, at + under + turn.y * lift)
+			var xf := Transform3D(turn, under + turn.y * lift)
 			house_roof.append(structure.add_piece(Matter.WOOD, xf, board, ROOF_SHADE))
 	# The long walls, between the corner posts: planks, windows, the door.
 	var bay := (HOUSE.y - 2.0 * HOUSE_POST) / WALL_BAYS
@@ -319,16 +335,16 @@ func _lay_house(at: Vector3) -> void:
 			var z := (k - (WALL_BAYS - 1) * 0.5) * bay
 			var pair := k > 0 and plan[k] == plan[k - 1]
 			if plan[k] == "P":
-				house_walls.append(_stand(Matter.WOOD, Vector3(CLAD, high, bay), at + Vector3(x, 0, z)))
+				house_walls.append(_stand(Matter.WOOD, Vector3(CLAD, high, bay), Vector3(x, 0, z)))
 			elif plan[k] == "W":
-				house_walls.append(_stand(Matter.WOOD, Vector3(CLAD, SILL, bay), at + Vector3(x, 0, z)))
+				house_walls.append(_stand(Matter.WOOD, Vector3(CLAD, SILL, bay), Vector3(x, 0, z)))
 				if pair:
 					var pane := Vector3(PANE_THICK, high - SILL, 2.0 * bay)
-					house_panes.append(_stand(Matter.GLASS, pane, at + Vector3(x, SILL, z - bay * 0.5)))
+					house_panes.append(_stand(Matter.GLASS, pane, Vector3(x, SILL, z - bay * 0.5)))
 			elif pair:
 				door_at = z - bay * 0.5
 				var door := Vector3(PANE_THICK, DOOR, 2.0 * bay)
-				house_door = _stand(Matter.WOOD, door, at + Vector3(x, 0, door_at), DOOR_SHADE)
+				house_door = _stand(Matter.WOOD, door, Vector3(x, 0, door_at), DOOR_SHADE)
 	# The gables, between the corner posts and the post in the middle:
 	# each plank as high as the roof boards let it be at its outer edge.
 	var across := (half.x - HOUSE_POST * 1.5) / GABLE_BAYS
@@ -338,7 +354,7 @@ func _lay_house(at: Vector3) -> void:
 				var outer := HOUSE_POST * 0.5 + (k + 1) * across
 				var top := plate_top + (half.x - outer) * HOUSE_PITCH + RAFTER.y / cos(slope) - SLACK
 				var foot := Vector3(side * (outer - across * 0.5), 0, end * (half.y - CLAD * 0.5))
-				house_gables.append(_stand(Matter.WOOD, Vector3(across, top, CLAD), at + foot))
+				house_gables.append(_stand(Matter.WOOD, Vector3(across, top, CLAD), foot))
 	# The porch, over the door: two posts at the wall and two lower ones in
 	# front, a beam on each pair, boards that lean from one to the other.
 	var reach := PORCH.x - PORCH_POST
@@ -349,18 +365,18 @@ func _lay_house(at: Vector3) -> void:
 		for end: float in [-1.0, 1.0]:
 			var foot := Vector3(x, 0, door_at + end * (PORCH.y - PORCH_POST) * 0.5)
 			var leg := Vector3(PORCH_POST, tall, PORCH_POST)
-			house_porch.append(_stand(Matter.WOOD, leg, at + foot, FRAME_SHADE))
+			house_porch.append(_stand(Matter.WOOD, leg, foot, FRAME_SHADE))
 	for row in 2:
 		var x := -(half.x + PORCH_POST * 0.5 + row * reach)
 		var beam := Vector3(PORCH_POST, PORCH_POST, PORCH.y + 0.1)
-		house_porch.append(_stand(Matter.WOOD, beam, at + Vector3(x, PORCH_HIGH[row], door_at), FRAME_SHADE))
+		house_porch.append(_stand(Matter.WOOD, beam, Vector3(x, PORCH_HIGH[row], door_at), FRAME_SHADE))
 	var lean := Basis(Vector3.BACK, atan(fall_off))
 	var far := half.x + PORCH.x + 0.08
 	var mid := (half.x + far) * 0.5
 	var lies := Vector3(-mid, PORCH_HIGH.x + PORCH_POST - (mid - half.x - PORCH_POST) * fall_off, door_at)
 	var plank := Vector3((far - half.x) / cos(atan(fall_off)), ROOF_BOARD, (PORCH.y + 0.1) / 3.0)
 	for k in 3:
-		var xf := Transform3D(lean, at + lies + Vector3(0, 0, (k - 1) * plank.z) + lean.y * ROOF_BOARD * 0.5)
+		var xf := Transform3D(lean, lies + Vector3(0, 0, (k - 1) * plank.z) + lean.y * ROOF_BOARD * 0.5)
 		house_porch.append(structure.add_piece(Matter.WOOD, xf, plank, ROOF_SHADE))
 
 
@@ -382,8 +398,9 @@ func house_pieces() -> PackedInt32Array:
 	return all
 
 
-## A piece made `of` a matter, `size` across, its foot at `foot`, drawn
-## `shade` darker than its matter. Returns its number.
+## A piece made `of` a matter, `size` across, its foot at `foot` (in the
+## frame of the structure), drawn `shade` darker than its matter. Returns
+## its number.
 func _stand(of: int, size: Vector3, foot: Vector3, shade := 0.0) -> int:
 	var middle := Transform3D(Basis(), foot + Vector3.UP * size.y * 0.5)
 	return structure.add_piece(of, middle, size, shade)

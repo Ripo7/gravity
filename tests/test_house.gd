@@ -5,10 +5,16 @@ extends TestCase
 ## on the rafters. Windows of glass, a door, a porch. What is no longer
 ## carried comes down: a slope of the roof when its plate goes, the whole
 ## roof when the ridge loses a post.
+##
+## It stands askew on the bench (Main.HOUSE_TURN): everything here is told
+## as the house is laid out, straight, and taken to the bench by `house`.
 
 var main: Main
 var p: Player
 var s: Structure
+## From the house as it is laid out (the middle of its floor at zero, the
+## door on the -x side) to where it stands on the bench.
+var house: Transform3D
 
 
 func test_the_house_is_a_frame_clad_in_planks_under_a_roof_that_overhangs() -> void:
@@ -56,19 +62,14 @@ func test_the_house_is_a_frame_clad_in_planks_under_a_roof_that_overhangs() -> v
 		check(s._tilted(q) and not Matter.upright(s.size[q]), "rafter %d leans" % k)
 		check_eq(Array(s.rests_on[q]), [plate, main.house_ridge], "from its plate up to the ridge")
 		check_eq(s.carries[q].size(), 4, "and carries the four boards of its slope")
-		check(
-			(
-				s._bounds(q).end.x - Main.HOUSE_AT.x > half.x + 0.2
-				or Main.HOUSE_AT.x - s._bounds(q).position.x > half.x + 0.2
-			),
-			"it goes past the wall"
-		)
+		var low_end := _laid(s.place[q] * Vector3(s.size[q].x * 0.5, 0, 0))
+		var high_end := _laid(s.place[q] * Vector3(-s.size[q].x * 0.5, 0, 0))
+		check(maxf(absf(low_end.x), absf(high_end.x)) > half.x + 0.2, "it goes past the wall")
 	for k in main.house_roof.size():
 		var q := main.house_roof[k]
-		var up := s.place[q].basis.y
+		var up := house.basis.inverse() * s.place[q].basis.y
 		check(
-			s._tilted(q) and up.x * (s.place[q].origin.x - Main.HOUSE_AT.x) > 0.0,
-			"board %d leans away from the ridge" % k
+			s._tilted(q) and up.x * _laid(s.place[q].origin).x > 0.0, "board %d leans away from the ridge" % k
 		)
 		check_eq(
 			Array(s.rests_on[q]),
@@ -102,15 +103,14 @@ func test_the_house_is_a_frame_clad_in_planks_under_a_roof_that_overhangs() -> v
 		check_eq(s.rests_on[q].size(), 2, "pane %d rests on two planks" % q)
 		check_eq(s.blocks[q], 1, "and is not cut")
 	# The door and its porch are on the side of the start.
-	check(Main.HOUSE_AT.x > 3.0, "(the start is on the -x side)")
-	check(
-		s.place[main.house_door].origin.x < Main.HOUSE_AT.x - half.x + 0.1,
-		"the door is in the wall that faces the start"
-	)
+	var to_start := (Main.START - Main.HOUSE_AT).normalized()
+	check(_turned(Vector3.LEFT).dot(to_start) > 0.8, "(askew as it is, its -x side faces the start)")
+	var door := _laid(s.place[main.house_door].origin)
+	check(door.x < -half.x + 0.1, "the door is in the wall that faces the start")
 	for q in main.house_porch:
-		var at := s.place[q].origin
-		check(at.x < Main.HOUSE_AT.x - half.x, "piece %d of the porch is in front of that wall" % q)
-		check(absf(at.z - s.place[main.house_door].origin.z) < 0.8, "by the door")
+		var at := _laid(s.place[q].origin)
+		check(at.x < -half.x, "piece %d of the porch is in front of that wall" % q)
+		check(absf(at.z - door.z) < 0.8, "by the door")
 		check(s._bounds(q).end.y < eaves + 0.1, "under the eaves")
 	await frames(90)
 	check_eq(s.standing_count, s.pieces, "nothing comes down on its own")
@@ -121,11 +121,11 @@ func test_the_house_is_a_frame_clad_in_planks_under_a_roof_that_overhangs() -> v
 func test_walking_running_and_jumping_break_nothing_of_the_house() -> void:
 	await _load()
 	# At the back wall, then along it; then at the porch.
-	_face(Main.HOUSE_AT + Vector3(5, 0.05, 0.3), Main.HOUSE_AT + Vector3(0, 1, 0.3))
+	_face(_bench(Vector3(5, 0.05, 0.3)), _bench(Vector3(0, 1, 0.3)))
 	p.touch_move = Vector2(0, -1)
 	p.touch_sprint = true
 	await frames(140)
-	var short := p.global_position.x - Main.HOUSE_AT.x - Main.HOUSE.x * 0.5
+	var short := _laid(p.global_position).x - Main.HOUSE.x * 0.5
 	check(short > 0.0 and short < 1.0, "the house stops the brute, which ran right up to it (%.2f m)" % short)
 	for k in 3:
 		p.touch_jump = true
@@ -133,17 +133,17 @@ func test_walking_running_and_jumping_break_nothing_of_the_house() -> void:
 	p.touch_sprint = false
 	p.touch_move = Vector2(1, -0.4)
 	await frames(110)
-	_face(Main.HOUSE_AT + Vector3(-5, 0.05, 0.45), Main.HOUSE_AT + Vector3(0, 1, 0.45))
+	_face(_bench(Vector3(-5, 0.05, 0.45)), _bench(Vector3(0, 1, 0.45)))
 	p.touch_move = Vector2(0, -1)
 	p.touch_sprint = true
 	var inside := 0
 	for k in 160:
 		await frames(1)
-		var off := p.global_position - Main.HOUSE_AT
+		var off := _laid(p.global_position)
 		inside += 1 if absf(off.x) < Main.HOUSE.x * 0.5 and absf(off.z) < Main.HOUSE.y * 0.5 else 0
 	p.touch_move = Vector2.ZERO
 	p.touch_sprint = false
-	short = Main.HOUSE_AT.x - Main.HOUSE.x * 0.5 - p.global_position.x
+	short = -Main.HOUSE.x * 0.5 - _laid(p.global_position).x
 	check(short > 0.3, "the porch stops it short of the door (%.2f m from the wall)" % short)
 	check_eq(inside, 0, "it never went in")
 	for q in s.pieces:
@@ -158,8 +158,8 @@ func test_a_blow_on_a_roof_board_knocks_a_hole_and_the_rest_stays_on_its_rafters
 	var board := main.house_roof[6]
 	var all := s.blocks[board]
 	# Between two rafters, half a metre from the middle of its length.
-	var at := s.place[board].origin + Vector3(0, 0, 0.1)
-	check(s.strike(at, Vector3.LEFT, 2, s.body_of(board)), "a blow lands on a board of the roof")
+	var at := s.place[board].origin + _turned(Vector3(0, 0, 0.1))
+	check(s.strike(at, _turned(Vector3.LEFT), 2, s.body_of(board)), "a blow lands on a board of the roof")
 	check_eq(s.state[board], Structure.STANDS, "the board stays up")
 	var left := 0
 	for i in range(s.first[board], s.first[board] + all):
@@ -171,13 +171,13 @@ func test_a_blow_on_a_roof_board_knocks_a_hole_and_the_rest_stays_on_its_rafters
 	# three others. What was above the cut comes down; a stub stays on the
 	# plate, where it balances.
 	var rafter := main.house_rafters[5]
-	s.hit(rafter, 2.0, Vector3.LEFT, s.place[rafter].origin)
+	s.hit(rafter, 2.0, _turned(Vector3.LEFT), s.place[rafter].origin)
 	var stub := 0
 	for i in range(s.first[rafter], s.first[rafter] + s.blocks[rafter]):
 		if s.stands[i] == 1:
 			stub += 1
 			check(
-				absf(s.centroid[i].x - Main.HOUSE_AT.x) > Main.HOUSE.x * 0.5 - 0.5,
+				absf(_laid(s.centroid[i]).x) > Main.HOUSE.x * 0.5 - 0.5,
 				"what is left of the rafter is over its plate"
 			)
 	check(
@@ -245,7 +245,7 @@ func test_a_pane_bursts_at_a_blow_and_when_nothing_holds_it() -> void:
 	await _load()
 	var pane := main.house_panes[0]
 	var at := s.place[pane].origin
-	check(s.strike(at, Vector3.RIGHT, 2, s.body_of(pane)), "a blow lands on a pane")
+	check(s.strike(at, _turned(Vector3.RIGHT), 2, s.body_of(pane)), "a blow lands on a pane")
 	check_eq(s.state[pane], Structure.BROKEN, "it is gone, all of it")
 	check_eq(s.glitter.bursts, 1, "in glitter")
 	check_eq(s.rubble.live, 0, "which is not loose pieces")
@@ -281,7 +281,7 @@ func test_the_porch_comes_down_when_a_post_under_its_front_beam_goes() -> void:
 
 func test_the_brute_brings_the_whole_roof_down_from_the_middle_of_a_gable() -> void:
 	await _load()
-	_face(Main.HOUSE_AT + Vector3(0, 0.05, 2.7), Main.HOUSE_AT + Vector3.UP)
+	_face(_bench(Vector3(0, 0.05, 2.7)), _bench(Vector3.UP))
 	await frames(5)
 	var thrown := [0]
 	p.blow.connect(func(_at: Vector3, _way: Vector3, _power: int, _on: RID) -> void: thrown[0] += 1)
@@ -309,7 +309,7 @@ func test_the_brute_brings_the_whole_roof_down_from_the_middle_of_a_gable() -> v
 
 func test_the_brute_at_a_long_wall_knocks_holes_then_brings_that_slope_down() -> void:
 	await _load()
-	_face(Main.HOUSE_AT + Vector3(2.45, 0.05, 0), Main.HOUSE_AT + Vector3.UP)
+	_face(_bench(Vector3(2.45, 0.05, 0)), _bench(Vector3.UP))
 	await frames(5)
 	var thrown := [0]
 	var first_on := [-1]
@@ -360,7 +360,22 @@ func _house() -> Array[int]:
 
 ## Piece `q`, which stands upright, is struck near its top: cut there.
 func _cut(q: int) -> void:
-	s.hit(q, 2.0, Vector3.RIGHT, s.place[q].origin + Vector3.UP * (s.size[q].y * 0.5 - 0.1))
+	s.hit(q, 2.0, _turned(Vector3.RIGHT), s.place[q].origin + Vector3.UP * (s.size[q].y * 0.5 - 0.1))
+
+
+## Where the point `of` the house as it is laid out is on the bench.
+func _bench(of: Vector3) -> Vector3:
+	return house * of
+
+
+## Where the point `at` of the bench is in the house as it is laid out.
+func _laid(at: Vector3) -> Vector3:
+	return house.affine_inverse() * at
+
+
+## The way `of` the house as it is laid out, on the bench.
+func _turned(of: Vector3) -> Vector3:
+	return house.basis * of
 
 
 ## Puts the brute at `at`, facing `target`.
@@ -389,6 +404,7 @@ func _load() -> void:
 	await frames(20)
 	p = main.player
 	s = main.structure
+	house = main.house_frame()
 
 
 func _unload() -> void:
