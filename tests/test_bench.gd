@@ -1,8 +1,8 @@
 extends TestCase
 ## The bench itself: a bare ground, one brute, what stands on it to be
-## broken (concrete on one side, metal on the other, wood ahead), no sun shadow, a
-## round shadow that stays on the ground, and the button that puts it all
-## back.
+## broken (concrete on one side, metal on the other, wood ahead, glass
+## behind, a house on its right), no sun shadow, a round shadow that stays
+## on the ground, and the button that puts it all back.
 
 var main: Main
 
@@ -29,8 +29,13 @@ func test_the_bench_is_a_bare_ground_with_one_brute_and_things_to_break() -> voi
 	# And in wood: a post, a palisade of ten planks, a floor of eight
 	# boards on two beams on four posts.
 	# And in glass: three panes.
-	check_eq(s.pieces, 44, "forty-four pieces")
-	check_eq(s.standing_count, 44, "all standing")
+	# And a house, in wood, of forty-seven pieces (see test_house.gd).
+	var house: Array[int] = [main.house_ridge]
+	for group: PackedInt32Array in [main.house_walls, main.house_gables, main.house_roof]:
+		house.append_array(Array(group))
+	check_eq(house.size(), 47, "forty-seven pieces to the house")
+	check_eq(s.pieces, 44 + 47, "ninety-one pieces")
+	check_eq(s.standing_count, s.pieces, "all standing")
 	check_eq(main.panes.size(), 3, "three panes")
 	check_eq(main.planks.size(), 10, "ten planks to the palisade")
 	for beam in main.beams:
@@ -57,6 +62,12 @@ func test_the_bench_is_a_bare_ground_with_one_brute_and_things_to_break() -> voi
 		var made_of := Matter.CONCRETE if q in concrete else (Matter.WOOD if q in wood else Matter.METAL)
 		if q in main.panes:
 			made_of = Matter.GLASS
+		if q in house:
+			var from := s.place[q].origin - p.global_position
+			check(
+				from.x > 5.0 and from.x < 9.0 and absf(from.z) < 4.0, "piece %d is on the brute's right" % q
+			)
+			continue
 		check_eq(s.matter[q], made_of, "piece %d is made of what it should be" % q)
 		check(q in carried or s.rests_on[q].is_empty(), "piece %d stands on the ground" % q)
 		# Concrete to the brute's right as it starts, metal to its left,
@@ -82,10 +93,10 @@ func test_the_bench_is_a_bare_ground_with_one_brute_and_things_to_break() -> voi
 				"piece %d is cut into a few blocks (%d)" % [q, s.blocks[q]]
 			)
 	check_eq(s.rubble.live, 0, "nothing lies loose")
-	# All of it but the glass in front of the brute as it starts, a few
-	# steps away.
+	# All of it but the glass and the house in front of the brute as it
+	# starts, a few steps away.
 	for q in s.pieces:
-		if q in main.panes:
+		if q in main.panes or q in house:
 			continue
 		var to := s.place[q].origin - p.global_position
 		check(to.z < -4.0 and to.z > -21.0 and absf(to.x) < 11.0, "piece %d is in front of the brute" % q)
@@ -133,6 +144,7 @@ func test_the_round_shadow_stays_on_the_ground() -> void:
 func test_rebuilding_puts_the_bench_back() -> void:
 	await _load()
 	var s := main.structure
+	var s_pieces := s.pieces
 	s.hit(main.column, s.strength[main.column], Vector3.FORWARD)
 	s.hit(main.posts[0], s.strength[main.posts[0]], Vector3.FORWARD)
 	s.hit(main.posts[1], s.strength[main.posts[1]], Vector3.FORWARD)
@@ -140,13 +152,22 @@ func test_rebuilding_puts_the_bench_back() -> void:
 	s.hit(main.metal_post, s.strength[main.metal_post], Vector3.FORWARD)
 	s.hit(main.planks[0], s.strength[main.planks[0]], Vector3.FORWARD)
 	s.hit(main.panes[0], 1.0, Vector3.FORWARD)
-	check(s.standing_count < 44 - 4 and s.rubble.live > 0, "things are down")
+	# (One end of the ridge of the house: its whole roof comes down.)
+	for q in s.rests_on[main.house_ridge]:
+		if s.place[q].origin.z > Main.HOUSE_AT.z:
+			s.hit(q, 2.0, Vector3.FORWARD, s.place[q].origin + Vector3.UP * (s.size[q].y * 0.5 - 0.1))
+	check(s.standing_count < s.pieces - 16 and s.rubble.live > 0, "things are down")
 	main.fall = 0.6
 	main.player.global_position = Vector3(3, 0.05, 3)
 	main.rebuild()
 	await frames(5)
 	check(main.structure != s and not is_instance_valid(s), "what stood is gone")
-	check_eq(main.structure.standing_count, 44, "and stands again")
+	check_eq(main.structure.standing_count, main.structure.pieces, "and stands again")
+	check_eq(main.structure.pieces, s_pieces, "all of it")
+	for q in main.house_roof:
+		check_eq(
+			main.structure.state[q], Structure.STANDS, "board %d of the roof of the house is up again" % q
+		)
 	check_eq(main.structure.glitter.bursts, 0, "no glitter is left")
 	check_eq(main.structure.harm[main.metal_post], 0.0, "what was bent is straight")
 	check_eq(main.structure.rubble.live, 0, "nothing lies loose")

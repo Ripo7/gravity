@@ -53,7 +53,10 @@ const steps =
   `s0,0.05,-9.1,0,1,-10;w0.3;h;w2.5;` +
   // One blow at a pane of glass, behind where it started: it bursts
   // (its glitter is drawn by a shader of its own).
-  `s0,0.05,7.1,0,1,8;w0.3;h;w2.5`;
+  `s0,0.05,7.1,0,1,8;w0.3;h;w2.5;` +
+  // Two blows at a gable of the house, a step away: its roof, of boards
+  // that are tilted, comes down (thirteen pieces).
+  `s7,0.05,4.5,7,1,2;w0.3;h;w0.25;h;w3.5`;
 // Software WebGL is slow: loading alone can take a while.
 await page.goto(`http://localhost:8061/index.html?mode=play&prof&steps=${encodeURIComponent(steps)}`, { timeout: 180000 });
 // And a few seconds of game time can take a minute.
@@ -88,6 +91,7 @@ const end = done && done.match(/standing=(\d+)\/(\d+) marked=(\d+) loose=(\d+)/)
 if (done && (!end || Number(end[1]) >= Number(end[2]) || Number(end[4]) < 2)) failures.push(`nothing came down: ${done}`);
 if (end && Number(end[3]) < 4) failures.push(`the column, the two posts and the sheet were not all marked: ${done}`);
 if (end && (Number(end[1]) > Number(end[2]) - 3 || Number(end[4]) < 14)) failures.push(`the column or the wooden post was not cut, the deck did not come loose, or the pane did not burst: ${done}`);
+if (end && Number(end[1]) > Number(end[2]) - 16) failures.push(`the roof of the house did not come down: ${done}`);
 const errors = lines.filter((t) => /SCRIPT ERROR|shader.*(error|fail)|ERROR:/i.test(t));
 if (errors.length) failures.push(`${errors.length} errors, first: ${errors[0]}`);
 console.log(failures.length ? "WEB_FAIL " + failures.join("; ") : "WEB_OK");

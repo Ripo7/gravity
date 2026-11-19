@@ -5,7 +5,7 @@ is being rebuilt from its concept, one step at a time, in greybox:
 [docs/CONCEPT.md](docs/CONCEPT.md) (in French) says what it is to be, and
 comes before the code.
 
-**Where it is now: step 5 of 7, glass.** A bare ground, one brute that
+**Where it is now: step 6 of 7, the house first.** A bare ground, one brute that
 walks, runs, sprints, jumps and throws a three-blow combination, and
 on the bench in front of it the same three things three times: a column,
 a wall, a slab on four columns. In concrete on its right, in metal on its
@@ -40,10 +40,16 @@ not pieces: nothing runs into it.
 What a piece carried comes down when the piece is gone. Walking breaks
 nothing.
 
+A house stands on the bench too, on the brute's right, in wood and as
+tall as the brute: walls of planks, a doorway, a roof of two slopes whose
+boards lean on the long walls and on a ridge beam. Cut the planks under
+a board and it comes down; knock out what holds one end of the ridge and
+the whole roof falls into the house.
+
 What breaks is worked out one material at a time, each on this bench and
 each tried on a phone before the next: concrete, then metal, wood, glass;
-then a house, an office and a tower made of them; then the city, made up
-from a number as before.
+then a house (it is there), an office and a tower made of them; then the
+city, made up from a number as before.
 
 Godot 4.7, GDScript, Jolt physics, Compatibility renderer (WebGL2), so it
 can be played in Safari on an iPhone from each pull request's preview.
@@ -149,6 +155,10 @@ Add `--write-movie out.avi --fixed-fps 30` before `--path` to record a run.
   dent under the fist and the rest stays flat; dented deep enough in one
   place it lies down and opens the fence; the brute does not hold up
   what comes down on it, and does not throw what it walks into); the
+  house (what it is made of and how tall; walking breaks nothing of it;
+  a board of its roof comes down when the wall under it is cut, and the
+  whole roof when the ridge loses an end; a board that is struck snaps;
+  what the brute brings down from a gable and from a long wall); the
   character
   (where the camera sits and how it comes in at a wall, the character
   turning to where it goes, its planted foot not sliding from a slow walk

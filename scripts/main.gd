@@ -49,6 +49,24 @@ const FLOOR_SPAN := 2.8
 const PANE := Vector3(1.2, 2.4, 0.04)
 const PANES := 3
 const GLASS_AT := Vector3(0, 0, 8)
+## A house, in wood, on the brute's right as it starts: as tall as the
+## brute is. HOUSE across (x) and along its ridge (z). Walls of planks that
+## stand side by side, each a piece: the two long ones HOUSE_WALL high,
+## with a doorway DOOR planks wide in the one that faces the start, and
+## the two gables, which rise with the roof. A roof of two slopes, which
+## rises HOUSE_PITCH m a metre: BOARDS_A_SLOPE boards on each side, tilted,
+## from the top of a long wall up to the ridge beam, which the gables
+## carry. No eaves: a straight finds the wall, not the edge of the roof.
+const HOUSE_AT := Vector3(7, 0, 2)
+const HOUSE := Vector2(2.4, 3.0)
+const HOUSE_WALL := 1.45
+const HOUSE_PITCH := 0.375
+const HOUSE_PLANK := Vector2(0.3, 0.06)
+const HOUSE_DOOR := 2
+const GABLE_PLANKS := 8
+const RIDGE := Vector2(0.16, 0.12)
+const ROOF_BOARD := Vector2(0.5, 0.05)
+const BOARDS_A_SLOPE := 6
 
 var player: Player
 var structure: Structure
@@ -79,6 +97,12 @@ var beams := PackedInt32Array()
 var boards := PackedInt32Array()
 ## And in glass: the panes.
 var panes := PackedInt32Array()
+## The house: the planks of its two long walls, those of its two gables,
+## its ridge beam, the boards of its roof.
+var house_walls := PackedInt32Array()
+var house_gables := PackedInt32Array()
+var house_ridge := -1
+var house_roof := PackedInt32Array()
 
 
 func _ready() -> void:
@@ -181,7 +205,60 @@ func _lay_bench() -> void:
 	panes.clear()
 	for k in PANES:
 		panes.append(_stand(Matter.GLASS, PANE, GLASS_AT + Vector3((k - (PANES - 1) * 0.5) * PANE.x, 0, 0)))
+	_lay_house(HOUSE_AT)
 	structure.build()
+
+
+## The house, the middle of its floor at `at` (see HOUSE). The underside of
+## its roof is one plane on each side: it passes over the outer edge of the
+## top of the long wall, and over the edge of the ridge beam.
+func _lay_house(at: Vector3) -> void:
+	var half := HOUSE * 0.5
+	var thick := HOUSE_PLANK.y
+	house_walls.clear()
+	house_gables.clear()
+	house_roof.clear()
+	# The long walls: planks side by side along the ridge. The doorway is
+	# in the middle of the one that faces the start (-x).
+	var along := roundi(HOUSE.y / HOUSE_PLANK.x)
+	for side: float in [-1.0, 1.0]:
+		for k in along:
+			if side < 0.0 and absi(2 * k - (along - 1)) < HOUSE_DOOR:
+				continue
+			var foot := Vector3(side * (half.x - thick * 0.5), 0, (k - (along - 1) * 0.5) * HOUSE_PLANK.x)
+			house_walls.append(_stand(Matter.WOOD, Vector3(thick, HOUSE_WALL, HOUSE_PLANK.x), at + foot))
+	# The gables, between the long walls: each plank as high as the roof
+	# lets it be at its outer edge; the two in the middle carry the ridge.
+	var ridge_top := HOUSE_WALL + (half.x - RIDGE.x * 0.5) * HOUSE_PITCH
+	var across := (HOUSE.x - 2.0 * thick) / GABLE_PLANKS
+	for side: float in [-1.0, 1.0]:
+		for k in GABLE_PLANKS:
+			var x := (k - (GABLE_PLANKS - 1) * 0.5) * across
+			var high := HOUSE_WALL + (half.x - absf(x) - across * 0.5) * HOUSE_PITCH
+			high = minf(high, ridge_top - RIDGE.y)
+			var foot := Vector3(x, 0, side * (half.y - thick * 0.5))
+			house_gables.append(_stand(Matter.WOOD, Vector3(across, high, thick), at + foot))
+	house_ridge = _stand(
+		Matter.WOOD, Vector3(RIDGE.x, RIDGE.y, HOUSE.y), at + Vector3.UP * (ridge_top - RIDGE.y)
+	)
+	# The roof: boards that lean on the long walls and the ridge, their
+	# lower end over the outer edge of the wall, their upper end just
+	# short of the middle.
+	var slope := atan(HOUSE_PITCH)
+	var top := RIDGE.x * 0.125
+	var long := (half.x - top) / cos(slope)
+	for side: float in [-1.0, 1.0]:
+		var turn := Basis(Vector3.BACK, -side * slope)
+		var out := (half.x + top) * 0.5
+		var under := Vector3(side * out, HOUSE_WALL + (half.x - out) * HOUSE_PITCH, 0)
+		for k in BOARDS_A_SLOPE:
+			var z := (k - (BOARDS_A_SLOPE - 1) * 0.5) * ROOF_BOARD.x
+			var middle := at + under + Vector3(0, 0, z) + turn.y * ROOF_BOARD.y * 0.5
+			house_roof.append(
+				structure.add_piece(
+					Matter.WOOD, Transform3D(turn, middle), Vector3(long, ROOF_BOARD.y, ROOF_BOARD.x)
+				)
+			)
 
 
 ## A piece made `of` a matter, `size` across, its foot at `foot`. Returns
