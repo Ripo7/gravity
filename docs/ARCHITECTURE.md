@@ -382,6 +382,60 @@ piece in that frame; `place` is where that puts it in the world.
    in none of 16 since, see docs/PERFORMANCE.md). A block of a piece that
    is not turned has the shape it had.
 
+### An office building: columns that carry, glass that does not
+
+`Main._lay_office` and `_lay_storey`: 71 pieces, concrete and glass, on
+the brute's left as it starts, its front towards the start, askew.
+
+1. **What carries what, from the ground up.** Six columns 0.25 m thick,
+   three along the front and three along the back, carry the first slab.
+   On each slab stands a storey: a low wall all round; on it, piers,
+   which carry the next slab; between the piers, a pane in each window.
+   The last slab is the roof. Panes carry nothing: those of the ground
+   floor stand between the columns, on the ground; all of them stop 4 cm
+   short of the slab over them, so that nothing rests on them.
+2. **The ground floor is taller than a storey** (1.55 m under its slab,
+   0.8 m for a storey): the brute's straights land 1.4 m up. With three
+   storeys of the same height they would have passed over the ground
+   floor, and the columns, the only things that bring the building down,
+   would have been out of reach. The fists reach the panes and the
+   columns of the ground floor, the edge of the first slab from below,
+   and the low wall of the first storey (the leap lands 1.9 m up). What
+   is higher comes down with the rest or not at all.
+3. **A column gives at the third straight that lands on it**, the
+   fourth blow (the leap that ends a combination lands over it, on the
+   low wall of the first storey): its top is knocked out and a stump
+   stands, 0.8 or 1.2 m high. The slab holds as long as its middle
+   is over the columns that are left (`_held`): on five, it does. With
+   the three of a long side cut it comes down, in one; and everything
+   over it is no longer carried and comes down at once (`_let_go`: two
+   slabs, eight low walls, twenty-eight piers; twenty panes burst). It
+   goes over towards the side that was cut, on the columns that still
+   stand, and breaks into its blocks as it lands.
+4. **Glass holds nothing up** (`Rubble._moved`, `Structure.fragile`). A
+   loose body of more than 40 kg that comes to rest on top of a pane
+   makes it give, however gently it came. Until now only a hard landing
+   counted. The slab, its columns cut, went over 4 cm onto the panes of
+   the ground floor: too gently to count, and the whole building stood
+   on glass, its roof where it was.
+5. **A slab that tips has come down by its far edge** (`Rubble._land`).
+   What comes down in one breaks when something stops it once it has
+   come down 0.3 m. That was measured at its middle. The slab landed on
+   the stumps of its columns (1.16 m high, under a slab that was at
+   1.55 m), its middle not 0.3 m lower: it stayed whole, leaning, the
+   two storeys still on it and the roof 0.12 m lower than it was. For a
+   piece that lies flat, how far its far edge has come down as it tipped
+   is now counted too.
+6. **A blow at its foot does not look at all of it** (`_let_go`,
+   `_shed`). When a piece loses something, what rests on it is looked at
+   again. So was everything over that, all the way up, whether it had
+   lost anything or not: one blow that knocked blocks out of the first
+   slab, or cut a column, looked at the seventy pieces of the building,
+   in script, 16 to 22 ms for that step (docs/PERFORMANCE.md). Now it
+   goes on up only through what loses something in its turn: what loses
+   nothing still holds all it held. What comes of the same blows is the
+   same, block for block.
+
 Not there: what falls does nothing to the brute but push it (a deck that
 comes down round a brute that cannot get out stays on its head); blocks
 that lie in one come apart under blows only once they have taken the
@@ -390,7 +444,13 @@ to five of them, not a fist's exact shape; what holds over a hole goes
 by which block is over which, not by weight, so how many holes it takes
 to open a wall to the top depends on how the wall was cut (two or three
 side by side); a slab that tips onto
-what is left under it can stay whole, leaning; metal that lies there no
+what is left under it breaks there only if that stops it short (by 0.8 m
+a second in a step), else it stays whole, leaning; glass gives under
+what comes to rest on top of it, not under what leans against it nor
+under what weighs 40 kg or less; with the front of the office building
+cut, a strip of it can stay up on the columns of the back, as high as
+the floor of its second storey; that building has no door, no stairs and
+nothing inside; metal that lies there no
 longer takes a mark; a sheet that stands dented is
 still a flat wall to the brute; a plate takes nothing from a blow;
 wood only snaps across its grain, never splits along it, and a long
@@ -434,7 +494,11 @@ taken): three panes side by side, 1.2 m wide, 2.4 high, 0.04 thick.
 And a house on its right as it starts and level with it (its porch 5 m
 away): 2.4 m across, 3 m along its ridge, 2.4 m high, of 70 pieces (see
 "A house" above). It stands 30 degrees askew (see "A building that
-stands turned"). In all 114 pieces, drawn as 907 parts.
+stands turned"). And an office building on its left, opposite the
+house (its front 7 m away): 3.6 m across, 2.4 m deep, 3.6 m high, of 71
+pieces (see "An office building" above). Its front faces the start, 20
+degrees off the lines of the ground. In all 185 pieces, drawn as 1077
+parts.
 "Reconstruire" puts them back and the brute where it started, without
 loading anything again (`Main.rebuild`).
 
