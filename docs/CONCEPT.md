@@ -69,8 +69,8 @@ toute sa largeur. Corrigé :
 - Le trou est centré sur le poing : environ 0,9 m de large, à la hauteur
   où le poing touche. (Retour du 18 novembre : le trou partait du sol,
   sous le poing.)
-- Le coup compte là où le poing ou le pied entre dans la pièce, au moment
-  où il y entre, et non là où le geste finit. (Second retour du
+- Le coup compte là où le poing entre dans la pièce, au moment où il y
+  entre, et non là où le geste finit. (Second retour du
   18 novembre : les impacts restaient plus bas que le poing. Le coup
   comptait droit devant, à la hauteur où le poing finit son geste dans le
   vide, 0,7 à 0,85 m ; collée au mur, la brute y entre le poing plus
@@ -91,7 +91,17 @@ toute sa largeur. Corrigé :
   anciens (le crochet et les deux coups d'épée sans épée) sont retirés,
   comme l'uppercut essayé entre-temps.
 - Conséquence : les poings touchent haut (1,4 m, et vers 1,9 m pour le
-  coup sauté). Le bas d'un mur ou d'une planche revient au coup de pied.
+  coup sauté).
+- Ces trois coups sont les seuls (décidé le 19 novembre) : un seul bouton
+  de frappe. Le coup de pied est retiré, son animation n'allait pas. Un
+  coup de pied bas, puis un marteau à deux poings, essayés le même jour,
+  sont écartés aussi.
+- Donc rien ne vise ce qui est bas. Seul le coup sauté redescend : quand
+  les directs ne touchent plus rien, il retombe sur ce qui reste (vers
+  0,9 m) et l'abaisse. Mesuré au banc : une palissade s'ouvre en une
+  douzaine de coups ; un mur de béton garde d'abord une marche de 0,8 m,
+  que la brute franchit en sautant, et il faut une soixantaine de coups,
+  en trois endroits côte à côte, pour qu'elle passe en marchant.
 - Au-dessus du trou d'un seul coup, ce qui reste tient. Au-dessus d'un
   trou plus large, ça tombe : des trous côte à côte ouvrent le mur
   jusqu'en haut.

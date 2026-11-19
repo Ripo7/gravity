@@ -5,7 +5,7 @@ extends Control
 ##   how far it is pushed sets the pace, from a walk to a run, and held at
 ##   full tilt it breaks into a sprint.
 ##   Right half: drag to look.
-##   Bottom-right: the punch button. Above it: jump. Left of it: the kick.
+##   Bottom-right: the punch button. Above it: jump.
 ## Multi-touch is tracked per finger so you can move, look and strike at once.
 
 @export var player: Player
@@ -24,7 +24,6 @@ var _stick_pos := Vector2.ZERO
 var _look_finger := -1
 var _jump_finger := -1
 var _punch_finger := -1
-var _kick_finger := -1
 ## Last position per finger. Deltas are computed from these instead of the
 ## event's `relative`: on the web, Godot pairs multi-touch moves with the
 ## wrong previous finger, which made the camera jump and spin on iOS.
@@ -58,15 +57,6 @@ func punch_radius() -> float:
 	return size.y * 0.11
 
 
-func kick_center() -> Vector2:
-	return Vector2(size.x - size.y * 0.47, size.y * 0.82)
-
-
-## The radius of the kick button.
-func small_radius() -> float:
-	return size.y * 0.08
-
-
 func jump_center() -> Vector2:
 	return Vector2(size.x - size.y * 0.2, size.y * 0.5)
 
@@ -88,11 +78,10 @@ func _input(event: InputEvent) -> void:
 
 
 func _release_all() -> void:
-	var fingers: Array[int] = [_stick_finger, _look_finger, _jump_finger, _punch_finger, _kick_finger]
+	var fingers: Array[int] = [_stick_finger, _look_finger, _jump_finger, _punch_finger]
 	if fingers.max() < 0:
 		return
 	_punch_finger = -1
-	_kick_finger = -1
 	_stick_finger = -1
 	_look_finger = -1
 	_jump_finger = -1
@@ -124,9 +113,6 @@ func _on_touch(e: InputEventScreenTouch) -> void:
 		elif e.position.distance_to(punch_center()) < punch_radius() * 1.3 and _punch_finger < 0:
 			_punch_finger = e.index
 			player.touch_punch = true
-		elif e.position.distance_to(kick_center()) < small_radius() * 1.3 and _kick_finger < 0:
-			_kick_finger = e.index
-			player.touch_kick = true
 		elif Hud.takes(e.position, size):
 			pass  # a button or the slider of the HUD: it sees to it itself
 		elif e.position.x < size.x * 0.5 and _stick_finger < 0:
@@ -141,8 +127,6 @@ func _on_touch(e: InputEventScreenTouch) -> void:
 			_jump_finger = -1
 		elif e.index == _punch_finger:
 			_punch_finger = -1
-		elif e.index == _kick_finger:
-			_kick_finger = -1
 		elif e.index == _stick_finger:
 			_stick_finger = -1
 			player.touch_move = Vector2.ZERO
@@ -191,19 +175,6 @@ func _draw() -> void:
 	draw_line(
 		c + Vector2(-r * 0.45, r * 0.22), c + Vector2(r * 0.3, r * 0.22), Color(1, 1, 1, 0.9), r * 0.16, true
 	)
-	# The kick: a boot, in orange.
-	c = kick_center()
-	r = small_radius()
-	draw_circle(c, r * (1.08 if _kick_finger >= 0 else 1.0), Color(1.0, 0.6, 0.15, 0.6))
-	draw_arc(c, r * 1.12, 0, TAU, 48, Color(1, 1, 1, 0.6), 3.0, true)
-	var boot := PackedVector2Array(
-		[
-			c + Vector2(-r * 0.3, -r * 0.5),
-			c + Vector2(-r * 0.3, r * 0.3),
-			c + Vector2(r * 0.5, r * 0.3),
-		]
-	)
-	draw_polyline(boot, Color(1, 1, 1, 0.9), r * 0.2, true)
 	draw_circle(jump_center(), jump_radius(), ink_strong if _jump_finger >= 0 else ink)
 	var a := jump_center() + Vector2(0, -jump_radius() * 0.35)
 	var w := jump_radius() * 0.4

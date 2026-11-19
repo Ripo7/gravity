@@ -29,7 +29,6 @@ func test_touch_controls_move_look_and_strike() -> void:
 	var buttons := {
 		"punch": [tc.punch_center(), tc.punch_radius() * 1.3],
 		"jump": [tc.jump_center(), tc.jump_radius() * 1.4],
-		"kick": [tc.kick_center(), tc.small_radius() * 1.3],
 	}
 	for a: String in buttons:
 		var top: Vector2 = (buttons[a][0] as Vector2) - Vector2(0, buttons[a][1])
@@ -64,9 +63,13 @@ func test_touch_controls_move_look_and_strike() -> void:
 	check(p.velocity.y > 1.0 or not p.is_on_floor(), "the arrow jumps")
 	tc._on_touch(_touch(3, tc.jump_center(), false))
 	await frames(90)
-	tc._on_touch(_touch(4, tc.kick_center(), true))
+	# There is one button to strike with: where a second one was, left of
+	# it, a thumb looks around.
+	var beside := Vector2(tc.size.x - tc.size.y * 0.47, tc.size.y * 0.82)
+	tc._on_touch(_touch(4, beside, true))
 	await frames(2)
-	check_eq(p.character.state, "kick", "the orange button kicks")
+	check(not p.character.striking(), "a thumb beside the punch button strikes nothing")
+	tc._on_touch(_touch(4, beside, false))
 	# A thumb on the slider of the HUD is the slider's: the camera stays.
 	var on_slider := Hud.fall_rect(tc.size).get_center()
 	yaw = p.yaw

@@ -10,7 +10,7 @@ Two kinds of clips, in one library:
   as they are (library.py): cut, joined end to end, measured.
 - CLIPS: motion capture, from the CMU Graphics Lab Motion Capture Database
   in Bruce Hahne's BVH conversion, put on the mannequin (retarget.py) and
-  retimed.
+  retimed. None for now: the kick is out of the game.
 
 Where the files come from, which clips and which seconds of them:
 assets/fight/SOURCE.md.
@@ -57,11 +57,7 @@ LINGERS = 2.5
 #   slow: how much longer the wind-up and the recovery take than performed
 #   (the blow itself is retimed the same way for all, see SNAP)
 #   steps: the root takes the steps (else the clip stays where it is)
-CLIPS = [
-    # A karateka's front kick, stepping in.
-    dict(name="kick", take="135_04", t0=2.62, t1=3.30, hit=3.11, limb="RightFoot", next=3.26, power=3,
-         slow=(1.2, 1.3), steps=True),
-]
+CLIPS = []  # (none for now: the kick, the one move that was a capture, is out of the game)
 
 
 # The clips made for games. name, the file (without .glb: "_RM" has the

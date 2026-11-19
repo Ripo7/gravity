@@ -375,7 +375,7 @@ func test_things_fall_as_fast_as_they_are_set_to() -> void:
 	await _unload()
 
 
-func test_the_brute_knocks_a_hole_in_the_wall_where_its_fists_land_then_kicks_a_way_through() -> void:
+func test_the_brute_knocks_a_hole_in_the_wall_where_its_fists_land_and_the_leap_lowers_what_is_left() -> void:
 	await _load()
 	var q := main.wall
 	var all := s.blocks[q]
@@ -415,8 +415,8 @@ func test_the_brute_knocks_a_hole_in_the_wall_where_its_fists_land_then_kicks_a_
 		for at in landed:
 			off = minf(off, Vector2(s.centroid[i].x - at.x, s.centroid[i].y - at.y).length())
 		check(off < 0.6, "block %d, knocked out, was by a fist (%.2f m from it)" % [i, off])
-	# The fists land high: what is below the shoulder is for the foot.
-	# More blows, then kicks from a step back, and it walks through.
+	# The straights land high, and nothing aims low: what they leave of
+	# the foot of the wall stops the brute.
 	for k in 1200:
 		if k % 6 == 0:
 			p.punch()
@@ -430,16 +430,28 @@ func test_the_brute_knocks_a_hole_in_the_wall_where_its_fists_land_then_kicks_a_
 		if s.stands[i] == 1 and absf(s.centroid[i].x - Main.WALL_AT.x) < 0.3:
 			low = mini(low, int(s.centroid[i].y * 10.0))
 	check(low < 5, "the fists have left the foot of the wall standing")
+	_face(Main.WALL_AT + Vector3(0, 0.05, 2.0), Main.WALL_AT + Vector3.UP)
+	p.touch_move = Vector2(0, -1)
+	await frames(200)
+	p.touch_move = Vector2.ZERO
+	check(p.global_position.z > Main.WALL_AT.z, "and it stops the brute (z %.2f)" % p.global_position.z)
+	# Only the leap comes down: once the straights meet nothing, its fist
+	# lands on what is left and lowers it. Twelve blows at each of three
+	# spots side by side, again and again, and the brute walks through.
 	var through := false
-	var kicks := 0
-	for attempt in 5:
-		for aside: float in [0.0, -0.35, 0.35]:
-			_face(Main.WALL_AT + Vector3(aside, 0.05, 1.1), Main.WALL_AT + Vector3(aside, 1, 0))
-			await frames(5)
-			p.kick()
-			kicks += 1
-			await frames(80)
-		await _rest(600)
+	landed.clear()
+	for spot in 9:
+		var aside: float = [-0.4, 0.4, 0.0][spot % 3]
+		_face(Main.WALL_AT + Vector3(aside, 0.05, 1.0), Main.WALL_AT + Vector3(aside, 1, 0))
+		await frames(5)
+		var before: int = thrown[0]
+		for k in 1200:
+			if thrown[0] - before >= 12 and not p.character.striking():
+				break
+			if k % 6 == 0 and thrown[0] - before < 12:
+				p.punch()
+			await frames(1)
+		await _rest(1200)
 		_face(Main.WALL_AT + Vector3(0, 0.05, 2.0), Main.WALL_AT + Vector3.UP)
 		p.touch_move = Vector2(0, -1)
 		await frames(220)
@@ -448,7 +460,11 @@ func test_the_brute_knocks_a_hole_in_the_wall_where_its_fists_land_then_kicks_a_
 			through = true
 			break
 	check(through, "the brute walks through (z %.2f)" % p.global_position.z)
-	check(kicks <= 15, "after a few kicks (%d)" % kicks)
+	check(thrown[0] <= 105, "after a few dozen blows (%d)" % thrown[0])
+	var lowest := 9.0
+	for at in landed:
+		lowest = minf(lowest, at.y)
+	check(lowest < 1.1, "the leap came down on what the straights had left (a blow %.2f m up)" % lowest)
 	check_eq(s.state[q], Structure.STANDS, "what is left of the wall stands")
 	check(_standing(s, q) >= all / 4, "a good part of it (%d blocks of %d)" % [_standing(s, q), all])
 	for other in s.pieces:

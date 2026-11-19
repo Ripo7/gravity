@@ -2,13 +2,12 @@ class_name Character
 extends Node3D
 ## A body you see: a mannequin and the tree that blends its clips. It
 ## decides nothing. Whoever owns it (the Player) tells it how fast it goes,
-## whether it is in the air, and when it jumps, lands, punches or kicks; it
-## turns that into a pose, and says when a fist or a foot gets there.
+## whether it is in the air, and when it jumps, lands or punches; it turns
+## that into a pose, and says when a fist gets there.
 ##
 ## Two sets of clips: the mannequin's own (Quaternius, CC0, assets/mannequin:
 ## standing, walking, jumping) and the blows (assets/fight, see SOURCE.md
-## there): made for games, by the same author on the same skeleton, and a
-## kick that is motion capture.
+## there): made for games, by the same author on the same skeleton.
 ##
 ## The tree, from the clips to the pose:
 ##
@@ -19,21 +18,21 @@ extends Node3D
 ##   Jump_Start ─────────────────────────────────┤
 ##   Jump (in the air) ──────────────────────────┤
 ##   Jump_Land ──pace────────────────────────────┤
-##   fight/jab, cross, slam, kick ───────────────┘
+##   fight/jab, cross, slam ─────────────────────┘
 ##
 ## Walk, jog and sprint are stretched to one common cycle so that the same
 ## foot is forward in all three, then mixed by speed; the cycle is the one
 ## at which the mixed stride covers the ground actually covered, so the feet
 ## do not slide.
 
-## A strike starts: one of COMBO, or "kick".
+## A strike starts: one of COMBO.
 signal swung(move: String)
-## The fist or foot of the strike under way is thrown: `limb` is where it
-## is drawn in this step (see limb()). `there`: this is the pose in which
-## its clip has it land. Said every step from SWING before that pose to
-## that pose, or until the blow has landed (see landed()).
+## The fist of the strike under way is thrown: `limb` is where it is drawn
+## in this step (see limb()). `there`: this is the pose in which its clip
+## has it land. Said every step from SWING before that pose to that pose,
+## or until the blow has landed (see landed()).
 signal reached(limb: PackedVector3Array, there: bool)
-## The clip of the strike under way has its fist or foot there.
+## The clip of the strike under way has its fist there.
 signal struck(move: String)
 ## The pose of this step of a strike is set (said before `reached`).
 signal posed
@@ -69,17 +68,16 @@ const COMBO: Array[String] = ["jab", "cross", "slam"]
 ## Steps of a sixtieth add up to a hair under the frame a clip says its
 ## blow lands on: this much (s) short still counts as there.
 const LATE := 0.002
-## A fist or a foot is thrown this long (s) before its clip has it land:
-## from then on, what it touches takes the blow.
+## A fist is thrown this long (s) before its clip has it land: from then
+## on, what it touches takes the blow.
 const SWING := 0.1
-## The limbs that strike, from the body out: where the limb leaves the
-## body, its middle joint, and what lands (the knuckles, the toes).
+## The arms that strike, from the body out: where the arm leaves the body,
+## its middle joint, and what lands (the knuckles).
 const ARM: Array[String] = ["DEF-upper_arm.R", "DEF-forearm.R", "DEF-f_middle.01.R"]
 const ARM_LEFT: Array[String] = ["DEF-upper_arm.L", "DEF-forearm.L", "DEF-f_middle.01.L"]
-const LEG: Array[String] = ["DEF-thigh.R", "DEF-shin.R", "DEF-toe.R"]
 ## The rest of the body, which goes into nothing that stands: its parts
 ## (bones), and how far round its bone each reaches (m). Not the forearm
-## and fist that strike; in a kick, not the right leg below the hip.
+## and fist that strike.
 const BULK := {
 	"DEF-head": 0.16,
 	"DEF-spine.003": 0.2,
@@ -96,7 +94,7 @@ const BULK := {
 const ROOT := "Rig/Skeleton3D:root"
 ## What the body can be doing (see `state`), in the order of the tree's
 ## inputs.
-const STATES: Array[String] = ["ground", "jump", "air", "land", "jab", "cross", "slam", "kick"]
+const STATES: Array[String] = ["ground", "jump", "air", "land", "jab", "cross", "slam"]
 ## One of STATES: what the body is doing.
 var state := "ground"
 var tree: AnimationTree
@@ -111,13 +109,12 @@ var _left := 0.0  # s before the state gives way to "ground" (0: it stays)
 var _fade_back := 0.3  # s that takes
 var _move_for := 0.0  # s of its clip the move under way has played
 var _move_from := 0  # the physics step that took it up
-var _move_out := false  # its clip has had its fist or foot there
+var _move_out := false  # its clip has had its fist there
 var _spent := false  # its blow has landed, or has had its time
 var _arm := PackedInt32Array()  # the bones of ARM
 var _arm_left := PackedInt32Array()
-var _leg := PackedInt32Array()
 var _bulk := PackedInt32Array()  # the bones of BULK
-var _then := ""  # the move asked for next: "punch" or "kick"
+var _again := false  # another blow is asked for, after the one under way
 
 
 func _ready() -> void:
@@ -144,8 +141,6 @@ func _ready() -> void:
 	tree.mixer_applied.connect(_posed)
 	for bone in ARM:
 		_arm.append(skeleton.find_bone(bone))
-	for bone in LEG:
-		_leg.append(skeleton.find_bone(bone))
 	for bone in ARM_LEFT:
 		_arm_left.append(skeleton.find_bone(bone))
 	for bone: String in BULK:
@@ -197,13 +192,13 @@ func land(down: float, along: float) -> void:
 		_go("ground", 0.15)
 
 
-## Is a punch or a kick under way?
+## Is a blow under way?
 func striking() -> bool:
-	return state == "kick" or state in COMBO
+	return state in COMBO
 
 
-## How far from the body (m) the fist or foot of the strike under way is
-## when it gets there, and how hard it is (2 a blow, 3 a heavy one).
+## How far from the body (m) the fist of the strike under way is when it
+## gets there, and how hard it is (2 a blow, 3 a heavy one).
 func reach() -> float:
 	return _about("reach") if striking() else 0.0
 
@@ -212,34 +207,29 @@ func power() -> int:
 	return int(_about("power")) if striking() else 0
 
 
-## How high (m) that fist or foot is.
+## How high (m) that fist is.
 func height() -> float:
 	return _about("height") if striking() else 0.0
 
 
-## The limb that strikes in the move under way, where it is drawn now (in
-## the world): where it leaves the body (the shoulder, the hip), its middle
-## joint (the elbow, the knee) and what lands (the knuckles, the toes).
+## The arm that strikes in the move under way, where it is drawn now (in
+## the world): the shoulder, the elbow and the knuckles.
 func limb() -> PackedVector3Array:
 	var at := PackedVector3Array()
-	var bones := _leg if state == "kick" else (_arm_left if _with_left() else _arm)
-	for bone in bones:
+	for bone in _arm_left if _with_left() else _arm:
 		at.append(skeleton.global_transform * skeleton.get_bone_global_pose(bone).origin)
 	return at
 
 
-## The body but for the limb that strikes in the move under way: where
+## The body but for the fist that strikes in the move under way: where
 ## each part of BULK is drawn now (x, y, z, in the world) and how far
 ## round that it reaches (w).
 func bulk() -> PackedVector4Array:
 	var parts := PackedVector4Array()
 	var k := 0
 	for bone: String in BULK:
-		# (Not the hand that strikes, nor the leg that kicks.)
-		var strikes := (
-			bone in LEG if state == "kick" else bone == ("DEF-hand.L" if _with_left() else "DEF-hand.R")
-		)
-		if not strikes:
+		# (Not the hand that strikes.)
+		if bone != ("DEF-hand.L" if _with_left() else "DEF-hand.R"):
 			var at := skeleton.global_transform * skeleton.get_bone_global_pose(_bulk[k]).origin
 			parts.append(Vector4(at.x, at.y, at.z, BULK[bone]))
 		k += 1
@@ -266,12 +256,13 @@ func root_motion() -> Vector3:
 ## is under way, the next of COMBO follows. Returns false if it
 ## cannot (in the air).
 func punch() -> bool:
-	return _ask("punch", COMBO[0])
-
-
-## A kick: straight ahead with the right leg, stepping in.
-func kick() -> bool:
-	return _ask("kick", "kick")
+	if striking():
+		_again = true
+		return true
+	if state != "ground" and state != "land":
+		return false
+	_start(COMBO[0], 0.08)
+	return true
 
 
 func _physics_process(delta: float) -> void:
@@ -283,38 +274,26 @@ func _physics_process(delta: float) -> void:
 			_go("ground", _fade_back)
 
 
-## A move is asked for: it starts now from standing, or after the move
-## under way (`then`: what to remember; `first`: what starts).
-func _ask(then: String, first: String) -> bool:
-	if striking():
-		_then = then
-		return true
-	if state != "ground" and state != "land":
-		return false
-	_start(first, 0.08)
-	return true
-
-
 func _start(named: String, fade: float) -> void:
 	_move_for = 0.0
 	# (Asked between two steps, by a key: the next one takes it up.)
 	_move_from = Engine.get_physics_frames() + (0 if Engine.is_in_physics_frame() else 1)
 	_move_out = false
 	_spent = false
-	_then = ""
+	_again = false
 	_go(named, fade)
 	swung.emit(named)
 
 
 ## What the clip of the move under way says about itself: "hit" (s before
-## its fist or foot gets there), "next", "reach" (m), "power", "height"
-## (m). See MOVES.
+## its fist gets there), "next", "reach" (m), "power", "height" (m). See
+## MOVES.
 func _about(what: String) -> float:
 	return _clips.get_animation("fight/" + state).get_meta(what, 0.0)
 
 
-## The move under way goes on: its fist or foot gets there, then the move
-## asked for starts, or it stands again.
+## The move under way goes on: its fist gets there, then the move asked
+## for starts, or it stands again.
 func _move(delta: float) -> void:
 	# Its clip starts at the end of the step that takes the move up: nothing
 	# of it plays in that one. (This count and the pose must agree to the
@@ -326,19 +305,14 @@ func _move(delta: float) -> void:
 		_move_out = true
 		struck.emit(state)
 	var length := _clips.get_animation("fight/" + state).length
-	if _then != "" and _move_for >= _about("next"):
-		if _then == "punch":
-			var k := COMBO.find(state)
-			# After a blow, the next one; after a kick, the first.
-			_start(COMBO[(k + 1) % COMBO.size()] if k >= 0 else COMBO[0], 0.12)
-		else:
-			_start(_then, 0.12)
+	if _again and _move_for >= _about("next"):
+		# After a blow, the next one; after the last, the first.
+		_start(COMBO[(COMBO.find(state) + 1) % COMBO.size()], 0.12)
 	elif _move_for >= length:
 		_go("ground", 0.25)
 
 
-## The pose of this step is set. While a fist or a foot is thrown, says
-## where it is.
+## The pose of this step is set. While a fist is thrown, says where it is.
 func _posed() -> void:
 	if not striking():
 		return
@@ -387,17 +361,17 @@ func _build() -> AnimationNodeBlendTree:
 	t.add_node("land_pace", AnimationNodeTimeScale.new())
 	t.connect_node("land_pace", 0, "land")
 	# The blows.
-	for named: String in COMBO + (["kick"] as Array[String]):
+	for named: String in COMBO:
 		t.add_node(named, _clip("fight/" + named))
 	var body := AnimationNodeTransition.new()
 	body.input_count = STATES.size()
 	for k in STATES.size():
 		body.set_input_name(k, STATES[k])
 	body.set_input_reset(0, false)  # the gait is not started over
-	body.allow_transition_to_self = true  # a second kick starts its clip again
+	body.allow_transition_to_self = true  # a state asked for again starts over
 	body.set_input_as_auto_advance(1, true)  # the start of a jump runs into the air
 	t.add_node("state", body)
-	var inputs: Array[String] = ["ground", "jump_start", "air", "land_pace", "jab", "cross", "slam", "kick"]
+	var inputs: Array[String] = ["ground", "jump_start", "air", "land_pace", "jab", "cross", "slam"]
 	for k in inputs.size():
 		t.connect_node("state", k, inputs[k])
 	t.connect_node("output", 0, "state")
