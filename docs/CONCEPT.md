@@ -11,6 +11,12 @@ de combat pour l'instant : on règle d'abord la destruction.
 À garder absolument : la ville générée, différente à chaque partie, et
 l'échelle géante.
 
+L'échelle, revue le 19 novembre : une maison arrive à la tête de la
+brute, un immeuble fait deux fois sa taille, une tour quatre fois. La
+version précédente était plus petite (les maisons lui arrivaient aux
+genoux) : ses trois coups, qui touchent à 1,4 m et 1,9 m, n'atteindraient
+pas ces maisons-là.
+
 ## Le principe
 
 La matière seule dit comment une pièce répond à un choc.
@@ -170,7 +176,37 @@ matières.
 | Immeuble | Béton et verre | Les vitres éclatent, puis chaque dalle tombe à plat quand ses poteaux ont lâché |
 | Tour | Métal et verre | Le verre pleut, l'ossature plie, penche et se couche d'un seul tenant |
 
-Ces mélanges ne se construisent qu'une fois les quatre matières validées.
+Les quatre matières sont validées (le béton et le métal le 18 novembre,
+le bois et le verre le 19) : ces mélanges se construisent maintenant, un
+bâtiment à la fois, chacun validé sur le téléphone avant le suivant.
+
+Une pièce peut être inclinée (une planche de toit) : elle repose là où
+son dessous passe à la hauteur de ce qui est sous elle, et ne porte rien
+elle-même.
+
+La maison sur le banc (étape 6). Choisis le 19 novembre : sa taille (à la
+tête de la brute) et son toit à deux pentes. Le reste est de ma part, à
+valider au banc :
+
+- Elle est en bois et creuse : des murs de planches debout, chaque
+  planche une pièce comme à la palissade, sans plancher. Une ouverture de
+  porte dans le mur tourné vers le départ, trop étroite pour la brute.
+- Le toit : des planches inclinées, posées en bas sur le haut des deux
+  longs murs, en haut sur une poutre de faîte que portent les deux
+  pignons. Pas de débord : un direct trouve le mur, pas le bord du toit.
+- Elle est à droite de la brute quand elle démarre, à 6 m.
+- Ce qui n'est plus porté tombe, comme partout. Une planche de toit
+  descend, entière, quand toutes les planches du mur sous elle sont
+  coupées. Si le faîte perd un de ses deux appuis, il tombe, et tout le
+  toit avec lui, dans la maison.
+- Une planche de toit frappée casse là, et rien n'en reste en l'air :
+  aucun de ses deux bouts ne tient seul.
+- Les murs restent debout quand le toit tombe : ils se coupent planche
+  par planche.
+- Mesuré au banc : depuis un pignon, le toit entier tombe dès la première
+  combinaison (au deuxième coup) ; depuis un long mur, trois combinaisons
+  coupent quelques planches et font tomber les planches de toit qui
+  étaient dessus.
 
 ## Comment on avance
 
@@ -191,9 +227,9 @@ Le plan, une pull request par étape, chacune jouable sur le téléphone
 2. Béton. (fait, validé ; repris pour casser là où le coup touche :
    validé le 18 novembre)
 3. Métal. (repris de même ; validé le 18 novembre)
-4. Bois. (fait : à valider sur le téléphone)
-5. Verre. (en cours)
-6. Maison, immeuble, tour sur le banc.
+4. Bois. (fait ; validé le 19 novembre)
+5. Verre. (fait ; validé le 19 novembre)
+6. Maison, immeuble, tour sur le banc. (en cours : la maison d'abord)
 7. La ville générée revient, faite de ces bâtiments.
 
 ## Ce qui prouvera que c'est bon
