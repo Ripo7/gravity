@@ -47,6 +47,41 @@ Since then, on that phone, with concrete and metal on the bench: 48 to
 53 frames a second while it is broken (see below). The measure above is
 still the way to compare two builds.
 
+### The house
+
+Same machine, same way (headless, 2 cores, `--fixed-fps 60`, real
+gravity). The bench has 114 pieces, drawn as 887 parts (44 and 597
+before): the house is 70 pieces and 290 parts.
+
+What the 70 more standing cost when nothing touches them: the run at the
+top of this page (it never goes near the house), three times, turn
+about with the build before. This build: 0.14 to 0.16 ms at the median,
+99% of the steps under 0.47 to 0.52 ms, the slowest 4.4 to 6.3 ms (one
+step over 6 ms in one run); 85 or 86 loose bodies at the end. The build
+before: 0.15 to 0.16 ms, 99% under 0.44 to 0.54 ms, the slowest 4.2 to
+7.8 ms (one step over 6 ms in one run); 86 to 88 loose bodies. No
+difference that these runs can show.
+
+The house taken apart, three times: two seconds of blows at the middle
+of a gable (the roof comes down), then six at the back wall, at the
+porch and at the other gable (2170 steps):
+
+```sh
+M() { python3 -c "print(';'.join(['h;w0.25']*round($1/0.25)))"; }
+godot --headless --fixed-fps 60 --path . -- --mode=play --prof --steps="\
+s7,0.05,4.7,7,1,2;w0.3;$(M 2);w3;s9.45,0.05,2,7,1,2;w0.3;$(M 6);w3;\
+s4,0.05,2.45,7,1,2.45;w0.3;$(M 6);w3;s7,0.05,-0.7,7,1,2;w0.3;$(M 6);w4"
+```
+
+A physics step cost 0.19 to 0.23 ms at the median, 99% of the steps were
+under 0.62 to 0.69 ms, the slowest took 2.2 ms, none over 6 ms. At the
+end 90 of the 114 pieces still stand (the feet of the walls, the corner
+posts, the plates) and 57 to 60 loose bodies lie there, all asleep.
+
+`index.pck` is 0.66 MB (0.65 before). What drawing 290 more parts costs
+was not measured: the picture is not drawn in these runs. Nothing was
+measured on the phone.
+
 ### Three blows, one button
 
 Same machine, same way (headless, 2 cores, `--fixed-fps 60`, real

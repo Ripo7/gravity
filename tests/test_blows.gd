@@ -262,13 +262,14 @@ func test_a_blow_that_touches_nothing_says_where_its_fist_ended() -> void:
 
 
 func test_the_body_stays_out_of_what_stands_while_it_strikes() -> void:
-	# Right up against the wall, the column and the thinner metal post: the
-	# combination. The moves lunge 0.9 m ahead of where the brute stands in
-	# the leap.
+	# Right up against the wall, the column, the thinner metal post and a
+	# gable of the house, under its roof: the combination. The moves lunge
+	# 0.9 m ahead of where the brute stands in the leap.
 	for target: Array in [
 		["the wall", Main.WALL_AT, 0.6],
 		["the column", Main.COLUMN_AT, 0.6],
-		["the metal post", Main.METAL_POST_AT, 0.5]
+		["the metal post", Main.METAL_POST_AT, 0.5],
+		["the house", Main.HOUSE_AT + Vector3(0, 0, Main.HOUSE.y * 0.5), 0.6]
 	]:
 		await _load()
 		var c := p.character

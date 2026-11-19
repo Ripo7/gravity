@@ -1,8 +1,9 @@
 class_name Structure
 extends Node3D
 ## What stands and can be broken. It is made of pieces (a column, a slab, a
-## panel of a wall): each one an upright box of one matter, which alone says
-## how the piece answers a blow (Matter, docs/CONCEPT.md).
+## panel of a wall): each one a box of one matter, which alone says how the
+## piece answers a blow (Matter, docs/CONCEPT.md). A box stands upright or
+## lies flat; one that lies flat may be tilted (a board of a roof).
 ##
 ## A blow harms the place it lands on, not the whole piece. A piece has a
 ## strength of its own (Matter.strength), however it is cut or drawn: that
@@ -24,8 +25,11 @@ extends Node3D
 ## stays up under what it carried.
 ##
 ## What is no longer carried comes down: a piece rests on the pieces right
-## under it, and when what is left of them no longer holds it up it falls,
-## in one piece; what breaks, breaks when it lands. A metal plate does not
+## under it (where the two are over one another, its underside passes at
+## the height of their top: a rafter that leans on a beam, a board that
+## lies on rafters), and when what is left of them no longer holds it up
+## it falls, in one piece; what breaks, breaks when it lands. Glass does
+## not wait to land: it bursts as soon as nothing holds it. A metal plate does not
 ## wait for that: as soon as one of the pieces under it goes, it sags
 ## there, and folds as it comes down. Only a blow breaks or bends: from the
 ## brute (`strike`), or from something heavy landing on a piece (Rubble).
@@ -133,6 +137,7 @@ var _in_body: Array[PackedInt32Array] = []  # per piece: the blocks its body is 
 var _loose: Array[PackedInt32Array] = []  # per piece: its bodies in the rubble once it has come down
 var _ties: Array[Array] = []  # per piece that stands: what ties to it a plate that has come loose
 var _by_body := {}  # RID -> piece that stands
+var _shade := PackedFloat32Array()  # per piece: how much darker than its matter it is drawn
 var _built := false
 
 
@@ -163,12 +168,16 @@ func _exit_tree() -> void:
 			PhysicsServer3D.free_rid(rid)
 
 
-## Adds a piece made `of` a matter: an upright box of `box` size, its
-## middle at `xf`. Call build() once every piece is in. Returns its number.
-func add_piece(of: int, xf: Transform3D, box: Vector3) -> int:
+## Adds a piece made `of` a matter: a box `box` across, its middle at `xf`,
+## turned as `xf` is (not at all, for all but the rafters and boards of a
+## roof, which are tilted). `shade`: how much darker than its matter it is
+## drawn (0 to 1), to tell the parts of a building apart: its frame, its
+## roof. Call build() once every piece is in. Returns its number.
+func add_piece(of: int, xf: Transform3D, box: Vector3, shade := 0.0) -> int:
 	var p := pieces
 	pieces += 1
 	matter.append(of)
+	_shade.append(shade)
 	size.append(box)
 	place.append(xf)
 	strength.append(Matter.strength(of, box))
@@ -210,14 +219,30 @@ func build() -> void:
 		PhysicsServer3D.body_set_space(body, space)
 		_body.append(body)
 		_by_body[body] = p
-	# Who rests on whom: a piece whose foot is on the head of another.
+	# Who rests on whom: a piece whose underside is on the top of another.
+	# Where the two are over one another, the underside passes at the
+	# height of that top: all over, if neither is tilted or both lean the
+	# same way; along a line, if one leans on the other.
 	for a in pieces:
-		var low := _bounds(a)
+		var foot := _face(a, -1.0)
 		for b in pieces:
 			if a == b:
 				continue
-			var under := _bounds(b)
-			if absf(low.position.y - under.end.y) < TOUCH and _contact(low, under).has_area():
+			var over := foot.intersection(_face(b, 1.0))
+			if over.size.x <= TOUCH or over.size.y <= TOUCH:
+				continue
+			var low := INF
+			var high := -INF
+			for corner: Vector2 in [
+				over.position,
+				over.end,
+				Vector2(over.position.x, over.end.y),
+				Vector2(over.end.x, over.position.y)
+			]:
+				var gap := _face_at(a, -1.0, corner) - _face_at(b, 1.0, corner)
+				low = minf(low, gap)
+				high = maxf(high, gap)
+			if low < TOUCH and high > -TOUCH:
 				rests_on[a].append(b)
 				carries[b].append(a)
 	standing_count = pieces
@@ -405,7 +430,7 @@ func _add_blocks(p: int) -> int:
 	var xf := place[p]
 	var cut := Fracture.cut(size[p], Matter.grain(matter[p], size[p]), cut_seed * 7919 + p * 104729, 0.0)
 	var base := count
-	var tint := Matter.TINT[matter[p]]
+	var tint := Matter.TINT[matter[p]].darkened(_shade[p])
 	if matter[p] == Matter.WOOD:
 		# (Planks side by side are told apart: each its own shade.)
 		tint = tint.darkened(0.14 * float(p % 3) / 2.0)
@@ -825,6 +850,10 @@ func _settle(p: int, way: Vector3) -> void:
 		if bend[p] != null:
 			if not _held(p, PackedInt32Array()) or _sags(p):
 				_drop(p, Vector3.ZERO)
+		elif Matter.BURSTS[matter[p]]:
+			# (Glass does not come down in one: it bursts.)
+			if not _held(p, _standing_of(p)):
+				_burst(p)
 		elif Matter.upright(size[p]):
 			for lump in _lumps(_unheld(p)):
 				_fall(p, lump, way)
@@ -1159,7 +1188,33 @@ func _shape_of(i: int) -> RID:
 	return _hull[i]
 
 
-## The box that holds piece `p` where it stood (pieces stand upright).
+## Is piece `p` tilted: a box whose top does not face straight up?
+func _tilted(p: int) -> bool:
+	return place[p].basis.y.y < 0.999
+
+
+## Where the top of piece `p` (`side` 1) or its underside (-1) is, seen
+## from above (x and z).
+func _face(p: int, side: float) -> Rect2:
+	var half := size[p] * 0.5
+	var first_corner := place[p] * Vector3(-half.x, side * half.y, -half.z)
+	var over := Rect2(first_corner.x, first_corner.z, 0, 0)
+	for x: float in [-half.x, half.x]:
+		for z: float in [-half.z, half.z]:
+			var corner := place[p] * Vector3(x, side * half.y, z)
+			over = over.expand(Vector2(corner.x, corner.z))
+	return over
+
+
+## How high the top of piece `p` (`side` 1) or its underside (-1) is over
+## the point `at` (x and z).
+func _face_at(p: int, side: float, at: Vector2) -> float:
+	var up := place[p].basis.y
+	var middle := place[p] * Vector3(0, side * size[p].y * 0.5, 0)
+	return middle.y - (up.x * (at.x - middle.x) + up.z * (at.y - middle.z)) / up.y
+
+
+## The box that holds piece `p` where it stood.
 func _bounds(p: int) -> AABB:
 	var half := size[p] * 0.5
 	var box := AABB(place[p].origin, Vector3.ZERO)
@@ -1168,12 +1223,3 @@ func _bounds(p: int) -> AABB:
 			box = box.expand(place[p] * Vector3(x, -half.y, z))
 			box = box.expand(place[p] * Vector3(x, half.y, z))
 	return box
-
-
-## Where two boxes are over one another, seen from above (x and z); nothing
-## if they are not.
-func _contact(a: AABB, b: AABB) -> Rect2:
-	var over := Rect2(a.position.x, a.position.z, a.size.x, a.size.z).intersection(
-		Rect2(b.position.x, b.position.z, b.size.x, b.size.z)
-	)
-	return over if over.size.x > TOUCH and over.size.y > TOUCH else Rect2()
