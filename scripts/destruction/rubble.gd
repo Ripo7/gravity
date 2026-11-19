@@ -493,9 +493,16 @@ func _moved(state: PhysicsDirectBodyState3D, i: int) -> void:
 			share.append(impulse)
 			where.append(state.get_contact_collider_position(k))
 	if total <= 0.0:
-		return
-	for k in share.size():
-		share[k] /= total
+		# The engine can tell of a contact a step before it tells what the
+		# contact took: the stop is real all the same (the body lost that
+		# much speed against something), and is shared out evenly.
+		if joined[i] >= 0:
+			return
+		for k in share.size():
+			share[k] = 1.0 / touching
+	else:
+		for k in share.size():
+			share[k] /= total
 	# (What is joined to something is also stopped by that: only what the
 	# bodies it came down on took from it counts.)
 	var lost := total / mass[i] if joined[i] >= 0 else stopped
