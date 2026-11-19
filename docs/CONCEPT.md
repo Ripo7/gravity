@@ -252,6 +252,53 @@ Ce qui tombe, comme partout, c'est ce qui n'est plus porté :
   pente tombe après 4 à 9 coups selon l'endroit (des trous dans le bord
   du toit, des planches du mur, une vitre, puis la sablière).
 
+L'immeuble sur le banc (étape 6). Choisis le 19 novembre : un
+rez-de-chaussée vitré et des étages en béton avec des fenêtres ; trois
+étages, 3,6 m de haut (deux fois la brute), un toit plat ; à gauche de la
+brute au départ, en face de la maison, posé de travers lui aussi. Le
+détail est de ma part, à valider au banc :
+
+- Le rez-de-chaussée : six poteaux en béton, trois devant et trois
+  derrière, et de grandes vitres entre eux sur les quatre côtés. Il est
+  plus haut que les étages (1,55 m sous la dalle) : les directs de la
+  brute touchent à 1,4 m, ils atteignent donc les vitres et les poteaux.
+  Avec trois étages égaux, le rez-de-chaussée aurait été hors d'atteinte.
+- Trois dalles en béton de 15 cm : le plancher de chaque étage et le
+  toit.
+- Chaque étage : un muret bas tout autour, posé sur la dalle ; dessus,
+  des pans de mur entre les fenêtres, qui portent la dalle du dessus ;
+  trois fenêtres devant et derrière, deux de chaque côté.
+- Les vitres ne portent rien.
+- Poteaux et dalles sont d'un gris plus sombre que les murs, pour lire ce
+  qui porte.
+- Pas de porte, pas d'escalier, rien à l'intérieur.
+
+Ce qui tombe dans l'immeuble, comme partout, c'est ce qui n'est plus
+porté :
+
+- Une vitre éclate au premier coup. Une vitre d'étage éclate aussi quand
+  le muret sous elle part.
+- Un poteau cède au troisième direct qui le touche : le haut part, il
+  reste un moignon.
+- La dalle du premier étage tient tant que son milieu est au-dessus des
+  poteaux qui restent. Un poteau en moins : elle tient. Les trois d'un
+  long côté en moins : elle tombe à plat, et tout ce qui est dessus avec
+  elle, murs, vitres et dalles. Le béton se disloque en touchant le sol.
+- Un trou dans un muret, ou un pan de mur en moins, ne fait pas tomber la
+  dalle du dessus tant que les autres pans la portent.
+- Les poings atteignent le rez-de-chaussée et le bas du premier étage ;
+  le deuxième étage ne tombe qu'avec le reste.
+- Le verre ne porte rien : une vitre éclate aussi dès qu'un morceau lourd
+  (plus de 40 kg) vient se poser dessus, même doucement. Sans cela,
+  l'immeuble aux poteaux coupés restait debout sur ses vitrines.
+- Mesuré au banc : devant un poteau, il est coupé au quatrième coup
+  (trois directs le touchent ; le coup sauté de la combinaison passe
+  au-dessus et touche le muret du premier étage), et il reste un moignon
+  de 0,8 ou 1,2 m. Les trois poteaux de devant coupés, soit douze coups,
+  tout ce qui est au-dessus tombe vers la brute et se disloque. Une bande
+  de l'arrière peut rester debout sur les poteaux de derrière, jusqu'à la
+  hauteur du plancher du deuxième étage.
+
 ## Comment on avance
 
 Une matière à la fois, sur un banc d'essai en grey box, validée sur le
@@ -273,9 +320,8 @@ Le plan, une pull request par étape, chacune jouable sur le téléphone
 3. Métal. (repris de même ; validé le 18 novembre)
 4. Bois. (fait ; validé le 19 novembre)
 5. Verre. (fait ; validé le 19 novembre)
-6. Maison, immeuble, tour sur le banc. (en cours : la maison d'abord ;
-   puis un bâtiment qu'on peut poser tourné, prouvé avec la maison ; puis
-   l'immeuble et la tour)
+6. Maison, immeuble, tour sur le banc. (la maison est faite, posée
+   tournée ; l'immeuble est en cours ; puis la tour)
 7. La ville générée revient, faite de ces bâtiments.
 
 ## Ce qui prouvera que c'est bon

@@ -47,6 +47,59 @@ Since then, on that phone, with concrete and metal on the bench: 48 to
 53 frames a second while it is broken (see below). The measure above is
 still the way to compare two builds.
 
+### The office building
+
+Same machine, same way (headless, 2 cores, `--fixed-fps 60`, real
+gravity). The bench has 185 pieces, drawn as 1077 parts (114 and 907
+before): the building is 71 pieces and 170 parts.
+
+The run at the top of this page (it never goes near the building), three
+times, turn about with the build before. This build: 0.10 to 0.13 ms at
+the median, 99% of the steps under 0.51 to 0.58 ms, the slowest 2.3 to
+5.6 ms; 85 to 87 loose bodies at the end. The build before: 0.12 to
+0.14 ms, 99% under 0.48 to 0.56 ms, the slowest 3.1 to 7.7 ms (one step
+over 6 ms in one run); 85 to 87 loose bodies. No difference that these
+runs can show.
+
+The building brought down, three times: blows at a pane of its front,
+then at each of the three columns of its front for 3.5 s, then six
+seconds for it to come down and lie.
+
+```sh
+M() { python3 -c "print(';'.join(['h;w0.25']*round($1/0.25)))"; }
+godot --headless --fixed-fps 60 --path . -- --mode=play --prof --steps="\
+s-6.02,0.05,2.67,-6.77,1,2.95;w0.4;$(M 1.5);w1.5;\
+s-5.74,0.05,3.46,-6.30,1,3.66;w0.4;$(M 3.5);w1.5;\
+s-6.31,0.05,1.88,-6.87,1,2.09;w0.4;$(M 3.5);w1.5;\
+s-6.88,0.05,0.31,-7.45,1,0.52;w0.4;$(M 3.5);w6"
+```
+
+0.15 to 0.18 ms at the median, 99% of the steps under 0.99 to 1.33 ms,
+the slowest 4.4 to 4.9 ms, none over 6 ms. In its worst second a step
+takes 0.79 to 1.04 ms. Up to 78 to 96 loose bodies move at once; 105 to
+112 lie there at the end; 121 or 122 of the 185 pieces stand.
+
+Before `_let_go` was changed (docs/ARCHITECTURE.md, "An office
+building", 6), the same run, three times, turn about with the three
+above: the slowest step took 16.1 to 21.7 ms, and four steps of each run
+took more than 6 ms (10.5 to 21.7 ms): steps in which a blow knocked
+blocks out of the first slab or cut a column. The median was 0.12 to
+0.22 ms and 99% of the steps were under 1.30 to 1.79 ms.
+
+That change leaves what happens as it was. One series of blows (a hole
+in the edge of the first slab, one in a low wall, the three front
+columns; a post of the house, a post under its ridge; two columns under
+the slab of the bench, a post under the deck, a post under the floor,
+four holes in the wall), each build started with the same random
+numbers: after each blow every piece and every block is in the same
+state in both builds, with as many loose bodies; both come to rest
+after the same 305 steps, with the same 204 loose bodies, and where
+those lie adds up to the same point to a tenth of a millimetre.
+
+`index.pck` is 0.66 MB, as before. Nothing was measured on the phone.
+What the picture costs was not measured: nothing is drawn in these runs
+(170 more parts are drawn than before).
+
 ### A building that stands turned
 
 Same machine, same way (headless, 2 cores, `--fixed-fps 60`, real

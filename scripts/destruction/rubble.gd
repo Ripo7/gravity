@@ -125,6 +125,7 @@ var _brute_id := 0
 var _brute_at := Vector3.ZERO
 var _freeze := PackedInt32Array()
 var _hits: Array[Array] = []  # [body, how hard it was stopped (m/s), who by, how much each]
+var _gives := PackedInt32Array()  # pieces that carry nothing on which something has come to rest
 
 
 func _exit_tree() -> void:
@@ -414,6 +415,9 @@ func _physics_process(delta: float) -> void:
 				_ang[k] = Vector3.ZERO
 				PhysicsServer3D.body_set_mode(body[k], PhysicsServer3D.BODY_MODE_STATIC)
 	_freeze.clear()
+	for pane in _gives:
+		structure.hit(pane, 1.0)
+	_gives.clear()
 	if _hits.is_empty():
 		return
 	var hits := _hits
@@ -475,6 +479,14 @@ func _moved(state: PhysicsDirectBodyState3D, i: int) -> void:
 		_quiet[i] += state.step
 		if _quiet[i] >= QUIET_TIME:
 			_freeze.append(i)
+		# What carries nothing (glass) does not hold up what comes to rest
+		# on it either, however gently it came: it gives.
+		if mass[i] > LIGHT and structure.fragile > 0:
+			for k in touching:
+				if state.get_contact_local_normal(k).y >= ON_TOP:
+					var under := structure.standing(state.get_contact_collider(k))
+					if under >= 0 and Matter.BURSTS[structure.matter[under]]:
+						_gives.append(under)
 	else:
 		_quiet[i] = 0.0
 	var stopped := (was - lin).length()
@@ -532,5 +544,8 @@ func _land(
 	if alive[i] == 0 or piece[i] < 0:
 		return
 	var down := _from_high[i] - _xf[i].origin.y
+	if not Matter.upright(structure.size[piece[i]]):
+		# (A slab that tips has come down by its far edge, not by its middle.)
+		down += reach[i] * sqrt(maxf(0.0, 1.0 - _xf[i].basis.y.y * _xf[i].basis.y.y))
 	if down >= BREAKS_FROM or stopped >= sqrt(2.0 * GRAVITY * fall * BREAKS_FROM):
 		structure.lands(i)
