@@ -1,8 +1,9 @@
 class_name Structure
 extends Node3D
 ## What stands and can be broken. It is made of pieces (a column, a slab, a
-## panel of a wall): each one an upright box of one matter, which alone says
-## how the piece answers a blow (Matter, docs/CONCEPT.md).
+## panel of a wall): each one a box of one matter, which alone says how the
+## piece answers a blow (Matter, docs/CONCEPT.md). A box stands upright or
+## lies flat; one that lies flat may be tilted (a board of a roof).
 ##
 ## A blow harms the place it lands on, not the whole piece. A piece has a
 ## strength of its own (Matter.strength), however it is cut or drawn: that
@@ -24,8 +25,10 @@ extends Node3D
 ## stays up under what it carried.
 ##
 ## What is no longer carried comes down: a piece rests on the pieces right
-## under it, and when what is left of them no longer holds it up it falls,
-## in one piece; what breaks, breaks when it lands. A metal plate does not
+## under it (a tilted one, on those its underside passes over at the
+## height of their top; it carries nothing itself), and when what is left
+## of them no longer holds it up it falls, in one piece; what breaks,
+## breaks when it lands. A metal plate does not
 ## wait for that: as soon as one of the pieces under it goes, it sags
 ## there, and folds as it comes down. Only a blow breaks or bends: from the
 ## brute (`strike`), or from something heavy landing on a piece (Rubble).
@@ -163,8 +166,9 @@ func _exit_tree() -> void:
 			PhysicsServer3D.free_rid(rid)
 
 
-## Adds a piece made `of` a matter: an upright box of `box` size, its
-## middle at `xf`. Call build() once every piece is in. Returns its number.
+## Adds a piece made `of` a matter: a box `box` across, its middle at `xf`,
+## turned as `xf` is (not at all, for all but the boards of a roof, which
+## are tilted). Call build() once every piece is in. Returns its number.
 func add_piece(of: int, xf: Transform3D, box: Vector3) -> int:
 	var p := pieces
 	pieces += 1
@@ -210,14 +214,32 @@ func build() -> void:
 		PhysicsServer3D.body_set_space(body, space)
 		_body.append(body)
 		_by_body[body] = p
-	# Who rests on whom: a piece whose foot is on the head of another.
+	# Who rests on whom: a piece whose underside is on the head of another.
+	# Where the two are over one another, the underside passes at the
+	# height of that head: all of it does, if the piece is not tilted.
 	for a in pieces:
-		var low := _bounds(a)
+		var foot := _underside(a)
 		for b in pieces:
-			if a == b:
+			if a == b or _tilted(b):
 				continue
 			var under := _bounds(b)
-			if absf(low.position.y - under.end.y) < TOUCH and _contact(low, under).has_area():
+			var over := foot.intersection(
+				Rect2(under.position.x, under.position.z, under.size.x, under.size.z)
+			)
+			if over.size.x <= TOUCH or over.size.y <= TOUCH:
+				continue
+			var low := INF
+			var high := -INF
+			for corner: Vector2 in [
+				over.position,
+				over.end,
+				Vector2(over.position.x, over.end.y),
+				Vector2(over.end.x, over.position.y)
+			]:
+				var at := _underside_at(a, corner)
+				low = minf(low, at)
+				high = maxf(high, at)
+			if under.end.y > low - TOUCH and under.end.y < high + TOUCH:
 				rests_on[a].append(b)
 				carries[b].append(a)
 	standing_count = pieces
@@ -1159,7 +1181,31 @@ func _shape_of(i: int) -> RID:
 	return _hull[i]
 
 
-## The box that holds piece `p` where it stood (pieces stand upright).
+## Is piece `p` tilted: a box whose top does not face straight up?
+func _tilted(p: int) -> bool:
+	return place[p].basis.y.y < 0.999
+
+
+## Where the underside of piece `p` is, seen from above (x and z).
+func _underside(p: int) -> Rect2:
+	var half := size[p] * 0.5
+	var first_corner := place[p] * Vector3(-half.x, -half.y, -half.z)
+	var over := Rect2(first_corner.x, first_corner.z, 0, 0)
+	for x: float in [-half.x, half.x]:
+		for z: float in [-half.z, half.z]:
+			var corner := place[p] * Vector3(x, -half.y, z)
+			over = over.expand(Vector2(corner.x, corner.z))
+	return over
+
+
+## How high the underside of piece `p` is over the point `at` (x and z).
+func _underside_at(p: int, at: Vector2) -> float:
+	var up := place[p].basis.y
+	var middle := place[p] * Vector3(0, -size[p].y * 0.5, 0)
+	return middle.y - (up.x * (at.x - middle.x) + up.z * (at.y - middle.z)) / up.y
+
+
+## The box that holds piece `p` where it stood.
 func _bounds(p: int) -> AABB:
 	var half := size[p] * 0.5
 	var box := AABB(place[p].origin, Vector3.ZERO)
@@ -1168,12 +1214,3 @@ func _bounds(p: int) -> AABB:
 			box = box.expand(place[p] * Vector3(x, -half.y, z))
 			box = box.expand(place[p] * Vector3(x, half.y, z))
 	return box
-
-
-## Where two boxes are over one another, seen from above (x and z); nothing
-## if they are not.
-func _contact(a: AABB, b: AABB) -> Rect2:
-	var over := Rect2(a.position.x, a.position.z, a.size.x, a.size.z).intersection(
-		Rect2(b.position.x, b.position.z, b.size.x, b.size.z)
-	)
-	return over if over.size.x > TOUCH and over.size.y > TOUCH else Rect2()
