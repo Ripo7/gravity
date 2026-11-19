@@ -7,7 +7,8 @@ What was measured, and how to measure it again.
 # physics. M n: it keeps striking for n seconds, a step from each piece
 # (its straights do not step in). In concrete the column, the wall, two
 # columns under the slab; in metal the post, a sheet, two posts under
-# the deck; in wood the post, the palisade, a post under the floor.
+# the deck; in wood the post, the palisade, a post under the floor; in
+# glass the three panes.
 M() { python3 -c "print(';'.join(['h;w0.25']*round($1/0.25)))"; }
 godot --headless --fixed-fps 60 --path . -- --mode=play --prof --steps="\
 s1.5,0.05,-5.0,1.5,1,-6;$(M 6);w4;s-1.5,0.05,-5.0,-1.5,1,-6;$(M 5);w4;\
@@ -15,7 +16,8 @@ s4.5,0.05,-7.0,4.5,1,-8;$(M 9);w4;s-4.5,0.05,-7.0,-4.5,1,-8;$(M 4);w4;\
 s7.4,0.05,-4.9,7.4,1,-5.9;$(M 6);w3.5;s10.6,0.05,-4.9,10.6,1,-5.9;$(M 6);w8;\
 s-7.4,0.05,-4.9,-7.4,1,-5.9;$(M 5);w3;s-10.6,0.05,-4.9,-10.6,1,-5.9;$(M 5);w10;\
 s0,0.05,-9.1,0,1,-10;$(M 1);w2;s0,0.05,-12.0,0,1,-13;$(M 4.5);w3;\
-s-1.4,0.05,-16.6,-1.4,1,-17.6;$(M 1);w6"
+s-1.4,0.05,-16.6,-1.4,1,-17.6;$(M 1);w6;\
+s0,0.05,7.1,0,1,8;$(M 1);w3;s1.2,0.05,7.1,1.2,1,8;$(M 1);w3;s-1.2,0.05,7.1,-1.2,1,8;$(M 1);w3"
 ```
 
 `--prof` prints the cost of the physics once a second and, at the end, how
@@ -45,12 +47,33 @@ Since then, on that phone, with concrete and metal on the bench: 48 to
 53 frames a second while it is broken (see below). The measure above is
 still the way to compare two builds.
 
+### Glass (step 5)
+
+Headless on a 2-core cloud machine, one physics step per frame
+(`--fixed-fps 60`), things falling at real gravity. Glitter is not in
+the physics: what is measured here is that bursting a pane costs no
+slow step.
+
+The three panes alone (765 steps), five times: a physics step cost
+0.10 to 0.12 ms at the median, 99% of the steps were under 0.25 to
+0.34 ms, the slowest took 2.2 to 2.4 ms, none over 6 ms.
+
+The run at the top of this page (the same as before, then the panes:
+7225 steps), three times: 0.14 to 0.15 ms at the median, 99% under
+0.44 to 0.45 ms, the slowest 2.5, 6.0 and 24.2 ms (one step over 6 ms
+in two runs of three, not at the panes: this machine does that by
+itself); 82 to 88 loose bodies at the end, 20 to 25 at most moving at
+once.
+
+Not measured: what drawing the glitter costs (up to 200 small quads a
+pane for about 2.5 s, one draw call each pane), here or on a phone.
+
 ### The three blows (two straights and the leap)
 
 Headless on a 2-core cloud machine, one physics step per frame
 (`--fixed-fps 60`), things falling at real gravity.
 
-The run at the top of this page changed with the blows (the brute now
+The run this page has at the top changed with the blows (the brute now
 stands a step from each piece, and strikes for other lengths of time:
 6490 steps). Three times: a physics step cost 0.15 to 0.16 ms at the
 median, 99% of the steps were under 0.47 to 0.57 ms, the slowest took

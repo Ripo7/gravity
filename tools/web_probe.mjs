@@ -50,7 +50,10 @@ const steps =
   `f1;w0.3;s1.5,0.05,-5.0,1.5,1,-6;${mash(6.5)};w4;s-1.5,0.05,-5.0,-1.5,1,-6;${mash(2.2)};w2;` +
   `s-4.5,0.05,-7.0,-4.5,1,-8;w0.3;h;w0.4;h;w1.5;` +
   `s-7.4,0.05,-4.9,-7.4,1,-5.9;${mash(6)};w3;` +
-  `s0,0.05,-9.1,0,1,-10;w0.3;h;w2.5`;
+  `s0,0.05,-9.1,0,1,-10;w0.3;h;w2.5;` +
+  // One blow at a pane of glass, behind where it started: it bursts
+  // (its glitter is drawn by a shader of its own).
+  `s0,0.05,7.1,0,1,8;w0.3;h;w2.5`;
 // Software WebGL is slow: loading alone can take a while.
 await page.goto(`http://localhost:8061/index.html?mode=play&prof&steps=${encodeURIComponent(steps)}`, { timeout: 180000 });
 // And a few seconds of game time can take a minute.
@@ -84,7 +87,7 @@ else if (Number(m[3]) > -2 || m[4] !== "true") failures.push(`the brute did not 
 const end = done && done.match(/standing=(\d+)\/(\d+) marked=(\d+) loose=(\d+)/);
 if (done && (!end || Number(end[1]) >= Number(end[2]) || Number(end[4]) < 2)) failures.push(`nothing came down: ${done}`);
 if (end && Number(end[3]) < 4) failures.push(`the column, the two posts and the sheet were not all marked: ${done}`);
-if (end && (Number(end[1]) > Number(end[2]) - 2 || Number(end[4]) < 14)) failures.push(`the column or the wooden post was not cut, or the deck did not come loose: ${done}`);
+if (end && (Number(end[1]) > Number(end[2]) - 3 || Number(end[4]) < 14)) failures.push(`the column or the wooden post was not cut, the deck did not come loose, or the pane did not burst: ${done}`);
 const errors = lines.filter((t) => /SCRIPT ERROR|shader.*(error|fail)|ERROR:/i.test(t));
 if (errors.length) failures.push(`${errors.length} errors, first: ${errors[0]}`);
 console.log(failures.length ? "WEB_FAIL " + failures.join("; ") : "WEB_OK");

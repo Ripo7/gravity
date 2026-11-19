@@ -4,7 +4,7 @@ extends Node3D
 ## in third person, and a few pieces of each matter for it to break. What
 ## breaks is worked out here one matter at a time (docs/CONCEPT.md):
 ## concrete on its right as it starts, metal on its left, wood straight
-## ahead, farther off.
+## ahead, farther off, glass behind it.
 
 ## Where the brute starts.
 const START := Vector3(0, 0.05, 0)
@@ -45,6 +45,10 @@ const BOARD := Vector3(3.2, 0.06, 0.4)
 const BOARDS := 8
 const FLOOR_AT := Vector3(0, 0, -19)
 const FLOOR_SPAN := 2.8
+## And in glass, behind the brute as it starts: PANES panes side by side.
+const PANE := Vector3(1.2, 2.4, 0.04)
+const PANES := 3
+const GLASS_AT := Vector3(0, 0, 8)
 
 var player: Player
 var structure: Structure
@@ -73,6 +77,8 @@ var planks := PackedInt32Array()
 var stilts := PackedInt32Array()
 var beams := PackedInt32Array()
 var boards := PackedInt32Array()
+## And in glass: the panes.
+var panes := PackedInt32Array()
 
 
 func _ready() -> void:
@@ -130,7 +136,7 @@ func _on_blow(at: Vector3, way: Vector3, power: int, on: RID) -> void:
 ## What stands on the bench: in concrete, a column, a wall, a slab on four
 ## columns; in metal, a post, a fence of sheets, a deck on four posts; in
 ## wood, a post, a palisade of planks, a floor of boards on two beams on
-## four posts.
+## four posts; in glass, three panes.
 func _lay_bench() -> void:
 	structure = Structure.new()
 	add_child(structure)
@@ -172,6 +178,9 @@ func _lay_bench() -> void:
 	for k in BOARDS:
 		var along := Vector3(0, STILT.y + BEAM.y, (k - (BOARDS - 1) * 0.5) * BOARD.z)
 		boards.append(_stand(Matter.WOOD, BOARD, FLOOR_AT + along))
+	panes.clear()
+	for k in PANES:
+		panes.append(_stand(Matter.GLASS, PANE, GLASS_AT + Vector3((k - (PANES - 1) * 0.5) * PANE.x, 0, 0)))
 	structure.build()
 
 

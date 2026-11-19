@@ -1,7 +1,7 @@
 class_name Matter
 extends RefCounted
 ## What things are made of. The matter of a piece alone says how the piece
-## answers a blow (docs/CONCEPT.md). Three so far.
+## answers a blow (docs/CONCEPT.md). Four.
 ##
 ## Concrete cracks where it is struck, for all to see, then lets go there:
 ## the few big, heavy blocks round the place are knocked out. It carries:
@@ -18,13 +18,20 @@ extends RefCounted
 ## off in one, long and light, and thrown far. It is cut along its grain,
 ## across the way it is longest. It carries. On the ground it stays in
 ## long pieces; struck again, one comes apart into small wood.
+##
+## Glass bursts, the whole pane, at the first blow wherever it lands: into
+## glitter that falls straight down, lies a moment and is gone (Glitter:
+## not bodies). While it stands it is a wall like any other. It carries
+## nothing.
 
-enum { CONCRETE, METAL, WOOD }
+enum { CONCRETE, METAL, WOOD, GLASS }
 
 ## The paint of each, in greybox.
-const TINT: Array[Color] = [Color(0.68, 0.68, 0.66), Color(0.33, 0.42, 0.56), Color(0.74, 0.56, 0.34)]
+const TINT: Array[Color] = [
+	Color(0.68, 0.68, 0.66), Color(0.33, 0.42, 0.56), Color(0.74, 0.56, 0.34), Color(0.72, 0.88, 0.92)
+]
 ## kg/m3.
-const DENSITY: Array[float] = [2400.0, 7800.0, 600.0]
+const DENSITY: Array[float] = [2400.0, 7800.0, 600.0, 2500.0]
 ## How much a piece takes before it lets go (concrete) or lies down (metal),
 ## in points of blows, for each metre it is thick the way it is thinnest. A
 ## blow is 2 points, a heavy one (the last of the combination, the kick) 3.
@@ -34,23 +41,27 @@ const DENSITY: Array[float] = [2400.0, 7800.0, 600.0]
 ## (Metal takes it in one place: blows elsewhere start another mark.)
 ## Wood gives at the first blow, whatever it is: a post 0.2 m thick takes
 ## 1.6, less than a blow.
-const STRENGTH: Array[float] = [22.5, 70.0, 8.0]
+## Glass gives at the first, however light.
+const STRENGTH: Array[float] = [22.5, 70.0, 8.0, 2.0]
 ## Does it bend (and never break), or break into blocks?
-const BENDS: Array[bool] = [false, true, false]
+const BENDS: Array[bool] = [false, true, false, false]
+## Does a piece of it burst whole at the first blow, into bits that are
+## not bodies (Glitter)?
+const BURSTS: Array[bool] = [false, false, false, true]
 ## A place is this far across (m) each way from where it was first struck:
 ## a blow nearer than this to a place already struck adds to it, and when
 ## the place gives, the blocks whose middle is within this of it go (the
 ## nearest, at least). Concrete loses what is round the fist; wood, the
 ## length of it the blow lands on.
-const PLACE: Array[float] = [0.45, 0.0, 0.22]
+const PLACE: Array[float] = [0.45, 0.0, 0.22, 0.0]
 ## Blocks are knocked out at this speed (m/s, as at real gravity).
-const KNOCK: Array[float] = [3.5, 0.0, 6.0]
+const KNOCK: Array[float] = [3.5, 0.0, 6.0, 0.0]
 ## What a blow cuts off from the rest of a piece is thrown at this speed
 ## (m/s, as at real gravity) along the blow, on top of going over.
 ## Concrete only goes over.
-const THROWN: Array[float] = [0.0, 0.0, 5.5]
+const THROWN: Array[float] = [0.0, 0.0, 5.5, 0.0]
 ## Does what comes down in one break into its blocks when it lands?
-const SHATTERS: Array[bool] = [true, false, false]
+const SHATTERS: Array[bool] = [true, false, false, false]
 ## What breaks is cut into blocks. An upright piece (a wall, a column)
 ## takes blows: its blocks are about BLOCK m across, small enough for what
 ## a blow knocks out to be round the fist. A piece that lies flat (a slab)
@@ -103,6 +114,8 @@ static func strength(of: int, size: Vector3) -> float:
 static func grain(of: int, size: Vector3) -> float:
 	if of == WOOD:
 		return LENGTH
+	if of == GLASS:
+		return 99.0  # one block: it is not cut, it bursts
 	var across := BLOCK if upright(size) else SLAB_BLOCK
 	while _cells(size, across) > MOST_BLOCKS:
 		across *= 1.1

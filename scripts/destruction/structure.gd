@@ -102,6 +102,8 @@ var piece_of := PackedInt32Array()
 var stands := PackedByteArray()
 var mesh: ShardMesh
 var rubble: Rubble
+## What glass turns into when it bursts.
+var glitter: Glitter
 ## The cut depends on it: another number, other blocks.
 var cut_seed := 1
 ## How many pieces still stand.
@@ -137,6 +139,8 @@ var _built := false
 func _init() -> void:
 	mesh = ShardMesh.new()
 	add_child(mesh)
+	glitter = Glitter.new()
+	add_child(glitter)
 	rubble = Rubble.new()
 	rubble.structure = self
 	add_child(rubble)
@@ -273,6 +277,10 @@ func strike(at: Vector3, way: Vector3, power: int, on := RID()) -> bool:
 func hit(p: int, points: float, way := Vector3.ZERO, at := Vector3.INF) -> void:
 	if state[p] == BROKEN:
 		return
+	if Matter.BURSTS[matter[p]]:
+		if points > 0.0:
+			_burst(p)
+		return
 	if bend[p] != null:
 		# (Once it lies there, it has its shape for good.)
 		if state[p] == STANDS:
@@ -317,6 +325,9 @@ func hit(p: int, points: float, way := Vector3.ZERO, at := Vector3.INF) -> void:
 func shatter(p: int, way := Vector3.ZERO) -> void:
 	if state[p] == BROKEN or bend[p] != null:
 		return
+	if Matter.BURSTS[matter[p]]:
+		_burst(p)
+		return
 	for lying in _loose[p].duplicate():
 		break_up(lying)
 	if state[p] != STANDS:
@@ -335,6 +346,21 @@ func shatter(p: int, way := Vector3.ZERO) -> void:
 		)
 		if under:
 			rubble.slip(block)
+	_refresh(p)
+	_let_go(p)
+
+
+## Piece `p`, of a matter that bursts (glass), is gone all at once: what
+## it was made of is no longer drawn nor in anything's way, and its bits
+## fall as glitter, which are not bodies.
+func _burst(p: int) -> void:
+	harm[p] = strength[p]
+	for i in range(first[p], first[p] + blocks[p]):
+		if stands[i] == 1:
+			stands[i] = 0
+			mesh.set_slot(i, 1 + i)
+			mesh.set_body(1 + i, Transform3D(Basis(), centroid[i]), centroid[i], 0.0)
+	glitter.burst(place[p], size[p], Matter.TINT[matter[p]], rubble.fall)
 	_refresh(p)
 	_let_go(p)
 

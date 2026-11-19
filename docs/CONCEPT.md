@@ -110,7 +110,7 @@ toute sa largeur. Corrigé :
 - Ce qui tombe sur la brute la pousse de côté : elle ne le porte pas sur
   la tête. (Les dégâts que la ville fait à la brute restent pour plus
   tard, avec le combat.)
-- Verre : inchangé.
+- Verre : inchangé (voir plus bas).
 
 Le bois sur le banc (étape 4 ; choix de ma part, à valider au banc) :
 
@@ -127,6 +127,20 @@ Le bois sur le banc (étape 4 ; choix de ma part, à valider au banc) :
 - Un poteau cassé sous le plancher : la poutre et les planches qu'il
   portait descendent, entières.
 - La brute traverse le petit bois en le poussant : il ne l'arrête pas.
+
+Le verre sur le banc (étape 5 ; choix de ma part, à valider au banc) :
+
+- Trois vitres côte à côte, derrière la brute quand elle démarre (à 8 m) :
+  les autres côtés sont pris.
+- Une vitre éclate tout entière au premier choc, où qu'il porte : un coup
+  de la brute, ou quelque chose de lourd qui tombe dessus. Ses voisines
+  ne bougent pas.
+- Elle part en paillettes qui tombent droit, restent un instant au sol
+  puis disparaissent. Ce ne sont pas des morceaux : la brute ne bute pas
+  dessus, rien ne s'y empile.
+- Une vitre debout arrête la brute comme un mur. Marcher, courir ou
+  sauter dedans ne la casse pas.
+- Le verre ne porte rien : rien n'est posé dessus sur le banc.
 
 Note sur le béton (étape 2) : la page disait d'abord que ses blocs
 « tombent droit ». Au banc, des blocs laissés là où ils étaient restaient
@@ -167,8 +181,8 @@ Le plan, une pull request par étape, chacune jouable sur le téléphone
 2. Béton. (fait, validé ; repris pour casser là où le coup touche :
    validé le 18 novembre)
 3. Métal. (repris de même ; validé le 18 novembre)
-4. Bois. (en cours : à valider sur le téléphone)
-5. Verre.
+4. Bois. (fait : à valider sur le téléphone)
+5. Verre. (en cours)
 6. Maison, immeuble, tour sur le banc.
 7. La ville générée revient, faite de ces bâtiments.
 

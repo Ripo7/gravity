@@ -71,8 +71,8 @@ the camera), 4 the brute.
 
 The rule is in the concept: a building is an assembly of simple pieces,
 each of one matter, and the matter alone says how a piece answers a
-blow. Three matters so far: concrete, which breaks; wood, which snaps;
-and metal, which bends.
+blow. Four matters: concrete, which breaks; wood, which snaps; metal,
+which bends; glass, which bursts.
 
 ### What all matters share
 
@@ -204,6 +204,27 @@ what differs is in `Matter`, by matter:
    (`_held`: its middle over what is left under it). A post cut under a
    beam: the beam comes down, whole, then every board that lay on it.
 
+### Glass: it bursts, the whole pane
+
+1. **One block** (`Matter.grain`). A piece of glass is not cut: it is
+   its own box, a wall to the brute like any other while it stands.
+2. **At the first blow, wherever it lands** (`Matter.BURSTS`,
+   `Structure._burst`). Any blow at all, from the brute or from
+   something heavy that lands on it, and the piece is gone: no longer
+   drawn, no longer in anything's way. The pieces beside it take
+   nothing.
+3. **Glitter, not pieces** (`Glitter`, `shaders/glitter.gdshader`). What
+   it turns into are small flat bits, 45 for each square metre of pane
+   (200 at most), that start where the pane stood, fall straight down
+   as fast as things fall on the bench, lie where they land 1.2 s and
+   shrink away in 0.6 s. They are not bodies: nothing runs into them,
+   nothing piles up on them, and the physics knows nothing of them. One
+   multimesh for each pane that bursts, each bit placed by the shader
+   from how long ago that was (one number sent to it each frame); it is
+   freed once its last bit is gone.
+4. **It carries nothing.** Nothing rests on glass on the bench. (Glass
+   that loses what it stands on is not handled.)
+
 ### Metal: a blow leaves its mark where it lands
 
 Metal never breaks. What a blow does to it depends on the shape of the
@@ -288,7 +309,7 @@ its shadows were what cost the most. The brute has a round shadow
 physics step, and gets smaller and fainter as the brute goes up.
 
 On it, a few steps in front of the brute, the same three things three
-times.
+times, and panes of glass behind it.
 In concrete, on its right: a column 2.6 m high on its own; a wall in one
 piece (3.6 m wide, 2.4 high, 0.35 thick: wide enough to keep a hole); a
 slab 3.6 m across on four columns 2.2 m high. In metal, on its left: a post 0.2 m thick; a
@@ -297,6 +318,8 @@ In wood, straight ahead and farther off: a post 0.2 m thick (10 m
 away); a palisade of ten planks that stand side by side, each a piece
 (0.3 m wide, 2.4 high, 0.06 thick: 13 m away); a floor of eight boards
 laid across two beams on four posts 2 m high (19 m away).
+In glass, behind the brute as it starts (8 m away: the other sides are
+taken): three panes side by side, 1.2 m wide, 2.4 high, 0.04 thick.
 "Reconstruire" puts them back and the brute where it started, without
 loading anything again (`Main.rebuild`).
 
