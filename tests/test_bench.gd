@@ -29,12 +29,12 @@ func test_the_bench_is_a_bare_ground_with_one_brute_and_things_to_break() -> voi
 	# And in wood: a post, a palisade of ten planks, a floor of eight
 	# boards on two beams on four posts.
 	# And in glass: three panes.
-	# And a house, in wood, of forty-seven pieces (see test_house.gd).
-	var house: Array[int] = [main.house_ridge]
-	for group: PackedInt32Array in [main.house_walls, main.house_gables, main.house_roof]:
-		house.append_array(Array(group))
-	check_eq(house.size(), 47, "forty-seven pieces to the house")
-	check_eq(s.pieces, 44 + 47, "ninety-one pieces")
+	# And a house, in wood with panes of glass, of seventy pieces (see
+	# test_house.gd).
+	var house: Array[int] = []
+	house.assign(main.house_pieces())
+	check_eq(house.size(), 70, "seventy pieces to the house")
+	check_eq(s.pieces, 44 + 70, "a hundred and fourteen pieces")
 	check_eq(s.standing_count, s.pieces, "all standing")
 	check_eq(main.panes.size(), 3, "three panes")
 	check_eq(main.planks.size(), 10, "ten planks to the palisade")
@@ -65,7 +65,7 @@ func test_the_bench_is_a_bare_ground_with_one_brute_and_things_to_break() -> voi
 		if q in house:
 			var from := s.place[q].origin - p.global_position
 			check(
-				from.x > 5.0 and from.x < 9.0 and absf(from.z) < 4.0, "piece %d is on the brute's right" % q
+				from.x > 4.8 and from.x < 9.0 and absf(from.z) < 4.0, "piece %d is on the brute's right" % q
 			)
 			continue
 		check_eq(s.matter[q], made_of, "piece %d is made of what it should be" % q)
@@ -152,10 +152,9 @@ func test_rebuilding_puts_the_bench_back() -> void:
 	s.hit(main.metal_post, s.strength[main.metal_post], Vector3.FORWARD)
 	s.hit(main.planks[0], s.strength[main.planks[0]], Vector3.FORWARD)
 	s.hit(main.panes[0], 1.0, Vector3.FORWARD)
-	# (One end of the ridge of the house: its whole roof comes down.)
-	for q in s.rests_on[main.house_ridge]:
-		if s.place[q].origin.z > Main.HOUSE_AT.z:
-			s.hit(q, 2.0, Vector3.FORWARD, s.place[q].origin + Vector3.UP * (s.size[q].y * 0.5 - 0.1))
+	# (A post under the ridge of the house: its whole roof comes down.)
+	var under := main.house_ridge_posts[1]
+	s.hit(under, 2.0, Vector3.FORWARD, s.place[under].origin + Vector3.UP * (s.size[under].y * 0.5 - 0.1))
 	check(s.standing_count < s.pieces - 16 and s.rubble.live > 0, "things are down")
 	main.fall = 0.6
 	main.player.global_position = Vector3(3, 0.05, 3)

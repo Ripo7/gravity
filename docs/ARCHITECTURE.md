@@ -78,8 +78,8 @@ which bends; glass, which bursts.
 
 1. **Pieces** (`Structure.add_piece`). A piece is a box: a column, a
    slab, a wall, a plank. It stands upright or lies flat; one that lies
-   flat may be tilted (a board of a roof). While it stands whole it is
-   one static box for the physics.
+   flat may be tilted (a rafter, a board of a roof). While it stands
+   whole it is one static box for the physics.
 2. **A blow harms the place it lands on**, not the whole piece. What a
    place takes belongs to the piece (`Matter.strength`): so many points
    of blows for each metre the piece is thick the way it is thinnest,
@@ -96,10 +96,10 @@ which bends; glass, which bursts.
    otherwise it comes down in one, a loose body. (A wall or a column is
    looked at block by block, and a metal plate sags: see below.) A
    tilted piece rests on the pieces its underside passes over at the
-   height of their top (`Structure.build`, `_underside_at`): a board of
-   a roof, on the wall under its lower end and on the ridge beam under
-   its upper end. It is held like a slab, by where its middle is over
-   them seen from above, and carries nothing itself.
+   height of their top (`Structure.build`, `_face_at`): a rafter, on the
+   plate under its lower end and on the ridge beam under its upper end;
+   a board, on the rafters. It is held like a slab, by where its middle
+   is over them seen from above.
 4. **Only a blow breaks or bends.** From the brute: the blow lands
    where its fist or foot first touches something (see "Where a blow
    lands" below); that takes it, there (`Structure.strike`), and what
@@ -288,38 +288,54 @@ piece (`Bend`): a post, a sheet or a plate.
 8. **It never breaks**, however hard it lands (`Structure.shatter`
    leaves it alone).
 
-### A house: wood that carries wood
+### A house: a frame that carries, planks that clad
 
-Nothing new breaks here: every piece is wood and answers as wood does.
-What is new is what rests on what (`Main._lay_house`).
+Nothing new breaks here: the house is wood, with panes of glass, and
+each answers as it does elsewhere. What is new is what rests on what
+(`Main._lay_house`), and three things the engine learnt for it.
 
-1. **Walls of planks.** Each plank a piece, as in the palisade, 0.3 m
-   wide and 0.06 thick. The two long walls are 1.45 m high: a straight,
-   which goes in 1.4 m up, finds the wall. The planks of the two gables
-   rise with the roof; the two in the middle of each stop under the
-   ridge beam and carry it.
-2. **A roof that leans.** Six boards on each slope, tilted 20.6 degrees
-   (0.375 m up for a metre across). The underside of a slope is one
-   plane: it passes over the outer edge of the top of the long wall and
-   over the edge of the top of the ridge beam, which is how the planks
-   and the beam are found to carry the boards. No eaves: an edge of
-   roof ahead of the wall would take the straights instead of it.
-3. **What comes down.** A board comes down whole once every plank under
-   its lower end has lost its head. The ridge is held by two planks at
-   each end; when one end has none it falls, and the twelve boards,
-   left with a wall under one end only, fall with it, into the house. A
-   board that is struck snaps there, and neither of its ends stays up
-   alone.
-4. **What the brute does to it.** From a gable, a step away: the left
-   straight snaps one of the two planks under the ridge, and the right
-   one, which stops short of the gable, counts on what a fist's width
-   touches there: the other. The roof is down at the second blow. From
-   a long wall: the straights cut planks 1.4 m up, the leap lands on
-   the roof 0.3 m in from the wall, 1.6 m up, and the boards over cut
-   planks come down one at a time.
-5. **As tall as the brute.** The top of the roof is 1.95 m up; the
-   brute is 1.8 m tall. The doorway, 0.6 m wide and as high as the
-   wall, is narrower and lower than the brute.
+1. **A frame.** Four corner posts 0.14 m thick and 1.5 m high. On each
+   pair along the ridge, a plate (a beam 0.1 m high). In the middle of
+   each gable a taller post, and on those two the ridge beam. On each
+   slope four rafters, which lean 30 degrees from the plate up to the
+   ridge and go 0.25 m past the wall. It is drawn darker than the rest
+   (`Structure.add_piece`, `shade`).
+2. **A roof on the rafters.** Four boards on each slope, laid along the
+   ridge, 3.4 m long: they go 0.2 m past each gable. A tilted piece can
+   carry another: where two pieces are over one another, the one rests
+   on the other if its underside passes at the height of the other's
+   top (`Structure.build`, `_face_at`). That is all over, for a board on
+   a rafter that leans the same way, and along a line for a rafter on a
+   plate.
+3. **Planks that carry nothing.** The walls are planks that stand
+   between the posts, as in the palisade. They stop 0.04 m short of what
+   is over them, so nothing rests on them: the house stands on its
+   frame. The planks of the gables rise with the roof, behind the end
+   rafters.
+4. **Windows, a door, a porch.** A window is a pane of glass on two
+   low planks; glass that nothing holds any more bursts where it is
+   (`Structure._settle`), it does not come down in one. The door is a
+   panel of darker wood, in the wall that faces the start. The porch is
+   a lean-to over it: four posts, two beams, three boards that lean from
+   one beam to the other.
+5. **What comes down.** A board that is struck keeps a hole and stays on
+   its rafters. A rafter that is cut loses what was above the cut, and
+   the boards stay on the three others. A plate that is cut, or loses a
+   post, comes down with its four rafters and the four boards of that
+   slope. The ridge that loses a post comes down with the whole roof.
+   The walls stay up: they are cut plank by plank.
+6. **What the brute does to it.** At the middle of a gable, the first
+   blow that lands cuts the post under the ridge (the leap, 1.9 m up,
+   from a step and a bit away): the roof is down. At a long wall the
+   straights knock holes in the edge of the roof and cut planks 1.4 m
+   up, a pane bursts; when one of them takes the underside of the plate
+   (1.5 m up), that slope comes down: at the fourth to the ninth blow,
+   by where it stands.
+7. **Its size.** Walls to the brute's shoulders (1.5 m), the top of the
+   roof 2.4 m up; the brute is 1.8 m tall. With walls 1.35 m high the
+   straights met the edge of the roof and the plate before the wall.
+   The porch is lower (1.0 to 1.4 m): from in front of it only the leap
+   lands on it; from beside it the straights take its boards.
 
 Not there: what falls does nothing to the brute but push it (a deck that
 comes down round a brute that cannot get out stays on its head); blocks
@@ -338,10 +354,12 @@ not only where it is struck; a plank that is snapped keeps its foot
 standing, however short; the brute's body goes through what lies loose,
 small wood included, as it lunges;
 pieces are boxes that stand upright or lie flat; only one that lies flat
-can be tilted, about one level axis, and it carries nothing; what holds a
-tilted piece goes by where it is over what it rests on, seen from above,
-not by how it leans or where it would slide; the house has no floor, no
-eaves and no frame but its ridge beam (its walls are its planks).
+can be tilted, about one level axis; what holds a tilted piece goes by
+where it is over what it rests on, seen from above, not by how it leans
+or where it would slide (the stub of a cut rafter balances on its
+plate); the house has no floor, its door does not open, its gables show
+small steps under the end rafters (a plank's top is level), and it
+stands one way only (its ridge from front to back).
 
 ## The bench
 
@@ -367,10 +385,9 @@ away); a palisade of ten planks that stand side by side, each a piece
 laid across two beams on four posts 2 m high (19 m away).
 In glass, behind the brute as it starts (8 m away: the other sides are
 taken): three panes side by side, 1.2 m wide, 2.4 high, 0.04 thick.
-And a house, in wood, on its right as it starts and level with it (its
-near wall 5.8 m away): 2.4 m across, 3 m along its ridge, 1.95 m high,
-of 47 pieces (see "A house" above). In all 91 pieces, drawn as 777
-parts.
+And a house on its right as it starts and level with it (its porch 5 m
+away): 2.4 m across, 3 m along its ridge, 2.4 m high, of 70 pieces (see
+"A house" above). In all 114 pieces, drawn as 887 parts.
 "Reconstruire" puts them back and the brute where it started, without
 loading anything again (`Main.rebuild`).
 

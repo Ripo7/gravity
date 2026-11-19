@@ -1,55 +1,117 @@
 extends TestCase
-## The house on the bench: wood, hollow, as tall as the brute. Walls of
-## planks that stand, a roof of two slopes whose boards lean on the long
-## walls and on the ridge beam. What is no longer carried comes down: the
-## board over a wall that is cut, the whole roof when the ridge loses an
-## end.
+## The house on the bench. A frame of dark wood (corner posts, a plate
+## along each long wall, a post under each end of the ridge beam, rafters)
+## clad in planks that carry nothing, under a roof that overhangs: boards
+## on the rafters. Windows of glass, a door, a porch. What is no longer
+## carried comes down: a slope of the roof when its plate goes, the whole
+## roof when the ridge loses a post.
 
 var main: Main
 var p: Player
 var s: Structure
 
 
-func test_the_house_stands_as_tall_as_the_brute_under_a_roof_of_two_slopes() -> void:
+func test_the_house_is_a_frame_clad_in_planks_under_a_roof_that_overhangs() -> void:
 	await _load()
-	check_eq(main.house_walls.size(), 18, "eighteen planks to its long walls: ten a side, less a doorway")
+	check_eq(main.house_posts.size(), 4, "four corner posts")
+	check_eq(main.house_plates.size(), 2, "two plates")
+	check_eq(main.house_ridge_posts.size(), 2, "two posts under the ridge")
+	check_eq(main.house_rafters.size(), 8, "four rafters to each slope")
+	check_eq(main.house_roof.size(), 8, "four boards to each slope")
+	check_eq(main.house_walls.size(), 16, "sixteen planks to the long walls, those under the windows too")
 	check_eq(main.house_gables.size(), 16, "eight to each gable")
-	check_eq(main.house_roof.size(), 12, "six boards to each slope of its roof")
+	check_eq(main.house_panes.size(), 3, "three panes")
+	check_eq(main.house_porch.size(), 9, "a porch of four posts, two beams, three boards")
+	check_eq(_house().size(), 70, "seventy pieces")
+	var half := Main.HOUSE * 0.5
 	var top := 0.0
+	var eaves := 9.0
 	for q in _house():
-		check_eq(s.matter[q], Matter.WOOD, "piece %d is wood" % q)
+		check_eq(
+			s.matter[q],
+			Matter.GLASS if q in main.house_panes else Matter.WOOD,
+			"piece %d: wood, or glass" % q
+		)
 		top = maxf(top, s._bounds(q).end.y)
+	for q in main.house_roof:
+		eaves = minf(eaves, s._bounds(q).position.y)
 	var head := p.character.bulk()[0]
 	var tall := head.y + head.w - p.global_position.y
 	check(tall > 1.6 and tall < 2.0, "(the brute is %.2f m tall)" % tall)
-	check(absf(top - tall) < 0.3, "its ridge is at the brute's head (%.2f m up)" % top)
-	var door := 0
-	for q in main.house_walls:
-		var at := s.place[q].origin - Main.HOUSE_AT
-		check(absf(absf(at.x) - 1.17) < 0.01, "plank %d is in one of the two long walls" % q)
-		check(not s._tilted(q) and s.rests_on[q].is_empty(), "it stands on the ground")
-		if at.x < 0.0 and absf(at.z) < 0.3:
-			door += 1
-	check_eq(door, 0, "a doorway in the middle of the wall that faces the start")
-	check(Main.HOUSE_AT.x > 3.0, "(the start is on that side)")
-	# The roof: boards tilted away from the ridge, each on the ridge and on
-	# the wall under it.
-	for q in main.house_roof:
+	check(eaves > 1.3 and eaves < tall, "its eaves are at the brute's shoulders (%.2f m up)" % eaves)
+	check(top > tall + 0.3 and top < tall + 0.8, "its ridge over the brute's head (%.2f m up)" % top)
+	# The frame carries the roof, and is drawn darker than what clads it.
+	for k in 2:
+		var plate := main.house_plates[k]
+		var posts := [main.house_posts[2 * k], main.house_posts[2 * k + 1]]
+		check_eq(Array(s.rests_on[plate]), posts, "plate %d rests on its two corner posts" % k)
+		check_eq(s.carries[plate].size(), 4, "and carries four rafters")
+	check_eq(
+		Array(s.rests_on[main.house_ridge]), Array(main.house_ridge_posts), "the ridge rests on its two posts"
+	)
+	check_eq(s.carries[main.house_ridge].size(), 8, "and carries the eight rafters")
+	for k in main.house_rafters.size():
+		var q := main.house_rafters[k]
+		var plate := main.house_plates[k / 4]
+		check(s._tilted(q) and not Matter.upright(s.size[q]), "rafter %d leans" % k)
+		check_eq(Array(s.rests_on[q]), [plate, main.house_ridge], "from its plate up to the ridge")
+		check_eq(s.carries[q].size(), 4, "and carries the four boards of its slope")
+		check(
+			(
+				s._bounds(q).end.x - Main.HOUSE_AT.x > half.x + 0.2
+				or Main.HOUSE_AT.x - s._bounds(q).position.x > half.x + 0.2
+			),
+			"it goes past the wall"
+		)
+	for k in main.house_roof.size():
+		var q := main.house_roof[k]
 		var up := s.place[q].basis.y
-		var out := s.place[q].origin.x - Main.HOUSE_AT.x
-		check(s._tilted(q) and up.y > 0.9, "board %d is tilted, a little" % q)
-		check(up.x * out > 0.0, "away from the ridge")
-		check(main.house_ridge in s.rests_on[q], "it rests on the ridge")
-		check(not _under(q).is_empty(), "and on the wall under it (%d planks)" % _under(q).size())
-		check(s.carries[q].is_empty(), "it carries nothing")
-		check_eq(s.blocks[q], 3, "it is cut into three lengths")
-	var ends := [0, 0]
-	for q in s.rests_on[main.house_ridge]:
-		check(q in main.house_gables, "the ridge rests on a plank of a gable")
-		check(absf(s.place[q].origin.x - Main.HOUSE_AT.x) < 0.2, "one of the two in the middle")
-		ends[0 if s.place[q].origin.z < Main.HOUSE_AT.z else 1] += 1
-	check_eq(ends, [2, 2], "two at each end")
-	check_eq(s.carries[main.house_ridge].size(), 12, "and carries the twelve boards")
+		check(
+			s._tilted(q) and up.x * (s.place[q].origin.x - Main.HOUSE_AT.x) > 0.0,
+			"board %d leans away from the ridge" % k
+		)
+		check_eq(
+			Array(s.rests_on[q]),
+			Array(main.house_rafters.slice(4 * (k / 4), 4 * (k / 4) + 4)),
+			"on the four rafters of its slope"
+		)
+		check(s.carries[q].is_empty(), "and carries nothing")
+		check(s.size[q].z > Main.HOUSE.y + 0.3, "it goes past both gables")
+	var frame: Array[int] = [main.house_ridge]
+	for group: PackedInt32Array in [
+		main.house_posts, main.house_plates, main.house_ridge_posts, main.house_rafters
+	]:
+		frame.append_array(Array(group))
+	for q in frame:
+		check(s._shade[q] > s._shade[main.house_roof[0]], "piece %d of the frame is darker than the roof" % q)
+	check(s._shade[main.house_roof[0]] > 0.1, "which is darker than the walls")
+	# What clads it carries nothing, but a pane on the two planks under it.
+	var sills := 0
+	for q in main.house_walls:
+		check(s.rests_on[q].is_empty(), "plank %d stands on the ground" % q)
+		check_eq(s._shade[q], 0.0, "in plain wood")
+		if s.size[q].y < 1.0:
+			sills += 1
+			check_eq(s.carries[q].size(), 1, "plank %d, under a window, carries its pane" % q)
+		else:
+			check(s.carries[q].is_empty(), "plank %d carries nothing" % q)
+	check_eq(sills, 6, "two planks under each window")
+	for q in main.house_gables:
+		check(s.rests_on[q].is_empty() and s.carries[q].is_empty(), "gable plank %d carries nothing" % q)
+	for q in main.house_panes:
+		check_eq(s.rests_on[q].size(), 2, "pane %d rests on two planks" % q)
+		check_eq(s.blocks[q], 1, "and is not cut")
+	# The door and its porch are on the side of the start.
+	check(Main.HOUSE_AT.x > 3.0, "(the start is on the -x side)")
+	check(
+		s.place[main.house_door].origin.x < Main.HOUSE_AT.x - half.x + 0.1,
+		"the door is in the wall that faces the start"
+	)
+	for q in main.house_porch:
+		var at := s.place[q].origin
+		check(at.x < Main.HOUSE_AT.x - half.x, "piece %d of the porch is in front of that wall" % q)
+		check(absf(at.z - s.place[main.house_door].origin.z) < 0.8, "by the door")
+		check(s._bounds(q).end.y < eaves + 0.1, "under the eaves")
 	await frames(90)
 	check_eq(s.standing_count, s.pieces, "nothing comes down on its own")
 	check_eq(s.rubble.live, 0, "nothing comes off")
@@ -58,28 +120,32 @@ func test_the_house_stands_as_tall_as_the_brute_under_a_roof_of_two_slopes() -> 
 
 func test_walking_running_and_jumping_break_nothing_of_the_house() -> void:
 	await _load()
-	_face(Main.HOUSE_AT + Vector3(-5, 0.05, 0.9), Main.HOUSE_AT + Vector3(0, 1, 0.9))
+	# At the back wall, then along it; then at the porch.
+	_face(Main.HOUSE_AT + Vector3(5, 0.05, 0.3), Main.HOUSE_AT + Vector3(0, 1, 0.3))
 	p.touch_move = Vector2(0, -1)
 	p.touch_sprint = true
 	await frames(140)
-	var short := Main.HOUSE_AT.x - Main.HOUSE.x * 0.5 - p.global_position.x
-	check(short > 0.0 and short < 1.0, "the wall stops the brute, which ran right up to it (%.2f m)" % short)
+	var short := p.global_position.x - Main.HOUSE_AT.x - Main.HOUSE.x * 0.5
+	check(short > 0.0 and short < 1.0, "the house stops the brute, which ran right up to it (%.2f m)" % short)
 	for k in 3:
 		p.touch_jump = true
 		await frames(50)
-	# Along the wall, pressed against it, past the doorway: it is too
-	# narrow to go in by.
 	p.touch_sprint = false
-	p.touch_move = Vector2(-1, -0.4)
+	p.touch_move = Vector2(1, -0.4)
+	await frames(110)
+	_face(Main.HOUSE_AT + Vector3(-5, 0.05, 0.45), Main.HOUSE_AT + Vector3(0, 1, 0.45))
+	p.touch_move = Vector2(0, -1)
+	p.touch_sprint = true
 	var inside := 0
-	for k in 110:
+	for k in 160:
 		await frames(1)
 		var off := p.global_position - Main.HOUSE_AT
 		inside += 1 if absf(off.x) < Main.HOUSE.x * 0.5 and absf(off.z) < Main.HOUSE.y * 0.5 else 0
 	p.touch_move = Vector2.ZERO
-	var moved := p.global_position.z - Main.HOUSE_AT.z
-	check(moved < -0.3, "it went along the wall, past the doorway (%.2f m from its middle)" % moved)
-	check_eq(inside, 0, "and never into the house")
+	p.touch_sprint = false
+	short = Main.HOUSE_AT.x - Main.HOUSE.x * 0.5 - p.global_position.x
+	check(short > 0.3, "the porch stops it short of the door (%.2f m from the wall)" % short)
+	check_eq(inside, 0, "it never went in")
 	for q in s.pieces:
 		check_eq(s.harm[q], 0.0, "piece %d took nothing" % q)
 	check_eq(s.standing_count, s.pieces, "everything stands")
@@ -87,149 +153,199 @@ func test_walking_running_and_jumping_break_nothing_of_the_house() -> void:
 	await _unload()
 
 
-func test_a_board_of_the_roof_comes_down_when_the_wall_under_it_is_cut() -> void:
+func test_a_blow_on_a_roof_board_knocks_a_hole_and_the_rest_stays_on_its_rafters() -> void:
 	await _load()
-	var board := main.house_roof[10]
-	var under := _under(board)
-	check(under.size() >= 2, "a board rests on a few planks (%d)" % under.size())
-	for k in under.size() - 1:
-		_cut(under[k])
-	check_eq(s.state[board], Structure.STANDS, "one of them still under it: it holds")
-	_cut(under[-1])
-	check(s.state[board] != Structure.STANDS, "none: it comes down")
-	var down := 0
-	for i in s.rubble.body.size():
-		if s.rubble.alive[i] == 1 and s._clumps.has(i) and s._clumps[i].size() == 3:
-			down += 1
-	check_eq(down, 1, "in one piece")
-	check_eq(s.state[main.house_ridge], Structure.STANDS, "the ridge stays up")
+	var board := main.house_roof[6]
+	var all := s.blocks[board]
+	# Between two rafters, half a metre from the middle of its length.
+	var at := s.place[board].origin + Vector3(0, 0, 0.1)
+	check(s.strike(at, Vector3.LEFT, 2, s.body_of(board)), "a blow lands on a board of the roof")
+	check_eq(s.state[board], Structure.STANDS, "the board stays up")
+	var left := 0
+	for i in range(s.first[board], s.first[board] + all):
+		left += s.stands[i]
+	check(left >= all - 2 and left < all, "less the length the blow landed on (%d of %d)" % [left, all])
+	check_eq(s.rubble.live, all - left, "which is loose")
+	check_eq(s.standing_count, s.pieces, "and everything else")
+	# A rafter that is cut does not let them down either: they lie on the
+	# three others. What was above the cut comes down; a stub stays on the
+	# plate, where it balances.
+	var rafter := main.house_rafters[5]
+	s.hit(rafter, 2.0, Vector3.LEFT, s.place[rafter].origin)
+	var stub := 0
+	for i in range(s.first[rafter], s.first[rafter] + s.blocks[rafter]):
+		if s.stands[i] == 1:
+			stub += 1
+			check(
+				absf(s.centroid[i].x - Main.HOUSE_AT.x) > Main.HOUSE.x * 0.5 - 0.5,
+				"what is left of the rafter is over its plate"
+			)
+	check(
+		stub < s.blocks[rafter] - 1,
+		"a rafter that is cut loses what was above the cut (%d lengths left)" % stub
+	)
 	for q in main.house_roof:
-		check(q == board or s.state[q] == Structure.STANDS, "board %d too" % q)
-	for q in under:
-		check_eq(s.state[q], Structure.STANDS, "the foot of plank %d stands" % q)
+		check_eq(s.state[q], Structure.STANDS, "board %d stays up" % q)
 	check(await _rest(900), "everything comes to rest")
 	await _unload()
 
 
-func test_the_whole_roof_comes_down_when_the_ridge_loses_an_end() -> void:
+func test_a_slope_of_the_roof_comes_down_when_its_plate_loses_a_post() -> void:
 	await _load()
-	var end: Array[int] = []
-	for q in s.rests_on[main.house_ridge]:
-		if s.place[q].origin.z > Main.HOUSE_AT.z:
-			end.append(q)
-	_cut(end[0])
-	check_eq(s.state[main.house_ridge], Structure.STANDS, "one plank still under that end: the ridge holds")
-	check_eq(s.standing_count, s.pieces, "and all the rest")
-	_cut(end[1])
-	check(s.state[main.house_ridge] != Structure.STANDS, "none: the ridge comes down")
-	for q in main.house_roof:
-		check(s.state[q] != Structure.STANDS, "and board %d with it" % q)
+	_cut(main.house_posts[3])
+	check(s.state[main.house_plates[1]] != Structure.STANDS, "a corner post is cut: its plate comes down")
+	for k in 8:
+		var down := k >= 4
+		check_eq(
+			s.state[main.house_rafters[k]] != Structure.STANDS, down, "rafter %d: down on that slope only" % k
+		)
+		check_eq(
+			s.state[main.house_roof[k]] != Structure.STANDS, down, "board %d: down on that slope only" % k
+		)
+	check_eq(s.state[main.house_ridge], Structure.STANDS, "the ridge stays up")
+	check_eq(s.state[main.house_plates[0]], Structure.STANDS, "and the other plate")
 	for q in main.house_walls:
 		check_eq(s.state[q], Structure.STANDS, "wall plank %d stands" % q)
 		check_eq(s.harm[q], 0.0, "untouched")
-	for q in main.house_gables:
-		check_eq(s.state[q], Structure.STANDS, "gable plank %d stands" % q)
 	check(await _rest(1200), "everything comes to rest")
-	# The roof is on the floor of the house, or against its walls: nothing
-	# has been thrown about.
-	for i in s.rubble.body.size():
-		if s.rubble.alive[i] == 1:
-			var off := s.rubble.transform_of(i).origin - Main.HOUSE_AT
-			check(Vector2(off.x, off.z).length() < 3.5, "loose piece %d lies by the house" % i)
 	for q in s.pieces:
 		check(q in _house() or s.harm[q] == 0.0, "piece %d, not of the house, took nothing" % q)
 	await _unload()
 
 
-func test_a_blow_on_a_board_of_the_roof_snaps_it_and_none_of_it_stays_up() -> void:
+func test_the_whole_roof_comes_down_when_the_ridge_loses_a_post() -> void:
 	await _load()
-	var board := main.house_roof[2]
-	var at := s.place[board].origin
-	check(s.strike(at, Vector3.RIGHT, 2, s.body_of(board)), "a blow lands on the middle of a board")
-	check(s.state[board] != Structure.STANDS, "neither end holds alone: nothing of it is left up")
-	check_eq(s.rubble.live, 3, "three loose pieces: the length struck, and what was on each side of it")
-	check_eq(s.state[main.house_ridge], Structure.STANDS, "the ridge stays up")
+	_cut(main.house_ridge_posts[1])
+	check(
+		s.state[main.house_ridge] != Structure.STANDS, "a post under the ridge is cut: the ridge comes down"
+	)
+	for q in main.house_rafters:
+		check(s.state[q] != Structure.STANDS, "and rafter %d with it" % q)
 	for q in main.house_roof:
-		check(q == board or s.state[q] == Structure.STANDS, "board %d too" % q)
-	check_eq(s.standing_count, s.pieces - 1, "and everything else")
+		check(s.state[q] != Structure.STANDS, "and board %d" % q)
+	for q in main.house_plates:
+		check_eq(s.state[q], Structure.STANDS, "plate %d stays up" % q)
+	for q in main.house_posts:
+		check_eq(s.state[q], Structure.STANDS, "corner post %d stands" % q)
+	for group: PackedInt32Array in [main.house_walls, main.house_gables]:
+		for q in group:
+			check_eq(s.state[q], Structure.STANDS, "plank %d stands" % q)
+	check(await _rest(1500), "everything comes to rest")
+	# Nothing has been thrown about: the roof lies in the house and round it.
+	for i in s.rubble.body.size():
+		if s.rubble.alive[i] == 1:
+			var off := s.rubble.transform_of(i).origin - Main.HOUSE_AT
+			check(Vector2(off.x, off.z).length() < 4.5, "loose piece %d lies by the house" % i)
+	for q in s.pieces:
+		check(q in _house() or s.harm[q] == 0.0, "piece %d, not of the house, took nothing" % q)
+	await _unload()
+
+
+func test_a_pane_bursts_at_a_blow_and_when_nothing_holds_it() -> void:
+	await _load()
+	var pane := main.house_panes[0]
+	var at := s.place[pane].origin
+	check(s.strike(at, Vector3.RIGHT, 2, s.body_of(pane)), "a blow lands on a pane")
+	check_eq(s.state[pane], Structure.BROKEN, "it is gone, all of it")
+	check_eq(s.glitter.bursts, 1, "in glitter")
+	check_eq(s.rubble.live, 0, "which is not loose pieces")
+	check_eq(s.standing_count, s.pieces - 1, "everything else stands")
+	# Another one: the two planks it stands on are cut.
+	pane = main.house_panes[1]
+	for q in s.rests_on[pane]:
+		_cut(q)
+	check_eq(s.state[pane], Structure.BROKEN, "the planks under a pane go: it bursts where it is")
+	check_eq(s.glitter.bursts, 2, "in glitter too")
+	check_eq(s.state[main.house_panes[2]], Structure.STANDS, "the third stands")
+	await _unload()
+
+
+func test_the_porch_comes_down_when_a_post_under_its_front_beam_goes() -> void:
+	await _load()
+	var porch := main.house_porch
+	check_eq(Array(s.rests_on[porch[5]]), [porch[2], porch[3]], "the front beam rests on the two front posts")
+	for k: int in [6, 7, 8]:
+		check_eq(
+			Array(s.rests_on[porch[k]]), [porch[4], porch[5]], "board %d leans from one beam to the other" % k
+		)
+	_cut(porch[2])
+	check(s.state[porch[5]] != Structure.STANDS, "a front post is cut: the front beam comes down")
+	for k: int in [6, 7, 8]:
+		check(s.state[porch[k]] != Structure.STANDS, "and board %d" % k)
+	check_eq(s.state[porch[4]], Structure.STANDS, "the beam at the wall stays up")
+	for q in main.house_roof:
+		check_eq(s.state[q], Structure.STANDS, "and the roof of the house (board %d)" % q)
 	check(await _rest(900), "everything comes to rest")
 	await _unload()
 
 
-func test_the_brute_brings_the_roof_down_from_the_gable() -> void:
+func test_the_brute_brings_the_whole_roof_down_from_the_middle_of_a_gable() -> void:
 	await _load()
-	_face(Main.HOUSE_AT + Vector3(0, 0.05, 2.5), Main.HOUSE_AT + Vector3.UP)
+	_face(Main.HOUSE_AT + Vector3(0, 0.05, 2.7), Main.HOUSE_AT + Vector3.UP)
 	await frames(5)
-	var landed: Array[Vector3] = []
 	var thrown := [0]
-	p.blow.connect(
-		func(at: Vector3, _way: Vector3, _power: int, on: RID) -> void:
-			thrown[0] += 1
-			if s.standing(on) in main.house_gables:
-				landed.append(at)
-	)
+	p.blow.connect(func(_at: Vector3, _way: Vector3, _power: int, _on: RID) -> void: thrown[0] += 1)
 	for k in 1200:
 		if thrown[0] >= 6 and not p.character.striking():
 			break
 		if k % 6 == 0 and thrown[0] < 6:
 			p.punch()
 		await frames(1)
-	check(not landed.is_empty(), "its fists land on the gable")
-	if not landed.is_empty():
-		check(
-			landed[0].y > 1.2 and landed[0].y < 1.6,
-			"the first at the height of the shoulder (%.2f m up)" % landed[0].y
-		)
 	check(s.state[main.house_ridge] != Structure.STANDS, "within two combinations the ridge is down")
 	var up := 0
-	for q in main.house_roof:
-		up += 1 if s.state[q] == Structure.STANDS else 0
+	for group: PackedInt32Array in [main.house_rafters, main.house_roof]:
+		for q in group:
+			up += 1 if s.state[q] == Structure.STANDS else 0
 	check_eq(up, 0, "and the whole roof with it")
-	for q in main.house_walls:
-		check_eq(s.state[q], Structure.STANDS, "long wall plank %d stands" % q)
-	check(await _rest(1200), "everything comes to rest")
+	for q in main.house_posts:
+		check_eq(s.state[q], Structure.STANDS, "corner post %d stands" % q)
+	for q in main.house_plates:
+		check_eq(s.state[q], Structure.STANDS, "plate %d stays up" % q)
+	check(await _rest(1500), "everything comes to rest")
 	for q in s.pieces:
 		check(q in _house() or s.harm[q] == 0.0, "piece %d, not of the house, took nothing" % q)
 	await _unload()
 
 
-func test_the_brute_cuts_a_long_wall_down_and_the_roof_over_it_follows() -> void:
+func test_the_brute_at_a_long_wall_knocks_holes_then_brings_that_slope_down() -> void:
 	await _load()
-	_face(Main.HOUSE_AT + Vector3(2.2, 0.05, -0.6), Main.HOUSE_AT + Vector3(0, 1, -0.6))
+	_face(Main.HOUSE_AT + Vector3(2.45, 0.05, 0), Main.HOUSE_AT + Vector3.UP)
 	await frames(5)
 	var thrown := [0]
-	var on_roof := [0]
+	var first_on := [-1]
 	p.blow.connect(
 		func(_at: Vector3, _way: Vector3, _power: int, on: RID) -> void:
 			thrown[0] += 1
-			if s.standing(on) in main.house_roof:
-				on_roof[0] += 1
+			if first_on[0] < 0 and s.standing(on) >= 0:
+				first_on[0] = s.standing(on)
 	)
-	for k in 1800:
-		if thrown[0] >= 9 and not p.character.striking():
+	var holes_first := false
+	for k in 2400:
+		if thrown[0] >= 12 and not p.character.striking():
 			break
-		if k % 6 == 0 and thrown[0] < 9:
+		if k % 6 == 0 and thrown[0] < 12:
 			p.punch()
 		await frames(1)
-	var cut := 0
-	for q in main.house_walls:
-		var out := s.place[q].origin.x - Main.HOUSE_AT.x
-		var lost := false
-		for i in range(s.first[q], s.first[q] + s.blocks[q]):
-			lost = lost or s.stands[i] == 0
-		check_eq(s.state[q], Structure.STANDS, "the foot of plank %d stands" % q)
-		if lost:
-			cut += 1
-			check(out > 0.0, "plank %d, cut, is of the wall the brute strikes" % q)
-	check(cut >= 2, "three combinations cut a few planks (%d)" % cut)
-	var down := 0
-	for q in main.house_roof:
-		if s.state[q] != Structure.STANDS:
-			down += 1
-			check(s.place[q].origin.x > Main.HOUSE_AT.x, "board %d, down, is of the slope over that wall" % q)
-	check(down >= 1, "and boards of the roof over them come down (%d)" % down)
+		if s.rubble.live > 0 and s.standing_count == s.pieces:
+			holes_first = true
+	check(first_on[0] in _house(), "its first blow lands on the house")
+	check(holes_first, "pieces come off before anything comes down whole")
+	check(
+		s.state[main.house_plates[1]] != Structure.STANDS,
+		"within four combinations the plate of that wall is down"
+	)
+	for k in 8:
+		var down := k >= 4
+		check_eq(
+			s.state[main.house_rafters[k]] != Structure.STANDS, down, "rafter %d: down on that slope only" % k
+		)
+		check_eq(
+			s.state[main.house_roof[k]] != Structure.STANDS, down, "board %d: down on that slope only" % k
+		)
 	check_eq(s.state[main.house_ridge], Structure.STANDS, "the ridge stays up")
-	check(await _rest(1200), "everything comes to rest")
+	for q in main.house_walls:
+		check_eq(s.state[q], Structure.STANDS, "the foot of plank %d stands" % q)
+	check(await _rest(1500), "everything comes to rest")
 	for q in s.pieces:
 		check(q in _house() or s.harm[q] == 0.0, "piece %d, not of the house, took nothing" % q)
 	await _unload()
@@ -237,22 +353,12 @@ func test_the_brute_cuts_a_long_wall_down_and_the_roof_over_it_follows() -> void
 
 ## Every piece of the house.
 func _house() -> Array[int]:
-	var all: Array[int] = [main.house_ridge]
-	for group: PackedInt32Array in [main.house_walls, main.house_gables, main.house_roof]:
-		all.append_array(Array(group))
+	var all: Array[int] = []
+	all.assign(main.house_pieces())
 	return all
 
 
-## The planks of the long walls that board `q` of the roof rests on.
-func _under(q: int) -> Array[int]:
-	var planks: Array[int] = []
-	for r in s.rests_on[q]:
-		if r in main.house_walls:
-			planks.append(r)
-	return planks
-
-
-## The top of plank `q` is struck off: a blow at its head.
+## Piece `q`, which stands upright, is struck near its top: cut there.
 func _cut(q: int) -> void:
 	s.hit(q, 2.0, Vector3.RIGHT, s.place[q].origin + Vector3.UP * (s.size[q].y * 0.5 - 0.1))
 
