@@ -39,6 +39,8 @@ extends Node3D
 ## wait for that: as soon as one of the pieces under it goes, it sags
 ## there, and folds as it comes down. Only a blow breaks or bends: from the
 ## brute (`strike`), or from something heavy landing on a piece (Rubble).
+## Glass carries nothing: it also gives as soon as something heavy comes
+## to rest on it, however gently.
 
 ## What a piece is doing: some of it stands; none of it does, and some of
 ## it lies in one (all of it, if it is metal); it is all in blocks.
@@ -118,6 +120,8 @@ var glitter: Glitter
 var cut_seed := 1
 ## How many pieces still stand.
 var standing_count := 0
+## How many of them burst (glass): what comes to rest on one makes it give.
+var fragile := 0
 ## The frame what is added from now on is placed in: where a building
 ## stands and how it is turned, about the vertical only. (As it is given,
 ## what is added stands where it is told, straight.)
@@ -225,6 +229,8 @@ func add_piece(of: int, xf: Transform3D, box: Vector3, shade := 0.0) -> int:
 	_limbs.append([])
 	_ties.append([])
 	_in_body.append(PackedInt32Array())
+	if Matter.BURSTS[of]:
+		fragile += 1
 	if Matter.BENDS[of]:
 		blocks.append(_add_skin(p))
 	else:
@@ -410,6 +416,7 @@ func shatter(p: int, way := Vector3.ZERO) -> void:
 ## fall as glitter, which are not bodies.
 func _burst(p: int) -> void:
 	harm[p] = strength[p]
+	fragile -= 1
 	for i in range(first[p], first[p] + blocks[p]):
 		if stands[i] == 1:
 			stands[i] = 0
@@ -877,36 +884,49 @@ func _refresh(p: int) -> void:
 			_in_body[p].remove_at(k)
 
 
-## Piece `p` has lost something, or something under it has: what of it is
-## no longer held comes down, and so on up through what rests on it.
-## `way`: where the blow that did it was going, if one did.
+## Piece `p` has lost something: what of it is no longer held comes down,
+## and so on up through what rests on it. `way`: where the blow that did
+## it was going, if one did.
 func _settle(p: int, way: Vector3) -> void:
-	if state[p] == STANDS:
-		if bend[p] != null:
-			if not _held(p, PackedInt32Array()) or _sags(p):
-				_drop(p, Vector3.ZERO)
-		elif Matter.BURSTS[matter[p]]:
-			# (Glass does not come down in one: it bursts.)
-			if not _held(p, _standing_of(p)):
-				_burst(p)
-		elif Matter.upright(size[p]):
-			for lump in _lumps(_unheld(p)):
-				_fall(p, lump, way)
-		else:
-			# What lies flat (a slab) holds in one, as long as its middle
-			# is over what is left under it.
-			for lump in _lumps(_standing_of(p)):
-				if not _held(p, lump):
-					_fall(p, lump, way)
+	_shed(p, way)
 	_let_go(p)
 
 
-## What rests on piece `p` is looked at again: it comes down unless what
-## is left under it still holds it.
+## What of piece `p` is no longer held comes down. Returns whether some did.
+func _shed(p: int, way: Vector3) -> bool:
+	if state[p] != STANDS:
+		return false
+	var shed := false
+	if bend[p] != null:
+		if not _held(p, PackedInt32Array()) or _sags(p):
+			_drop(p, Vector3.ZERO)
+			shed = true
+	elif Matter.BURSTS[matter[p]]:
+		# (Glass does not come down in one: it bursts.)
+		if not _held(p, _standing_of(p)):
+			_burst(p)
+			shed = true
+	elif Matter.upright(size[p]):
+		for lump in _lumps(_unheld(p)):
+			_fall(p, lump, way)
+			shed = true
+	else:
+		# What lies flat (a slab) holds in one, as long as its middle
+		# is over what is left under it.
+		for lump in _lumps(_standing_of(p)):
+			if not _held(p, lump):
+				_fall(p, lump, way)
+				shed = true
+	return shed
+
+
+## What rests on piece `p`, which has lost something, is looked at again:
+## it comes down unless what is left under it still holds it. And so on
+## up, but only through what loses something in its turn.
 func _let_go(p: int) -> void:
 	for q in carries[p]:
-		if state[q] == STANDS:
-			_settle(q, Vector3.ZERO)
+		if _shed(q, Vector3.ZERO):
+			_let_go(q)
 
 
 ## Is piece `p` a metal plate with nothing left under it of one of the
