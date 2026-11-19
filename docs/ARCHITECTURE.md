@@ -321,30 +321,36 @@ it jumps, lands, strikes or kicks.
 - **The air.** A jump leaves at once (the clip's crouch is skipped), runs
   into the pose held in the air, and ends in a landing only when you come
   down hard or on the spot: running, the legs run on.
-- **Blows made for games.** The four blows come from Quaternius's
-  Universal Animation Library 2 (CC0, the free version; see
-  `assets/fight/SOURCE.md`): animations drawn for games, with big poses
-  and blows that land within a third of a second. Its skeleton is the
-  mannequin's own under other names, so `tools/moves/build.py` takes the
-  clips over as they are, joins each stroke to its recovery and measures
-  it. One was made as a punch (the hook); the others are sword strokes
-  thrown without the sword. What is measured on each is stored with it:
-  when the fist gets there (the blow counts then at the latest), when the next move may
-  start, how far and how high it reaches, and which way it is going.
+- **Blows made for games.** The three blows come from Quaternius's two
+  Universal Animation Libraries (CC0, the free versions; see
+  `assets/fight/SOURCE.md`): animations drawn for games. The first has
+  two punches made as punches, a straight left and a straight right
+  thrown standing from a guard, the fist 1.4 m up and the body going
+  nowhere; the second, a leap that ends fist first on the ground (the
+  last stroke of a sword combination, thrown without the sword). Their
+  skeletons are the mannequin's own, so `tools/moves/build.py` takes the
+  clips over as they are and measures them. What is measured on each is
+  stored with it: when the fist gets there (the blow counts then at the
+  latest), when the next move may start, how far and how high it
+  reaches, and whether it is thrown with the left hand (the fist that is
+  followed, and the hand left out of what is held back from what
+  stands, go by it).
+  The owner chose these on 19 November, having tried them beside the
+  four the brute had (a lunging hook and three sword strokes, which all
+  dived: fists 0.7 to 0.85 m up) and an uppercut from motion capture.
 - **What is motion capture.** The kick is what a real person did (CMU
   motion capture database, free to use): the free library has none. The
   tool puts it on the mannequin's skeleton and retimes it (a slow
   wind-up, the last 0.12 s in two thirds of their time, the pose all but
   held for an instant after).
-- **The combination.** A lunging hook, a swing up from the right, one
-  back across from the left, a leap that comes down fist first, then
-  round again. The next blow starts where a stroke ends, and its recovery
-  only plays when nothing follows.
-- **Steps that are real.** The blows step, some a long way (the swing up
-  dashes 1.1 m in, the leap 1.4 m). The steps are on the skeleton's root
-  bone; the game moves the body by them (root motion), so a planted foot
-  stays planted. A blow is thrown where the stick pushes, or where the
-  character faces.
+- **The combination.** A straight left, a straight right, a leap that
+  comes down fist first, then round again. The next blow starts when the
+  one before lets it (`next` in its clip).
+- **Steps that are real.** The straights stay where they are; the leap
+  and the kick step (the leap 1.4 m). The steps are on the skeleton's
+  root bone; the game moves the body by them (root motion), so a planted
+  foot stays planted. A blow is thrown where the stick pushes, or where
+  the character faces.
 - **The clock of a move.** A fist goes more than a metre between two
   frames of these clips, so the blow has to count on the very step whose
   pose shows it there. A clip starts at the end of the step that takes
@@ -353,18 +359,6 @@ it jumps, lands, strikes or kicks.
   clips say their blow lands on one of their own frames. `struck` is sent
   before the pose of that step is set; `reached`, which says where the
   limb is, once it is.
-- **On trial: a boxer's blows.** The owner doubts the blows (three of
-  the four are sword strokes thrown without the sword, and all four
-  dive). `Character.BOXING` is a second combination: a straight left
-  and a straight right from the first animation pack, made as punches
-  and thrown standing (the fist 1.4 m up, the body going nowhere), then
-  the leap of the other: three blows (an uppercut from a boxing capture
-  was tried as a third and left out). A button of the bench ("Coups :
-  épée" / "Coups : boxe", `Hud.blows_pressed`, `Main.set_boxing`) goes
-  from one to the other; `--blows=boxing` starts with it. A clip thrown
-  with the left hand says so (`left` in its metadata): the fist that is
-  followed, and the hand left out of what is held back, go by it.
-  Nothing is replaced until the owner has chosen.
 - **Where a blow lands.** Where its fist or foot first touches
   something, not where the move ends. From 0.1 s before a clip has its
   blow land, and until it does, `Character` says at each step where the
@@ -382,19 +376,18 @@ it jumps, lands, strikes or kicks.
   it. Nothing at all: the blow is said where the fist ended, on nothing,
   and what a fist touches there (0.3 m round) takes it. A blow is thrown
   along the way the brute faces, wherever it lands.
-  What this does: right up against a wall, the hook goes in 1.1 m up on
-  the right (in the open its fist ends 0.7 m up, straight ahead), the
-  blow back across 0.7 m up on the left, the swing up 0.45 m up on the
-  right, and the fist of the leap 1.9 m up, over the brute's head. The
-  blows of a combination no longer land on one place: each place takes
-  its own. Before, a blow was a thin line from the body's axis straight
-  ahead to where the fist ends in the open, at that height: 0.3 m to one
-  side of a column 0.4 m wide, every blow missed it.
+  What this does: a step from a wall, the two straights go in 1.4 m up,
+  straight ahead, and the fist of the leap 1.9 m up, over the brute's
+  head: the fists land high. What is below the shoulder (the foot of a
+  wall, of a plank) is for the kick, which goes in 0.4 to 0.8 m up.
+  Before, a blow was a thin line from the body's axis straight ahead to
+  where the fist ends in the open, at that height: 0.3 m to one side of
+  a column 0.4 m wide, every blow missed it.
 - **The body stays out of what stands.** The moves lunge well ahead of
   where the brute stands, which is all the physics knows of it (a
-  capsule 0.35 m in radius): in the hook its head is 0.9 m ahead, its
-  front knee and foot 0.8 m. Up against a wall it dived into it to the
-  shoulders. At each step of a strike, once the pose is set
+  capsule 0.35 m in radius): in the leap its left hand is 0.8 m ahead
+  and its head 0.5 m (in the hook it had before, its head 0.9 m: up
+  against a wall it dived into it to the shoulders). At each step of a strike, once the pose is set
   (`Character.posed`) and before the fist is looked at, `Player._on_posed`
   takes the parts of the body other than the limb that strikes
   (`Character.bulk`: head, chest, shoulders, left hand, knees, toes, each

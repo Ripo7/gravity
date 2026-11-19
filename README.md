@@ -6,7 +6,7 @@ is being rebuilt from its concept, one step at a time, in greybox:
 comes before the code.
 
 **Where it is now: step 4 of 7, wood.** A bare ground, one brute that
-walks, runs, sprints, jumps, throws a four-blow combination and kicks, and
+walks, runs, sprints, jumps, throws a three-blow combination and kicks, and
 on the bench in front of it the same three things three times: a column,
 a wall, a slab on four columns. In concrete on its right, in metal on its
 left, in wood straight ahead and farther off (a post, a palisade of
@@ -14,8 +14,8 @@ planks, a floor of boards on beams).
 
 A blow lands where its fist or foot first touches something, and harms
 that place, not the whole piece: the blows of a combination land apart
-(a hook high on the right, one back across on the left, a fist from
-above over the brute's head). Its body stays out of what stands: it
+(two straights at the height of the shoulder, a fist from above over
+the brute's head): the fists land high, and what is low is for the kick. Its body stays out of what stands: it
 backs off as it lunges, and only the fist and the arm go in. Concrete
 cracks round the blow, for all to see, then lets go there: the few big blocks
 round the fist are knocked out, away from the blow, and a wall keeps a
@@ -66,10 +66,9 @@ head; it comes closer when a wall is behind (and the character is not
 drawn when the camera is right against its back). The character goes where
 you push, seen from the camera, and turns to face where it goes.
 
-The strike button throws a lunging hook; pressed again before it is over,
-the next blow of the combination follows: a swing up from the right, one
-back across from the left, then a leap that comes down fist first, then
-round again. A blow is thrown where the stick pushes, or where the
+The strike button throws a straight left; pressed again before it is
+over, the next blow of the combination follows: a straight right, then a
+leap that comes down fist first, then round again. A blow is thrown where the stick pushes, or where the
 character faces.
 
 A place of a concrete piece 0.4 m thick takes one whole combination:
@@ -88,12 +87,6 @@ The slider ("Chute") sets how fast what has come off falls, as a share of
 real gravity: 1 to begin with, as things really fall (what the owner
 settled on, on the phone); less, and they fall slowly, which was tried
 to make the brute a giant.
-
-On trial: the button under "Reconstruire" ("Coups : épée" / "Coups :
-boxe") gives the brute a boxer's combination of three blows instead: a
-straight left and a straight right thrown standing, then the leap that
-ends the other. It is there to
-compare; the blows the brute starts with are the ones it has had so far.
 
 The line at the top left shows frames per second, the cost of one physics
 step, how many pieces still stand, how many loose bodies there are (and
@@ -115,7 +108,7 @@ Scripted runs (`scripts/core/director.gd`), on desktop after `--`, in a
 browser as `index.html?mode=...`:
 
 ```sh
-# Stand in front of the concrete column and throw the four blows at it.
+# Stand in front of the concrete column and throw the three blows at it.
 godot --path . -- --mode=play --steps="s1.5,0.05,-4.55,1.5,1,-6;w0.3;h;w0.4;h;w0.4;h;w0.4;h;w5"
 # The same at the metal post, without a screen, with the cost of the physics.
 godot --headless --fixed-fps 60 --path . -- --mode=play --prof --steps="s-1.5,0.05,-4.6,-1.5,1,-6;w0.3;h;w0.4;h;w0.4;h;w0.4;h;w5"

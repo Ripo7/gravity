@@ -19,7 +19,7 @@ extends Node3D
 ##   Jump_Start ─────────────────────────────────┤
 ##   Jump (in the air) ──────────────────────────┤
 ##   Jump_Land ──pace────────────────────────────┤
-##   fight/hook, upswing, backhand, slam, kick ──┘
+##   fight/jab, cross, slam, kick ───────────────┘
 ##
 ## Walk, jog and sprint are stretched to one common cycle so that the same
 ## foot is forward in all three, then mixed by speed; the cycle is the one
@@ -60,17 +60,12 @@ const LAND_HARD := 8.5  ## m/s down: a landing this hard is always shown
 const LAND_STILL := 1.5  ## m/s along the ground: slower than this, it is shown too
 const LAND_TIME := 0.5  ## s before the legs go back to standing or running
 ## The blows the punch button chains, in order (then round again): a
-## lunging hook, a swing up from the right, one back across from the left,
-## and a leap that ends fist first on the ground. Each clip says when its
-## fist is there, when the next move may start, how far it reaches and how
-## hard it is (see tools/moves/build.py).
-const COMBO: Array[String] = ["hook", "upswing", "backhand", "slam"]
-## On trial beside it (docs/CONCEPT.md): a boxer's, of three blows. A
 ## straight left and a straight right thrown standing, the fists at the
-## height of the shoulder, then the leap of the other.
-const BOXING: Array[String] = ["jab", "cross", "slam"]
-## Every blow of the fists there is a clip for.
-const BLOWS: Array[String] = ["hook", "upswing", "backhand", "slam", "jab", "cross"]
+## height of the shoulder, and a leap that ends fist first on the ground.
+## Each clip says when its fist is there, when the next move may start,
+## how far it reaches, how hard it is and with which hand it is thrown
+## (see tools/moves/build.py).
+const COMBO: Array[String] = ["jab", "cross", "slam"]
 ## Steps of a sixtieth add up to a hair under the frame a clip says its
 ## blow lands on: this much (s) short still counts as there.
 const LATE := 0.002
@@ -101,13 +96,9 @@ const BULK := {
 const ROOT := "Rig/Skeleton3D:root"
 ## What the body can be doing (see `state`), in the order of the tree's
 ## inputs.
-const STATES: Array[String] = [
-	"ground", "jump", "air", "land", "hook", "upswing", "backhand", "slam", "kick", "jab", "cross"
-]
+const STATES: Array[String] = ["ground", "jump", "air", "land", "jab", "cross", "slam", "kick"]
 ## One of STATES: what the body is doing.
 var state := "ground"
-## The combination a punch throws: COMBO, or BOXING.
-var combo: Array[String] = COMBO
 var tree: AnimationTree
 var skeleton: Skeleton3D
 
@@ -208,7 +199,7 @@ func land(down: float, along: float) -> void:
 
 ## Is a punch or a kick under way?
 func striking() -> bool:
-	return state == "kick" or state in BLOWS
+	return state == "kick" or state in COMBO
 
 
 ## How far from the body (m) the fist or foot of the strike under way is
@@ -271,11 +262,11 @@ func root_motion() -> Vector3:
 	return skeleton.global_basis * tree.get_root_motion_position()
 
 
-## Throws a blow: the first of the combination from standing. Asked for
-## while one is under way, the next of it follows. Returns false if it
+## Throws a blow: the first of COMBO from standing. Asked for while one
+## is under way, the next of COMBO follows. Returns false if it
 ## cannot (in the air).
 func punch() -> bool:
-	return _ask("punch", combo[0])
+	return _ask("punch", COMBO[0])
 
 
 ## A kick: straight ahead with the right leg, stepping in.
@@ -337,9 +328,9 @@ func _move(delta: float) -> void:
 	var length := _clips.get_animation("fight/" + state).length
 	if _then != "" and _move_for >= _about("next"):
 		if _then == "punch":
-			var k := combo.find(state)
+			var k := COMBO.find(state)
 			# After a blow, the next one; after a kick, the first.
-			_start(combo[(k + 1) % combo.size()] if k >= 0 else combo[0], 0.12)
+			_start(COMBO[(k + 1) % COMBO.size()] if k >= 0 else COMBO[0], 0.12)
 		else:
 			_start(_then, 0.12)
 	elif _move_for >= length:
@@ -396,7 +387,7 @@ func _build() -> AnimationNodeBlendTree:
 	t.add_node("land_pace", AnimationNodeTimeScale.new())
 	t.connect_node("land_pace", 0, "land")
 	# The blows.
-	for named: String in BLOWS + (["kick"] as Array[String]):
+	for named: String in COMBO + (["kick"] as Array[String]):
 		t.add_node(named, _clip("fight/" + named))
 	var body := AnimationNodeTransition.new()
 	body.input_count = STATES.size()
@@ -406,19 +397,7 @@ func _build() -> AnimationNodeBlendTree:
 	body.allow_transition_to_self = true  # a second kick starts its clip again
 	body.set_input_as_auto_advance(1, true)  # the start of a jump runs into the air
 	t.add_node("state", body)
-	var inputs: Array[String] = [
-		"ground",
-		"jump_start",
-		"air",
-		"land_pace",
-		"hook",
-		"upswing",
-		"backhand",
-		"slam",
-		"kick",
-		"jab",
-		"cross"
-	]
+	var inputs: Array[String] = ["ground", "jump_start", "air", "land_pace", "jab", "cross", "slam", "kick"]
 	for k in inputs.size():
 		t.connect_node("state", k, inputs[k])
 	t.connect_node("output", 0, "state")

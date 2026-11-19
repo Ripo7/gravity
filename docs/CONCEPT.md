@@ -85,16 +85,13 @@ toute sa largeur. Corrigé :
   du 18 novembre : collée au mur, la brute y plongeait jusqu'aux épaules.)
 - Combien de coups pour un trou : validé tel quel le 18 novembre (un
   endroit cède au quatrième coup qu'il reçoit).
-- Les gestes de frappe eux-mêmes ne sont peut-être pas les bons (retour
-  du 18 novembre) : à revoir, pas encore décidé.
-- Essai en cours, pour en juger : une combinaison de boxe (direct du
-  gauche, direct du droit, lancés debout, poing à hauteur d'épaule ; puis
-  le crochet et le coup sauté d'aujourd'hui). Un bouton du banc passe de
-  l'une à l'autre. Rien n'est remplacé tant que ce n'est pas choisi.
-- Retour du 18 novembre sur l'essai : les deux directs plaisent. Un
-  uppercut a été essayé en troisième, puis écarté. La combinaison de
-  boxe est donc de trois coups : direct du gauche, direct du droit, coup
-  sauté.
+- Les coups de la brute (choisis le 19 novembre, après essai) : un direct
+  du gauche et un direct du droit, lancés debout, poing à hauteur
+  d'épaule, puis le coup sauté. Trois coups, puis ça recommence. Les
+  anciens (le crochet et les deux coups d'épée sans épée) sont retirés,
+  comme l'uppercut essayé entre-temps.
+- Conséquence : les poings touchent haut (1,4 m, et vers 1,9 m pour le
+  coup sauté). Le bas d'un mur ou d'une planche revient au coup de pied.
 - Au-dessus du trou d'un seul coup, ce qui reste tient. Au-dessus d'un
   trou plus large, ça tombe : des trous côte à côte ouvrent le mur
   jusqu'en haut.

@@ -70,34 +70,22 @@ CLIPS = [
 #   name, and from when to when (s) if not the whole of it
 #   hit, next: s into the result (hit on one of its 30 frames a second:
 #   the fist goes a long way between two); limb, power, steps: as above
-# The blows are sword strokes, thrown without the sword: A, B and the
-# last of the heavy ones, each with the recovery that follows it when no
-# other blow does.
+# The leap is the last stroke of a sword combination, thrown without the
+# sword. The two straights are from the first library (`file`: its
+# document, kept beside the others): made as punches, thrown standing
+# from a guard, the fist at the height of the shoulder; they stay where
+# they are.
 MADE_FPS = 30
 MADE = [
-    # A lunging hook: the one blow of the set that was made as a punch.
-    dict(name="hook", glb="UAL2_Standard_RM", parts=[("Melee_Hook",), ("Melee_Hook_Rec",)],
-         hit=8 / 30, limb="RightHand", next=0.47, power=2, steps=True),
-    # Dashing in, a swing from low on the right to high on the left.
-    dict(name="upswing", glb="UAL2_Standard_RM", parts=[("Sword_Regular_A",), ("Sword_Regular_A_Rec",)],
-         hit=7 / 30, limb="RightHand", next=0.43, power=2, steps=True),
-    # Back across, from the left to the right.
-    dict(name="backhand", glb="UAL2_Standard_RM", parts=[("Sword_Regular_B",), ("Sword_Regular_B_Rec",)],
-         hit=7 / 30, limb="RightHand", next=0.53, power=2, steps=True),
-    # A leap, the fist straight up, and down to the ground.
-    dict(name="slam", glb="UAL2_Standard_RM", parts=[("Sword_Heavy_Combo", 2.1, 3.8)],
-         hit=15 / 30, limb="RightHand", next=1.1, power=3, steps=True),
-]
-# Two punches made as punches, from the first library (`file`: its
-# document, kept beside the others): thrown standing, from a guard, the
-# fist at the height of the shoulder. They stay where they are.
-MADE += [
     # A straight left.
     dict(name="jab", file="AnimationLibrary_Godot_Standard.gltf", parts=[("Punch_Jab",)],
          hit=6 / 30, limb="LeftHand", next=0.37, power=2, steps=False),
     # A straight right.
     dict(name="cross", file="AnimationLibrary_Godot_Standard.gltf", parts=[("Punch_Cross",)],
          hit=8 / 30, limb="RightHand", next=0.43, power=2, steps=False),
+    # A leap, the fist straight up, and down to the ground.
+    dict(name="slam", glb="UAL2_Standard_RM", parts=[("Sword_Heavy_Combo", 2.1, 3.8)],
+         hit=15 / 30, limb="RightHand", next=1.1, power=3, steps=True),
 ]
 LIMBS = {"LeftHand": "DEF-hand.L", "RightHand": "DEF-hand.R", "RightFoot": "DEF-foot.R", "LeftFoot": "DEF-foot.L"}
 

@@ -40,19 +40,17 @@ page.on("console", (m) => {
   if (/BENCH|WALKED|PROF|PLAY_DONE|ERROR|error|shader/i.test(t)) console.log(t);
 });
 page.on("pageerror", (e) => console.log("PAGE ERROR " + e.message));
-// Run forward a second, then stand in front of the concrete column and
-// keep striking for two combinations (its blows land apart: it is cut at
-// the sixth); the four blows of one at the metal post; two blows at a
-// sheet of the fence; three combinations at a post under the deck (it
-// lies down at the ninth blow).
-const blows = "w0.3;h;w0.4;h;w0.4;h;w0.4;h";
+// Run forward a second, then stand a step from the concrete column and
+// keep striking for three combinations (it is cut at the seventh blow);
+// one combination and a blow at the metal post; two blows at a sheet of
+// the fence; three combinations at a post under the deck (it lies down
+// at the sixth blow); one blow at the wooden post (it is cut there).
 const mash = (seconds) => Array(Math.round(seconds / 0.25)).fill("h;w0.25").join(";");
 const steps =
-  `f1;w0.3;s1.5,0.05,-4.55,1.5,1,-6;${mash(4.5)};w4;s-1.5,0.05,-4.6,-1.5,1,-6;${blows};w2;` +
-  `s-4.5,0.05,-6.55,-4.5,1,-8;w0.3;h;w0.4;h;w1.5;` +
-  `s-7.4,0.05,-4.5,-7.4,1,-5.9;${mash(7)};w3;` +
-  // One blow at the wooden post: it is cut there.
-  `s0,0.05,-8.8,0,1,-10;w0.3;h;w2.5`;
+  `f1;w0.3;s1.5,0.05,-5.0,1.5,1,-6;${mash(6.5)};w4;s-1.5,0.05,-5.0,-1.5,1,-6;${mash(2.2)};w2;` +
+  `s-4.5,0.05,-7.0,-4.5,1,-8;w0.3;h;w0.4;h;w1.5;` +
+  `s-7.4,0.05,-4.9,-7.4,1,-5.9;${mash(6)};w3;` +
+  `s0,0.05,-9.1,0,1,-10;w0.3;h;w2.5`;
 // Software WebGL is slow: loading alone can take a while.
 await page.goto(`http://localhost:8061/index.html?mode=play&prof&steps=${encodeURIComponent(steps)}`, { timeout: 180000 });
 // And a few seconds of game time can take a minute.
@@ -86,7 +84,7 @@ else if (Number(m[3]) > -2 || m[4] !== "true") failures.push(`the brute did not 
 const end = done && done.match(/standing=(\d+)\/(\d+) marked=(\d+) loose=(\d+)/);
 if (done && (!end || Number(end[1]) >= Number(end[2]) || Number(end[4]) < 2)) failures.push(`nothing came down: ${done}`);
 if (end && Number(end[3]) < 4) failures.push(`the column, the two posts and the sheet were not all marked: ${done}`);
-if (end && (Number(end[1]) > Number(end[2]) - 2 || Number(end[4]) < 15)) failures.push(`the column or the wooden post was not cut, or the deck did not come loose: ${done}`);
+if (end && (Number(end[1]) > Number(end[2]) - 2 || Number(end[4]) < 14)) failures.push(`the column or the wooden post was not cut, or the deck did not come loose: ${done}`);
 const errors = lines.filter((t) => /SCRIPT ERROR|shader.*(error|fail)|ERROR:/i.test(t));
 if (errors.length) failures.push(`${errors.length} errors, first: ${errors[0]}`);
 console.log(failures.length ? "WEB_FAIL " + failures.join("; ") : "WEB_OK");

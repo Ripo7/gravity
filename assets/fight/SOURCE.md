@@ -23,16 +23,10 @@ mirror <https://github.com/NafisRayan/Animate-Rigged-Humanoid-No-Blender>
 
 | Clip | Made of | What it is in the game |
 | --- | --- | --- |
-| `hook` | `Melee_Hook`, then `Melee_Hook_Rec` | a lunging hook, the body dropping into it |
-| `upswing` | `Sword_Regular_A`, then `Sword_Regular_A_Rec` | dashing in, a swing from low on the right to high on the left |
-| `backhand` | `Sword_Regular_B`, then `Sword_Regular_B_Rec` | back across, from the left to the right |
 | `slam` | `Sword_Heavy_Combo`, 2.1 to 3.8 s | a leap, the fist straight up, and down to the ground |
 
-The free version has one blow made as a punch (the hook). The three others
-are sword strokes thrown without the sword: the first two of the regular
-combination, and the last of the heavy one, cut out of the clip of the
-whole combination. Each `_Rec` is the recovery that follows a stroke when
-no other follows it; the game starts the next blow where the stroke ends.
+It is the last stroke of the heavy sword combination, cut out of the clip
+of the whole combination and thrown without the sword.
 
 ## Made for games: Universal Animation Library (the first)
 
@@ -40,8 +34,7 @@ By **Quaternius** too, **CC0 1.0**: the pack the mannequin comes from
 (see `assets/mannequin/SOURCE.md`, which says where its two files are
 taken from and gives their hashes). Its free version has two punches
 made as punches, thrown standing from a guard, the fist at the height of
-the shoulder. They are on trial beside the blows above
-(`Character.BOXING`).
+the shoulder. They are the first two blows of the brute's combination.
 
 | Clip | Made of | What it is in the game |
 | --- | --- | --- |

@@ -54,8 +54,8 @@ const FALL_AFTER := 0.12
 ## The brute is this wide where it stands (m, the radius of its capsule).
 const RADIUS := 0.35
 ## No part of it goes farther ahead of where it stands than this in a move
-## (m; the most is its head in the hook, 0.9 m, and the head is 0.16 m
-## round).
+## (m; the most is its left hand in the leap, 0.8 m; with room to
+## spare).
 const LUNGE := 1.1
 ## A fist, or a foot, is a ball this wide round the knuckles or the toes
 ## (m, its radius).
@@ -293,8 +293,8 @@ func _on_swung(_move: String) -> void:
 
 
 ## The pose of a step of a strike is set. The moves lunge well ahead of
-## where the brute stands (its head 0.9 m, its front knee 0.8 m in the
-## hook): it is held back from what stands, so that only the limb that
+## where the brute stands (its left hand 0.8 m, its head 0.5 m in the
+## leap): it is held back from what stands, so that only the limb that
 ## strikes goes into it.
 func _on_posed() -> void:
 	var ahead := Basis(Vector3.UP, facing) * Vector3.FORWARD
