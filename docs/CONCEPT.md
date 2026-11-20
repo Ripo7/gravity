@@ -299,6 +299,32 @@ porté :
   de l'arrière peut rester debout sur les poteaux de derrière, jusqu'à la
   hauteur du plancher du deuxième étage.
 
+La tour sur le banc (étape 6). Choisie le 20 novembre : en gradins, plus
+étroite en haut ; en métal et en verre ; quatre fois la brute (7,2 m). Le
+détail est de ma part, à valider au banc :
+
+- Quatre étages de 1,8 m. Les deux du bas font 2,4 m de côté, les deux du
+  haut 1,5 m, posés au milieu du plancher du dessous.
+- Chaque étage : quatre poteaux en métal aux coins, un plancher en métal
+  dessus, une vitre sur chaque face entre les poteaux. Les vitres ne
+  portent rien.
+- Derrière la brute au départ, au-delà des vitres, posée de travers elle
+  aussi, assez loin pour ne se coucher ni sur la maison ni sur
+  l'immeuble.
+
+Ce qui tombe dans la tour : le métal reste d'un seul tenant. Deux pièces
+de métal dont l'une est posée sur l'autre sont fixées là où elles se
+touchent, debout comme tombées : un poteau reste attaché au plancher
+qu'il porte et à celui sur lequel il est posé.
+
+- Une vitre éclate au premier coup.
+- Un poteau du bas plie là où il est frappé et se cintre ; assez frappé,
+  il cède.
+- Alors le plancher du premier étage s'affaisse à ce coin, les vitres
+  au-dessus éclatent, et l'ossature penche de ce côté et se couche, d'un
+  seul tenant : poteaux et planchers restent attachés.
+- Elle reste pendue aux poteaux du bas qui sont encore debout.
+
 ## Comment on avance
 
 Une matière à la fois, sur un banc d'essai en grey box, validée sur le
@@ -321,7 +347,7 @@ Le plan, une pull request par étape, chacune jouable sur le téléphone
 4. Bois. (fait ; validé le 19 novembre)
 5. Verre. (fait ; validé le 19 novembre)
 6. Maison, immeuble, tour sur le banc. (la maison est faite, posée
-   tournée ; l'immeuble est en cours ; puis la tour)
+   tournée ; l'immeuble attend d'être validé ; la tour est en cours)
 7. La ville générée revient, faite de ces bâtiments.
 
 ## Ce qui prouvera que c'est bon
