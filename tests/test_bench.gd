@@ -30,11 +30,19 @@ func test_the_bench_is_a_bare_ground_with_one_brute_and_things_to_break() -> voi
 	# boards on two beams on four posts.
 	# And in glass: three panes.
 	# And a house, in wood with panes of glass, of seventy pieces (see
-	# test_house.gd).
+	# test_house.gd); an office building, in concrete with panes of
+	# glass, of seventy-one (see test_office.gd); and a tower, in metal
+	# with panes of glass, of thirty-six (see test_tower.gd).
 	var house: Array[int] = []
 	house.assign(main.house_pieces())
+	var office: Array[int] = []
+	office.assign(main.office_pieces())
+	var tower: Array[int] = []
+	tower.assign(main.tower_pieces())
 	check_eq(house.size(), 70, "seventy pieces to the house")
-	check_eq(s.pieces, 44 + 70, "a hundred and fourteen pieces")
+	check_eq(office.size(), 71, "seventy-one to the office building")
+	check_eq(tower.size(), 36, "thirty-six to the tower")
+	check_eq(s.pieces, 44 + 70 + 71 + 36, "two hundred and twenty-one pieces")
 	check_eq(s.standing_count, s.pieces, "all standing")
 	check_eq(main.panes.size(), 3, "three panes")
 	check_eq(main.planks.size(), 10, "ten planks to the palisade")
@@ -68,6 +76,20 @@ func test_the_bench_is_a_bare_ground_with_one_brute_and_things_to_break() -> voi
 				from.x > 4.8 and from.x < 9.0 and absf(from.z) < 4.0, "piece %d is on the brute's right" % q
 			)
 			continue
+		if q in office:
+			var from := s.place[q].origin - p.global_position
+			check(
+				from.x < -5.5 and from.x > -10.5 and absf(from.z - 2.5) < 2.5,
+				"piece %d is on the brute's left, opposite the house" % q
+			)
+			continue
+		if q in tower:
+			var from := s.place[q].origin - p.global_position
+			check(
+				from.z > 16.5 and from.z < 20.5 and absf(from.x) < 2.0,
+				"piece %d is behind the brute, beyond the panes of glass" % q
+			)
+			continue
 		check_eq(s.matter[q], made_of, "piece %d is made of what it should be" % q)
 		check(q in carried or s.rests_on[q].is_empty(), "piece %d stands on the ground" % q)
 		# Concrete to the brute's right as it starts, metal to its left,
@@ -93,10 +115,10 @@ func test_the_bench_is_a_bare_ground_with_one_brute_and_things_to_break() -> voi
 				"piece %d is cut into a few blocks (%d)" % [q, s.blocks[q]]
 			)
 	check_eq(s.rubble.live, 0, "nothing lies loose")
-	# All of it but the glass and the house in front of the brute as it
-	# starts, a few steps away.
+	# All of it but the glass, the house, the office building and the
+	# tower in front of the brute as it starts, a few steps away.
 	for q in s.pieces:
-		if q in main.panes or q in house:
+		if q in main.panes or q in house or q in office or q in tower:
 			continue
 		var to := s.place[q].origin - p.global_position
 		check(to.z < -4.0 and to.z > -21.0 and absf(to.x) < 11.0, "piece %d is in front of the brute" % q)

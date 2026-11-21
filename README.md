@@ -5,7 +5,7 @@ is being rebuilt from its concept, one step at a time, in greybox:
 [docs/CONCEPT.md](docs/CONCEPT.md) (in French) says what it is to be, and
 comes before the code.
 
-**Where it is now: step 6 of 7, the house first, set askew.** A bare ground, one brute that
+**Where it is now: step 6 of 7, a house and an office building.** A bare ground, one brute that
 walks, runs, sprints, jumps and throws a three-blow combination, and
 on the bench in front of it the same three things three times: a column,
 a wall, a slab on four columns. In concrete on its right, in metal on its
@@ -51,10 +51,23 @@ house. It stands askew: the streets of the city will not be straight, so
 a building is laid out straight and set down turned any way, and turned
 it holds, breaks and comes down as it does straight.
 
+An office building stands on its left, twice as high as the brute: a
+ground floor of glass between six concrete columns, and two concrete
+storeys with windows under a flat roof. A pane bursts at a blow. A column
+is cut at the fourth. Cut the three columns of its front and all of it
+comes down towards you and breaks: glass holds nothing up.
+
+A tower stands behind it, beyond the panes of glass, four times as high
+as the brute: four storeys of metal posts and decks with a pane of glass
+in each side, the upper two narrower. Metal fixed to metal stays fixed.
+Strike a post of its foot until it gives (four combinations): the glass
+over it bursts and the frame leans that way and lies down in one, still
+hanging from the posts that stand.
+
 What breaks is worked out one material at a time, each on this bench and
 each tried on a phone before the next: concrete, then metal, wood, glass;
-then a house (it is there), an office and a tower made of them; then the
-city, made up from a number as before.
+then a house, an office and a tower made of them (they are there); then
+the city, made up from a number as before.
 
 Godot 4.7, GDScript, Jolt physics, Compatibility renderer (WebGL2), so it
 can be played in Safari on an iPhone from each pull request's preview.
@@ -168,6 +181,10 @@ Add `--write-movie out.avi --fixed-fps 30` before `--path` to record a run.
   what stands turned (a house rests on the same things however it is
   turned; turned, concrete, metal, wood and glass answer the same blows
   as they do straight; two buildings do not rest on one another);
+  the office building (what carries what; a pane bursts at a blow, a
+  window when the wall under it goes; a column gives at the third
+  straight and the slab holds on the others; with the front columns cut all of it
+  comes down and breaks; what the brute brings down);
   the character
   (where the camera sits and how it comes in at a wall, the character
   turning to where it goes, its planted foot not sliding from a slow walk

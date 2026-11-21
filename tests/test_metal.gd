@@ -488,7 +488,8 @@ func test_the_brute_does_not_hold_up_what_comes_down_on_it() -> void:
 	var lowest := INF
 	for at in _parts(s, main.deck):
 		lowest = minf(lowest, at.y)
-	check(lowest < 1.0, "the deck's corner came down past its head (%.2f m up)" % lowest)
+	# (The post that gave is still fixed to that corner, folded under it.)
+	check(lowest < 1.4, "the deck's corner came down past its shoulders (%.2f m up)" % lowest)
 	check(p.global_position.y < 0.3, "and the brute is on the ground (%.2f m up)" % p.global_position.y)
 	await _unload()
 

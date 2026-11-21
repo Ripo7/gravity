@@ -39,6 +39,8 @@ extends Node3D
 ## wait for that: as soon as one of the pieces under it goes, it sags
 ## there, and folds as it comes down. Only a blow breaks or bends: from the
 ## brute (`strike`), or from something heavy landing on a piece (Rubble).
+## Glass carries nothing: it also gives as soon as something heavy comes
+## to rest on it, however gently.
 
 ## What a piece is doing: some of it stands; none of it does, and some of
 ## it lies in one (all of it, if it is metal); it is all in blocks.
@@ -77,9 +79,6 @@ const LINTEL := 1.25
 ## its own. Both as at real gravity.
 const TOPPLE := 2.5
 const SCATTER := 0.4
-## The triangles of a plate are this much smaller than drawn, as bodies:
-## two that only meet at a corner do not start out pressed together.
-const TILE := 0.97
 
 ## How many pieces there are, and per piece: what it is made of, its size,
 ## where its middle is, what one place of it takes, what it has taken
@@ -118,6 +117,8 @@ var glitter: Glitter
 var cut_seed := 1
 ## How many pieces still stand.
 var standing_count := 0
+## How many of them burst (glass): what comes to rest on one makes it give.
+var fragile := 0
 ## The frame what is added from now on is placed in: where a building
 ## stands and how it is turned, about the vertical only. (As it is given,
 ## what is added stands where it is told, straight.)
@@ -142,8 +143,7 @@ var _corners: Array[PackedVector3Array] = []
 var _radius := PackedFloat32Array()  # per block: how far its corners are from its centre
 var _hull: Array[RID] = []  # per block: its collision shape, once it is needed
 var _box: Array[RID] = []  # per piece: its collision shape as it was built
-var _limbs: Array[Array] = []  # per post that has been kinked: the shapes of its limbs
-var _made: Array[RID] = []  # the shapes of metal that has lain down: sheets, the triangles of plates
+var _wreck: Wreck  # what makes bodies of metal that comes down
 var _body: Array[RID] = []  # per piece: its static body while it stands
 var _in_body: Array[PackedInt32Array] = []  # per piece: the blocks its body is made of, once not its box
 var _loose: Array[PackedInt32Array] = []  # per piece: its bodies in the rubble once it has come down
@@ -166,6 +166,7 @@ func _init() -> void:
 	rubble = Rubble.new()
 	rubble.structure = self
 	add_child(rubble)
+	_wreck = Wreck.new(self)
 
 
 func _exit_tree() -> void:
@@ -175,11 +176,7 @@ func _exit_tree() -> void:
 			PhysicsServer3D.free_rid(rid)
 	for rid in _box:
 		PhysicsServer3D.free_rid(rid)
-	for limbs in _limbs:
-		for rid: RID in limbs:
-			PhysicsServer3D.free_rid(rid)
-	for rid in _made:
-		PhysicsServer3D.free_rid(rid)
+	_wreck.free_shapes()
 	for rid in _hull:
 		if rid.is_valid():
 			PhysicsServer3D.free_rid(rid)
@@ -222,9 +219,11 @@ func add_piece(of: int, xf: Transform3D, box: Vector3, shade := 0.0) -> int:
 	_wound_harm.append(PackedFloat32Array())
 	_whole.append(0.0)
 	_loose.append(PackedInt32Array())
-	_limbs.append([])
+	_wreck.add_piece()
 	_ties.append([])
 	_in_body.append(PackedInt32Array())
+	if Matter.BURSTS[of]:
+		fragile += 1
 	if Matter.BENDS[of]:
 		blocks.append(_add_skin(p))
 	else:
@@ -410,6 +409,7 @@ func shatter(p: int, way := Vector3.ZERO) -> void:
 ## fall as glitter, which are not bodies.
 func _burst(p: int) -> void:
 	harm[p] = strength[p]
+	fragile -= 1
 	for i in range(first[p], first[p] + blocks[p]):
 		if stands[i] == 1:
 			stands[i] = 0
@@ -877,36 +877,49 @@ func _refresh(p: int) -> void:
 			_in_body[p].remove_at(k)
 
 
-## Piece `p` has lost something, or something under it has: what of it is
-## no longer held comes down, and so on up through what rests on it.
-## `way`: where the blow that did it was going, if one did.
+## Piece `p` has lost something: what of it is no longer held comes down,
+## and so on up through what rests on it. `way`: where the blow that did
+## it was going, if one did.
 func _settle(p: int, way: Vector3) -> void:
-	if state[p] == STANDS:
-		if bend[p] != null:
-			if not _held(p, PackedInt32Array()) or _sags(p):
-				_drop(p, Vector3.ZERO)
-		elif Matter.BURSTS[matter[p]]:
-			# (Glass does not come down in one: it bursts.)
-			if not _held(p, _standing_of(p)):
-				_burst(p)
-		elif Matter.upright(size[p]):
-			for lump in _lumps(_unheld(p)):
-				_fall(p, lump, way)
-		else:
-			# What lies flat (a slab) holds in one, as long as its middle
-			# is over what is left under it.
-			for lump in _lumps(_standing_of(p)):
-				if not _held(p, lump):
-					_fall(p, lump, way)
+	_shed(p, way)
 	_let_go(p)
 
 
-## What rests on piece `p` is looked at again: it comes down unless what
-## is left under it still holds it.
+## What of piece `p` is no longer held comes down. Returns whether some did.
+func _shed(p: int, way: Vector3) -> bool:
+	if state[p] != STANDS:
+		return false
+	var shed := false
+	if bend[p] != null:
+		if not _held(p, PackedInt32Array()) or _sags(p):
+			_drop(p, Vector3.ZERO)
+			shed = true
+	elif Matter.BURSTS[matter[p]]:
+		# (Glass does not come down in one: it bursts.)
+		if not _held(p, _standing_of(p)):
+			_burst(p)
+			shed = true
+	elif Matter.upright(size[p]):
+		for lump in _lumps(_unheld(p)):
+			_fall(p, lump, way)
+			shed = true
+	else:
+		# What lies flat (a slab) holds in one, as long as its middle
+		# is over what is left under it.
+		for lump in _lumps(_standing_of(p)):
+			if not _held(p, lump):
+				_fall(p, lump, way)
+				shed = true
+	return shed
+
+
+## What rests on piece `p`, which has lost something, is looked at again:
+## it comes down unless what is left under it still holds it. And so on
+## up, but only through what loses something in its turn.
 func _let_go(p: int) -> void:
 	for q in carries[p]:
-		if state[q] == STANDS:
-			_settle(q, Vector3.ZERO)
+		if _shed(q, Vector3.ZERO):
+			_let_go(q)
 
 
 ## Is piece `p` a metal plate with nothing left under it of one of the
@@ -922,139 +935,67 @@ func _sags(p: int) -> bool:
 
 
 ## Piece `p`, which is metal and stood, comes down, in the shape it has:
-## loose from now on, as many bodies as it can fold into. It starts off
-## turning at `turn` about its foot.
+## loose from now on, as many bodies as it can fold into (Wreck). It
+## starts off turning at `turn` about its foot.
+##
+## Metal stays in one. From what still stands under it, it hangs: a plate
+## from whatever that is, where they still meet (it sags where there is
+## nothing); a post or a sheet from metal. And it stays fixed to the metal
+## it stood on or carried that has come down too, where they met: a frame
+## goes over in one.
 func _drop(p: int, turn: Vector3) -> void:
 	_leave(p)
 	state[p] = FALLS
-	var middle := place[p].origin
-	var foot := middle - Vector3.UP * size[p].y * 0.5
-	if bend[p].kind == Bend.POST:
-		_drop_post(p, turn, foot)
-	elif bend[p].kind == Bend.SHEET:
-		# One body, as dented as it is: what holds its corners and its dents.
-		var b := bend[p]
-		var thick := b.normal * minf(size[p].x, size[p].z) * 0.5
-		var around := PackedVector3Array()
-		for k in b.parts:
-			var corner := (k % b.across) % (b.across - 1) == 0 and (k / b.across) % (b.rows - 1) == 0
-			if corner or absf(b.dent[k]) > 0.01:
-				around.append(b.node(k) - middle + thick)
-				around.append(b.node(k) - middle - thick)
-			mesh.set_slot(first[p] + k, 1 + first[p])
-		var sheet := rubble.add(
-			[[_shape(around), Transform3D.IDENTITY]],
-			Transform3D(Basis(), middle),
-			middle,
-			size[p].x * size[p].y * size[p].z * Matter.DENSITY[matter[p]],
-			size[p].length() * 0.75,
-			turn.cross(middle - foot),
-			turn,
-			[[1 + first[p], Transform3D(Basis(), middle), middle]],
-			p
-		)
-		_loose[p] = PackedInt32Array([sheet])
-	else:
-		_drop_plate(p)
-
-
-## A post lies down: each of its limbs a body, the rings of the limb with
-## it. They fold at the joints between them.
-func _drop_post(p: int, turn: Vector3, foot: Vector3) -> void:
-	var b := bend[p]
-	var poses := b.ring_poses()
-	var limbs := _limbs_of(p, poses)
-	var across := size[p].x * size[p].z
-	var made := PackedInt32Array()
-	for limb in limbs:
-		var xf: Transform3D = limb[1]
-		var long: float = limb[4]
-		var rig: Array = []
-		# (The ring at a joint goes with the limb under it.)
-		var low: int = limb[2]
-		for k in range(low + (1 if low > 0 else 0), limb[3] + 1):
-			var i := first[p] + k
-			mesh.set_slot(i, 1 + i)
-			rig.append([1 + i, poses[k], centroid[i]])
-		made.append(
-			rubble.add(
-				[[limb[0], Transform3D(xf.basis, Vector3.ZERO)]],
-				Transform3D(Basis(), xf.origin),
-				xf.origin,
-				across * long * Matter.DENSITY[matter[p]],
-				long * 0.5 + maxf(size[p].x, size[p].z),
-				turn.cross(xf.origin - foot),
-				turn,
-				rig,
-				p
-			)
-		)
-	var holds := Matter.FOLD * maxf(size[p].x, size[p].z) * pow(minf(size[p].x, size[p].z), 2.0)
-	for k in made.size() - 1:
-		var at := poses[limbs[k][3]].origin
-		var axis := (at - poses[limbs[k][2]].origin).cross(poses[limbs[k + 1][3]].origin - at)
-		if axis.length() < 0.0001:
-			axis = place[p].basis.x
-		rubble.join(made[k], made[k + 1], at, axis, holds)
-	_loose[p] = made
-
-
-## A plate comes loose: each of its triangles a body, joined to the next
-## along the line between them, where the plate folds.
-func _drop_plate(p: int) -> void:
-	var b := bend[p]
-	var up := place[p].basis.y.normalized() * size[p].y * 0.5
-	var taken := {}  # node -> a triangle moves it already
-	var made := PackedInt32Array()
-	for tile in b.tiles:
-		var middle := (b.rest(tile[0]) + b.rest(tile[1]) + b.rest(tile[2])) / 3.0
-		var around := PackedVector3Array()
-		var far := 0.0
-		var rig: Array = []
-		for n in tile:
-			var from := (b.rest(n) - middle) * TILE
-			around.append(from + up)
-			around.append(from - up)
-			far = maxf(far, from.length())
-			if not taken.has(n):
-				taken[n] = true
-				var i := first[p] + n
-				mesh.set_slot(i, 1 + i)
-				rig.append([1 + i, Transform3D(Basis(), centroid[i]), centroid[i]])
-		var area := (
-			(b.rest(tile[1]) - b.rest(tile[0])).cross(b.rest(tile[2]) - b.rest(tile[0])).length() * 0.5
-		)
-		made.append(
-			rubble.add(
-				[[_shape(around), Transform3D.IDENTITY]],
-				Transform3D(Basis(), middle),
-				middle,
-				area * size[p].y * Matter.DENSITY[matter[p]],
-				far,
-				Vector3.ZERO,
-				Vector3.ZERO,
-				rig,
-				p
-			)
-		)
-	for fold in b.folds:
-		var from := b.rest(fold[2])
-		var to := b.rest(fold[3])
-		var holds := Matter.FOLD * from.distance_to(to) * size[p].y * size[p].y
-		rubble.join(made[fold[0]], made[fold[1]], (from + to) * 0.5, to - from, holds)
-	_loose[p] = made
-	# It stays tied to the pieces under it that still stand: it hangs
-	# from them, and sags where there is none. (Tied at the height of its
-	# folds: it can fold along a line that goes through there.)
-	var feet := _feet(p, PackedInt32Array())
+	_loose[p] = _wreck.drop(p, turn, _box[p])
+	var plate := bend[p].kind == Bend.PLATE
 	for q in rests_on[p]:
-		var meet := _meeting(feet, _heads(q))
-		if meet.is_empty():
+		var meet := _face(p, -1.0).intersection(_face(q, 1.0))
+		if state[q] != STANDS:
+			_weld(p, q, meet.get_center())
 			continue
-		# By the triangle that is over the middle of where they meet.
-		var touch := meet[0].get_center()
-		var at := _frames[_frame[p]] * Vector3(touch.x, _within[p].origin.y, touch.y)
-		_ties[q].append(rubble.tie(made[_tile_over(p, touch)], _body[q], at))
+		if plate:
+			var left := _meeting(_feet(p, PackedInt32Array()), _heads(q))
+			if left.is_empty():
+				continue
+			meet = left[0]
+		elif bend[q] == null:
+			continue
+		var at := _seat(p, q, meet.get_center())
+		_ties[q].append(rubble.tie(_loose[p][_part(p, meet.get_center(), true)], _body[q], at))
+	for q in carries[p]:
+		if state[q] != STANDS:
+			_weld(q, p, _face(q, -1.0).intersection(_face(p, 1.0)).get_center())
+
+
+## Pieces `top` and `under`, of which the first rested on the second, have
+## both come down: if they are metal and lie there, they stay fixed to one
+## another where they met, over the point `touch` of their frame.
+func _weld(top: int, under: int, touch: Vector2) -> void:
+	if bend[top] == null or bend[under] == null or _loose[top].is_empty() or _loose[under].is_empty():
+		return
+	var mine := _loose[top][_part(top, touch, true)]
+	rubble.weld(mine, _loose[under][_part(under, touch, false)], _seat(top, under, touch))
+
+
+## Where piece `top` and piece `under`, on which it rested, are fixed to
+## one another, over the point `touch` of their frame: at the height of
+## the folds of the one that is a plate (it can fold along a line that
+## goes through there), or else where they met.
+func _seat(top: int, under: int, touch: Vector2) -> Vector3:
+	var high := _face_at(under, 1.0, touch)
+	for p: int in [under, top]:
+		if bend[p] != null and bend[p].kind == Bend.PLATE:
+			high = _within[p].origin.y
+	return _frames[_frame[top]] * Vector3(touch.x, high, touch.y)
+
+
+## The body of piece `p`, which is metal and has come down, that is over
+## the point `touch` of its frame (its number among them): a triangle of
+## a plate; the limb at the foot of a post (`foot`) or the one at its head.
+func _part(p: int, touch: Vector2, foot: bool) -> int:
+	if bend[p].kind == Bend.PLATE:
+		return _tile_over(p, touch)
+	return 0 if foot else _loose[p].size() - 1
 
 
 ## The triangle of plate `p` that is over the point `at` of its frame (x
@@ -1079,14 +1020,6 @@ func _tile_over(p: int, at: Vector2) -> int:
 			over = t
 			least = off
 	return over
-
-
-## A collision shape that holds the points `around`, kept to be freed.
-func _shape(around: PackedVector3Array) -> RID:
-	var hull := PhysicsServer3D.convex_polygon_shape_create()
-	PhysicsServer3D.shape_set_data(hull, around)
-	_made.append(hull)
-	return hull
 
 
 ## Does what is under the blocks `chunk` of piece `p` (all of `p`, if it
@@ -1206,32 +1139,8 @@ func _bend(p: int, points: float, way: Vector3, at: Vector3) -> void:
 		mesh.set_body(1 + i, poses[k], centroid[i])
 	PhysicsServer3D.body_clear_shapes(_body[p])
 	var here := place[p].affine_inverse()
-	for limb in _limbs_of(p, poses):
+	for limb in _wreck.limbs_of(p, poses, _box[p]):
 		PhysicsServer3D.body_add_shape(_body[p], limb[0], here * (limb[1] as Transform3D))
-
-
-## The limbs of post `p` as its rings are in `poses`, between its foot,
-## its kinks and its head: for each, its shape, where it is, its first
-## ring and its last, how long it is. (One, as it was built, if it was
-## never kinked.)
-func _limbs_of(p: int, poses: Array[Transform3D]) -> Array[Array]:
-	var joints := bend[p].joints()
-	if bend[p].kink_at.is_empty():
-		return [[_box[p], place[p], 0, joints[1], size[p].y]]
-	var limbs: Array[Array] = []
-	for k in joints.size() - 1:
-		if _limbs[p].size() <= k:
-			_limbs[p].append(PhysicsServer3D.box_shape_create())
-		var from := poses[joints[k]].origin
-		var along := poses[joints[k + 1]].origin - from
-		var long := along.length()
-		PhysicsServer3D.shape_set_data(_limbs[p][k], Vector3(size[p].x, long, size[p].z) * 0.5)
-		var tilt := Vector3.UP.cross(along)
-		var turned := place[p].basis
-		if tilt.length() > 0.0001:
-			turned = Basis(tilt.normalized(), Vector3.UP.angle_to(along)) * turned
-		limbs.append([_limbs[p][k], Transform3D(turned, from + along * 0.5), joints[k], joints[k + 1], long])
-	return limbs
 
 
 ## The collision shape of block `i`, as its piece is laid out: it is

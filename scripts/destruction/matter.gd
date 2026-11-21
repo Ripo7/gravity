@@ -102,6 +102,9 @@ const CELL := 1.8
 ## 0.2 m thick holds 3600 N.m at a kink: more than its own weight makes
 ## as it lies down, less than what it carried makes once it is kinked.
 const FOLD := 450000.0
+## A post that gives under what it carries buckles: its folds then hold
+## only this share of that, and it folds up under what comes down on it.
+const BUCKLED := 0.1
 
 
 ## How many points of blows a piece of `of`, `size` across, takes.

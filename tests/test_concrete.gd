@@ -312,6 +312,35 @@ func test_what_is_no_longer_carried_comes_down() -> void:
 	await _unload()
 
 
+func test_what_came_down_from_high_breaks_however_gently_it_was_set_down() -> void:
+	await _load()
+	# A slab on one column, away from the bench.
+	var built := _alone(
+		1, [[Vector3(0.4, 1.6, 0.4), Vector3(60, 0, 0)], [Vector3(2.4, 0.3, 1.6), Vector3(60, 1.6, 0)]]
+	)
+	check_eq(Array(built.rests_on[1]), [0], "the slab rests on the column")
+	built.hit(0, built.strength[0], Vector3.RIGHT)
+	check_eq(built.state[1], Structure.FALLS, "which gone, it comes down, in one")
+	check_eq(built._loose[1].size(), 1, "one loose body")
+	var body := built.rubble.body[built._loose[1][0]]
+	# Let down slowly: nothing stops it short, and it would have been left
+	# lying whole.
+	var fastest := 0.0
+	for k in 900:
+		if built.state[1] != Structure.FALLS:
+			break
+		var going: Vector3 = PhysicsServer3D.body_get_state(body, PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY)
+		fastest = maxf(fastest, going.length())
+		PhysicsServer3D.body_set_state(
+			body, PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY, going.limit_length(0.3)
+		)
+		await frames(1)
+	check(fastest < Rubble.SCRAPE, "(it never went fast enough to be stopped short: %.2f m/s)" % fastest)
+	check_eq(built.state[1], Structure.BROKEN, "it is in blocks all the same, once it has come to rest")
+	built.free()
+	await _unload()
+
+
 func test_what_lands_on_a_piece_is_a_blow_to_it() -> void:
 	await _load()
 	# A low column, and over it a heavy slab that rests on a tall column to

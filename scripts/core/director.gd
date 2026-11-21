@@ -50,8 +50,7 @@ func _wait(seconds: float) -> void:
 
 
 func _place(at: Vector3, target: Vector3) -> void:
-	player.global_position = at
-	player.velocity = Vector3.ZERO
+	player.set_down(at)
 	player.look_at_point(target)
 	player.facing = player.yaw
 
@@ -59,8 +58,7 @@ func _place(at: Vector3, target: Vector3) -> void:
 ## Puts the brute at `at`, its body turned to `target`, the camera behind
 ## it.
 func _face(at: Vector3, target: Vector3) -> void:
-	player.global_position = at
-	player.velocity = Vector3.ZERO
+	player.set_down(at)
 	player.facing = atan2(at.x - target.x, at.z - target.z)
 	player.look(Vector2(angle_difference(player.yaw, player.facing), 0.0))
 
@@ -81,14 +79,14 @@ func _profile() -> void:
 
 func _play() -> void:
 	if options.has("from"):
-		player.global_position = _vec(options["from"])
+		player.set_down(_vec(options["from"]))
 	await _wait(0.5)
 	for spec: String in String(options.get("steps", "")).split(";", false):
 		var kind := spec.substr(0, 1)
 		if kind == "w":
 			await _wait(float(spec.substr(1)))
 		elif kind == "m":
-			player.global_position = _vec(spec.substr(1))
+			player.set_down(_vec(spec.substr(1)))
 		elif kind == "s":
 			var f := spec.substr(1).split_floats(",")
 			_face(Vector3(f[0], f[1], f[2]), Vector3(f[3], f[4], f[5]))
