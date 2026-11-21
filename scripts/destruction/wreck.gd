@@ -111,6 +111,8 @@ func _post(p: int, turn: Vector3, whole: RID) -> PackedInt32Array:
 			)
 		)
 	var holds := Matter.FOLD * maxf(size.x, size.z) * pow(minf(size.x, size.z), 2.0)
+	if _of.bend[p].bows and _of.harm[p] >= _of.strength[p]:
+		holds *= Matter.BUCKLED
 	for k in made.size() - 1:
 		var at := poses[limbs[k][3]].origin
 		var axis := (at - poses[limbs[k][2]].origin).cross(poses[limbs[k + 1][3]].origin - at)

@@ -32,8 +32,9 @@ const GRAVITY := 9.8
 const QUIET_SPEED := 0.3
 const QUIET_SPIN := 0.8
 const QUIET_TIME := 0.5
-## Bodies joined to others have to be this much slower still: a fold that
-## gives starts slowly.
+## Bodies joined to others are held to this share of those speeds (a fold
+## that gives starts slowly), and by how far they go, not by how fast: see
+## `_is_quiet`.
 const QUIET_JOINED := 0.12
 ## A fold goes this far (rad) from how it was made, either way.
 const FOLD_MOST := 2.4
@@ -53,6 +54,11 @@ const SPIN := 5.0
 ## What is tied to a piece that stands can shift this far (m) from where
 ## it is tied, each way: enough to fold over the edge of what holds it.
 const SLACK := 0.15
+## What it takes to turn two pieces of metal about where they are fixed to
+## one another (N.m, as at real gravity). Little, next to what a frame
+## weighs: it leans and lies down all the same. Enough for what hangs
+## there neither to swing nor to spin for long.
+const WELD := 200.0
 ## A body stopped by less than this (m/s, as at real gravity) in a step has
 ## only scraped: nothing comes of it.
 const SCRAPE := 0.8
@@ -112,6 +118,7 @@ var _xf: Array[Transform3D] = []
 var _lin := PackedVector3Array()
 var _ang := PackedVector3Array()
 var _quiet := PackedFloat32Array()
+var _stayed: Array[Transform3D] = []  # per body joined to others: where it has not left since
 var _from_high := PackedFloat32Array()  # per body: how high its middle was when it came loose
 var _rig: Array[Array] = []  # per body: the bodies of the mesh it moves, each [slot, pose, origin]
 var _by_body := {}  # RID -> body
@@ -120,6 +127,7 @@ var _through: Array[Vector3] = []  # (body, piece it goes through, s before it n
 var _together: Array[PackedInt32Array] = []  # bodies joined to one another, directly or not
 var _joints: Array[RID] = []
 var _ties: Array[RID] = []  # what ties loose bodies to pieces that stand
+var _welds: Array[RID] = []  # what fixes loose bodies of metal to one another
 var _holds := PackedFloat32Array()  # per joint: the turning force it holds (N.m, at real gravity)
 var _brute_id := 0
 var _brute_at := Vector3.ZERO
@@ -129,10 +137,11 @@ var _gives := PackedInt32Array()  # pieces that carry nothing on which something
 
 
 func _exit_tree() -> void:
-	for joint in _joints + _ties:
+	for joint in _joints + _ties + _welds:
 		PhysicsServer3D.free_rid(joint)
 	_joints.clear()
 	_ties.clear()
+	_welds.clear()
 	for i in body.size():
 		if alive[i] == 1:
 			PhysicsServer3D.free_rid(body[i])
@@ -149,6 +158,8 @@ func set_fall(share: float) -> void:
 		PhysicsServer3D.hinge_joint_set_param(
 			_joints[k], PhysicsServer3D.HINGE_JOINT_MOTOR_MAX_IMPULSE, _impulse(_holds[k])
 		)
+	for joint in _welds:
+		_rub(joint)
 
 
 ## A new loose body, at `xf`, going at `velocity` and turning at `spin`.
@@ -204,6 +215,7 @@ func add(
 	_lin.append(velocity)
 	_ang.append(spin)
 	_quiet.append(0.0)
+	_stayed.append(xf)
 	_from_high.append(xf.origin.y)
 	_rig.append(rig)
 	_by_body[b] = i
@@ -243,7 +255,51 @@ func join(a: int, b: int, at: Vector3, axis: Vector3, holds: float) -> void:
 	PhysicsServer3D.hinge_joint_set_flag(joint, PhysicsServer3D.HINGE_JOINT_FLAG_ENABLE_MOTOR, true)
 	_joints.append(joint)
 	_holds.append(holds)
-	# They rest and move again together, with all they are joined to.
+	_gather(a, b)
+
+
+## Body `i` is tied at `at` to `anchor`, the body of a piece that stands
+## (a deck to the post that still holds it): it can turn there as it
+## likes and shift by SLACK m each way, no more. Returns the tie, to
+## `release` when the piece goes.
+func tie(i: int, anchor: RID, at: Vector3) -> RID:
+	var there: Transform3D = PhysicsServer3D.body_get_state(anchor, PhysicsServer3D.BODY_STATE_TRANSFORM)
+	var joint := _pin(body[i], _xf[i], anchor, there, at)
+	_ties.append(joint)
+	return joint
+
+
+## Bodies `a` and `b` are of two pieces of metal fixed to one another at
+## `at` (a post to the deck it carried, both come down): each can lean
+## there, which takes WELD N.m, and shift by SLACK m each way, no more,
+## and they still stop one another. For good.
+func weld(a: int, b: int, at: Vector3) -> void:
+	var joint := _pin(body[a], _xf[a], body[b], _xf[b], at)
+	PhysicsServer3D.joint_disable_collisions_between_bodies(joint, false)
+	for axis: int in [Vector3.AXIS_X, Vector3.AXIS_Y, Vector3.AXIS_Z]:
+		PhysicsServer3D.generic_6dof_joint_set_param(
+			joint, axis, PhysicsServer3D.G6DOF_JOINT_ANGULAR_MOTOR_TARGET_VELOCITY, 0.0
+		)
+		PhysicsServer3D.generic_6dof_joint_set_flag(
+			joint, axis, PhysicsServer3D.G6DOF_JOINT_FLAG_ENABLE_MOTOR, true
+		)
+	_rub(joint)
+	_welds.append(joint)
+	_gather(a, b)
+
+
+## Gives the weld `joint` what it takes to turn it, at the gravity there
+## is here: a motor told to stay still, with only so much force.
+func _rub(joint: RID) -> void:
+	for axis: int in [Vector3.AXIS_X, Vector3.AXIS_Y, Vector3.AXIS_Z]:
+		PhysicsServer3D.generic_6dof_joint_set_param(
+			joint, axis, PhysicsServer3D.G6DOF_JOINT_ANGULAR_MOTOR_FORCE_LIMIT, WELD * fall
+		)
+
+
+## Bodies `a` and `b` rest and move again together from now on, with all
+## they are joined or fixed to.
+func _gather(a: int, b: int) -> void:
 	if joined[a] < 0 and joined[b] < 0:
 		joined[a] = _together.size()
 		joined[b] = joined[a]
@@ -262,16 +318,14 @@ func join(a: int, b: int, at: Vector3, axis: Vector3, holds: float) -> void:
 		_together[from] = PackedInt32Array()
 
 
-## Body `i` is tied at `at` to `anchor`, the body of a piece that stands
-## (a deck to the post that still holds it): it can turn there as it
-## likes and shift by SLACK m each way, no more. Returns the tie, to
-## `release` when the piece goes.
-func tie(i: int, anchor: RID, at: Vector3) -> RID:
-	var there: Transform3D = PhysicsServer3D.body_get_state(anchor, PhysicsServer3D.BODY_STATE_TRANSFORM)
+## A joint that holds the body `one`, which is at `one_at`, to the body
+## `other`, which is at `other_at`, at the point `at`: free to turn there,
+## and to shift by SLACK m each way.
+func _pin(one: RID, one_at: Transform3D, other: RID, other_at: Transform3D, at: Vector3) -> RID:
 	var here := Transform3D(Basis(), at)
 	var joint := PhysicsServer3D.joint_create()
 	PhysicsServer3D.joint_make_generic_6dof(
-		joint, body[i], _xf[i].affine_inverse() * here, anchor, there.affine_inverse() * here
+		joint, one, one_at.affine_inverse() * here, other, other_at.affine_inverse() * here
 	)
 	for axis: int in [Vector3.AXIS_X, Vector3.AXIS_Y, Vector3.AXIS_Z]:
 		PhysicsServer3D.generic_6dof_joint_set_param(
@@ -286,7 +340,6 @@ func tie(i: int, anchor: RID, at: Vector3) -> RID:
 		PhysicsServer3D.generic_6dof_joint_set_flag(
 			joint, axis, PhysicsServer3D.G6DOF_JOINT_FLAG_ENABLE_ANGULAR_LIMIT, false
 		)
-	_ties.append(joint)
 	return joint
 
 
@@ -473,9 +526,8 @@ func _moved(state: PhysicsDirectBodyState3D, i: int) -> void:
 				if state.get_contact_local_normal(k).y >= OVER:
 					bears_down.emit(_xf[i].origin, mass[i])
 	# (What it is joined to holds it as well as what it touches.)
-	var still := slow * (QUIET_JOINED if joined[i] >= 0 else 1.0)
 	var held := (touching > 0 or joined[i] >= 0) and not on_brute
-	if held and lin.length() < QUIET_SPEED * still and ang.length() < QUIET_SPIN * still:
+	if held and _is_quiet(i, lin, ang, slow):
 		_quiet[i] += state.step
 		if _quiet[i] >= QUIET_TIME:
 			_freeze.append(i)
@@ -519,6 +571,23 @@ func _moved(state: PhysicsDirectBodyState3D, i: int) -> void:
 	# bodies it came down on took from it counts.)
 	var lost := total / mass[i] if joined[i] >= 0 else stopped
 	_hits.append([i, lost, by, share, where])
+
+
+## Is body `i`, which goes at `lin` and turns at `ang`, quiet? On its own:
+## it is slow. Joined to others, which hold it and shake it where it is:
+## it has not left where it was by more than it would, going for
+## QUIET_TIME at the QUIET_JOINED share of those speeds (a limb that hangs
+## is slow at the end of each swing, and is not at rest for that).
+func _is_quiet(i: int, lin: Vector3, ang: Vector3, slow: float) -> bool:
+	if joined[i] < 0:
+		return lin.length() < QUIET_SPEED * slow and ang.length() < QUIET_SPIN * slow
+	var most := QUIET_JOINED * QUIET_TIME * slow
+	var was := _stayed[i]
+	var turned := was.basis.get_rotation_quaternion().angle_to(_xf[i].basis.get_rotation_quaternion())
+	if was.origin.distance_to(_xf[i].origin) < QUIET_SPEED * most and turned < QUIET_SPIN * most:
+		return true
+	_stayed[i] = _xf[i]
+	return false
 
 
 ## Body `i` was stopped by `stopped` m/s in a step; it came down on the

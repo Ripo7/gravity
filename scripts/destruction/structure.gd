@@ -937,24 +937,65 @@ func _sags(p: int) -> bool:
 ## Piece `p`, which is metal and stood, comes down, in the shape it has:
 ## loose from now on, as many bodies as it can fold into (Wreck). It
 ## starts off turning at `turn` about its foot.
+##
+## Metal stays in one. From what still stands under it, it hangs: a plate
+## from whatever that is, where they still meet (it sags where there is
+## nothing); a post or a sheet from metal. And it stays fixed to the metal
+## it stood on or carried that has come down too, where they met: a frame
+## goes over in one.
 func _drop(p: int, turn: Vector3) -> void:
 	_leave(p)
 	state[p] = FALLS
 	_loose[p] = _wreck.drop(p, turn, _box[p])
-	if bend[p].kind != Bend.PLATE:
-		return
-	# A plate stays tied to the pieces under it that still stand: it hangs
-	# from them, and sags where there is none. (Tied at the height of its
-	# folds: it can fold along a line that goes through there.)
-	var feet := _feet(p, PackedInt32Array())
+	var plate := bend[p].kind == Bend.PLATE
 	for q in rests_on[p]:
-		var meet := _meeting(feet, _heads(q))
-		if meet.is_empty():
+		var meet := _face(p, -1.0).intersection(_face(q, 1.0))
+		if state[q] != STANDS:
+			_weld(p, q, meet.get_center())
 			continue
-		# By the triangle that is over the middle of where they meet.
-		var touch := meet[0].get_center()
-		var at := _frames[_frame[p]] * Vector3(touch.x, _within[p].origin.y, touch.y)
-		_ties[q].append(rubble.tie(_loose[p][_tile_over(p, touch)], _body[q], at))
+		if plate:
+			var left := _meeting(_feet(p, PackedInt32Array()), _heads(q))
+			if left.is_empty():
+				continue
+			meet = left[0]
+		elif bend[q] == null:
+			continue
+		var at := _seat(p, q, meet.get_center())
+		_ties[q].append(rubble.tie(_loose[p][_part(p, meet.get_center(), true)], _body[q], at))
+	for q in carries[p]:
+		if state[q] != STANDS:
+			_weld(q, p, _face(q, -1.0).intersection(_face(p, 1.0)).get_center())
+
+
+## Pieces `top` and `under`, of which the first rested on the second, have
+## both come down: if they are metal and lie there, they stay fixed to one
+## another where they met, over the point `touch` of their frame.
+func _weld(top: int, under: int, touch: Vector2) -> void:
+	if bend[top] == null or bend[under] == null or _loose[top].is_empty() or _loose[under].is_empty():
+		return
+	var mine := _loose[top][_part(top, touch, true)]
+	rubble.weld(mine, _loose[under][_part(under, touch, false)], _seat(top, under, touch))
+
+
+## Where piece `top` and piece `under`, on which it rested, are fixed to
+## one another, over the point `touch` of their frame: at the height of
+## the folds of the one that is a plate (it can fold along a line that
+## goes through there), or else where they met.
+func _seat(top: int, under: int, touch: Vector2) -> Vector3:
+	var high := _face_at(under, 1.0, touch)
+	for p: int in [under, top]:
+		if bend[p] != null and bend[p].kind == Bend.PLATE:
+			high = _within[p].origin.y
+	return _frames[_frame[top]] * Vector3(touch.x, high, touch.y)
+
+
+## The body of piece `p`, which is metal and has come down, that is over
+## the point `touch` of its frame (its number among them): a triangle of
+## a plate; the limb at the foot of a post (`foot`) or the one at its head.
+func _part(p: int, touch: Vector2, foot: bool) -> int:
+	if bend[p].kind == Bend.PLATE:
+		return _tile_over(p, touch)
+	return 0 if foot else _loose[p].size() - 1
 
 
 ## The triangle of plate `p` that is over the point `at` of its frame (x
