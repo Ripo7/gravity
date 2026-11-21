@@ -5,7 +5,7 @@ extends Node3D
 ## breaks is worked out here one matter at a time (docs/CONCEPT.md):
 ## concrete on its right as it starts, metal on its left, wood straight
 ## ahead, farther off, glass behind it. Then one building at a time: a
-## house on its right, an office building on its left.
+## house on its right, an office building on its left, a tower behind it.
 
 ## Where the brute starts.
 const START := Vector3(0, 0.05, 0)
@@ -133,6 +133,30 @@ const WINDOW := Vector2(0.6, 0.5)
 ## How much darker than plain concrete its columns and its slabs are.
 const COLUMN_SHADE := 0.3
 const SLAB_SHADE := 0.16
+## A tower, behind the brute as it starts, beyond the glass: four times as
+## high as the brute, far enough from the house and the office building
+## not to lie down on them. It is laid out straight, the middle of its
+## floor at TOWER_AT, and stands turned TOWER_TURN degrees.
+## TOWER_STOREYS storeys, each TOWER_STOREY high from floor to floor: four
+## metal posts TOWER_POST thick at its corners, a metal deck TOWER_DECK
+## thick on them, and a pane of glass in each side, between the posts.
+## It is stepped: its storeys are TOWER across (square) up to storey
+## TOWER_STEP, and TOWER_TOP across from there up, in the middle of the
+## deck under them.
+## No pane carries anything: each stops SLACK m short of the deck over it.
+## (Its decks are thin: one that has lost the post under a corner sags
+## there under what stands on it. Twice as thick, it could hold it up.)
+const TOWER_AT := Vector3(0, 0, 18.5)
+const TOWER_TURN := 15.0
+const TOWER_STOREYS := 4
+const TOWER_STOREY := 1.8
+const TOWER := 2.4
+const TOWER_TOP := 1.5
+const TOWER_STEP := 2
+const TOWER_POST := 0.15
+const TOWER_DECK := 0.06
+## How much darker than plain metal its decks are.
+const DECK_SHADE := 0.25
 
 var player: Player
 var structure: Structure
@@ -195,6 +219,15 @@ var office_piers := PackedInt32Array()
 var office_panes := PackedInt32Array()
 ## How it is turned when the bench is laid (degrees, see OFFICE_TURN).
 var office_turn := OFFICE_TURN
+## The tower, storey by storey from the ground up: its posts (four to a
+## storey: the two of the front, +z as it is laid out, from -x to +x, then
+## the two of the back), its decks (one to a storey, the last the roof),
+## its panes (four to a storey: front, back, the -x side, the +x side).
+var tower_posts := PackedInt32Array()
+var tower_decks := PackedInt32Array()
+var tower_panes := PackedInt32Array()
+## How it is turned when the bench is laid (degrees, see TOWER_TURN).
+var tower_turn := TOWER_TURN
 
 
 func _ready() -> void:
@@ -251,7 +284,8 @@ func _on_blow(at: Vector3, way: Vector3, power: int, on: RID) -> void:
 ## What stands on the bench: in concrete, a column, a wall, a slab on four
 ## columns; in metal, a post, a fence of sheets, a deck on four posts; in
 ## wood, a post, a palisade of planks, a floor of boards on two beams on
-## four posts; in glass, three panes. And a house, and an office building.
+## four posts; in glass, three panes. And a house, an office building
+## and a tower.
 func _lay_bench() -> void:
 	structure = Structure.new()
 	add_child(structure)
@@ -300,6 +334,8 @@ func _lay_bench() -> void:
 	_lay_house()
 	structure.frame = office_frame()
 	_lay_office()
+	structure.frame = tower_frame()
+	_lay_tower()
 	structure.frame = Transform3D.IDENTITY
 	structure.build()
 
@@ -528,6 +564,47 @@ func _lay_storey(floor_at: float) -> void:
 			var z := -side_long * 0.5 + side_pier + k * (side_pier + WINDOW.y) + WINDOW.y * 0.5
 			var pane := Vector3(PANE_THICK, tall - SLACK, WINDOW.y)
 			office_panes.append(_stand(Matter.GLASS, pane, Vector3(side * at_x, sill, z)))
+
+
+## Where the tower stands and how it is turned: what takes a point of it
+## as it is laid out (see TOWER), from the middle of its floor, to where
+## it is on the bench.
+func tower_frame() -> Transform3D:
+	return Transform3D(Basis(Vector3.UP, deg_to_rad(tower_turn)), TOWER_AT)
+
+
+## The tower (see TOWER), laid out straight round the middle of its floor,
+## in the frame of the structure.
+func _lay_tower() -> void:
+	for group: PackedInt32Array in [tower_posts, tower_decks, tower_panes]:
+		group.clear()
+	var tall := TOWER_STOREY - TOWER_DECK
+	for storey in TOWER_STOREYS:
+		var across := TOWER if storey < TOWER_STEP else TOWER_TOP
+		var floor_at := storey * TOWER_STOREY
+		var corner := (across - TOWER_POST) * 0.5
+		var upright := Vector3(TOWER_POST, tall, TOWER_POST)
+		for row: float in [1.0, -1.0]:
+			for side: float in [-1.0, 1.0]:
+				var foot := Vector3(side * corner, floor_at, row * corner)
+				tower_posts.append(_stand(Matter.METAL, upright, foot))
+		var flat := Vector3(across, TOWER_DECK, across)
+		tower_decks.append(_stand(Matter.METAL, flat, Vector3.UP * (floor_at + tall), DECK_SHADE))
+		var wide := across - 2.0 * TOWER_POST
+		for row: float in [1.0, -1.0]:
+			var pane := Vector3(wide, tall - SLACK, PANE_THICK)
+			tower_panes.append(_stand(Matter.GLASS, pane, Vector3(0, floor_at, row * corner)))
+		for side: float in [-1.0, 1.0]:
+			var pane := Vector3(PANE_THICK, tall - SLACK, wide)
+			tower_panes.append(_stand(Matter.GLASS, pane, Vector3(side * corner, floor_at, 0)))
+
+
+## Every piece of the tower.
+func tower_pieces() -> PackedInt32Array:
+	var all := PackedInt32Array()
+	for group: PackedInt32Array in [tower_posts, tower_decks, tower_panes]:
+		all.append_array(group)
+	return all
 
 
 ## Every piece of the office building.

@@ -65,7 +65,14 @@ const steps =
   // and breaks.
   `s-5.74,0.05,3.46,-6.30,1,3.66;w0.3;${mash(3.5)};w1;` +
   `s-6.31,0.05,1.88,-6.87,1,2.09;w0.3;${mash(3.5)};w1;` +
-  `s-6.88,0.05,0.31,-7.45,1,0.52;w0.3;${mash(3.5)};w5`;
+  `s-6.88,0.05,0.31,-7.45,1,0.52;w0.3;${mash(3.5)};w5;` +
+  // A post at a corner of the foot of the tower, which stands behind the
+  // start, 15 degrees askew (it gives at the sixth straight that lands on
+  // it, and bowed, it is no longer where some of them land: four
+  // combinations): the four decks and the twelve posts over it come
+  // loose in one, the twelve panes over it burst, and the frame lies
+  // down.
+  `s1.56,0.05,19.97,1.38,1,19.30;w0.3;${mash(8)};w7`;
 // Software WebGL is slow: loading alone can take a while.
 await page.goto(`http://localhost:8061/index.html?mode=play&prof&steps=${encodeURIComponent(steps)}`, { timeout: 180000 });
 // And a few seconds of game time can take a minute.
@@ -102,6 +109,7 @@ if (end && Number(end[3]) < 4) failures.push(`the column, the two posts and the 
 if (end && (Number(end[1]) > Number(end[2]) - 3 || Number(end[4]) < 14)) failures.push(`the column or the wooden post was not cut, the deck did not come loose, or the pane did not burst: ${done}`);
 if (end && Number(end[1]) > Number(end[2]) - 20) failures.push(`the roof of the house did not come down: ${done}`);
 if (end && Number(end[1]) > Number(end[2]) - 70) failures.push(`the office building did not come down: ${done}`);
+if (end && Number(end[1]) > Number(end[2]) - 70 - 29) failures.push(`the tower did not come down: ${done}`);
 const errors = lines.filter((t) => /SCRIPT ERROR|shader.*(error|fail)|ERROR:/i.test(t));
 if (errors.length) failures.push(`${errors.length} errors, first: ${errors[0]}`);
 console.log(failures.length ? "WEB_FAIL " + failures.join("; ") : "WEB_OK");
