@@ -64,7 +64,7 @@ const WELD := 200.0
 const SCRAPE := 0.8
 ## Blocks that come down in one break apart when something stops them
 ## once they have come down this far (m), or as hard as a drop from this
-## high would.
+## high would; and at the latest as they come to rest that much lower.
 const BREAKS_FROM := 0.3
 ## What a body that lands on a standing piece does to it: a point of blows
 ## for each POINT kg.m/s it loses against it (as at real gravity); less
@@ -452,6 +452,12 @@ func _physics_process(delta: float) -> void:
 				PhysicsServer3D.body_remove_collision_exception(body[i], rest_of)
 			_through.remove_at(k)
 	for i in _freeze:
+		# What came down from high breaks, at the latest as it comes to rest,
+		# however gently it was stopped.
+		if alive[i] == 1 and joined[i] < 0 and piece[i] >= 0 and _came_down(i) >= BREAKS_FROM:
+			structure.lands(i)
+		if alive[i] == 0:
+			continue
 		# (Bodies joined to one another: only once all of them are quiet.)
 		var all := PackedInt32Array([i]) if joined[i] < 0 else _together[joined[i]]
 		var rests := true
@@ -612,9 +618,14 @@ func _land(
 			structure.hit(stands, taken[stands], Vector3.ZERO, at[stands])
 	if alive[i] == 0 or piece[i] < 0:
 		return
+	if _came_down(i) >= BREAKS_FROM or stopped >= sqrt(2.0 * GRAVITY * fall * BREAKS_FROM):
+		structure.lands(i)
+
+
+## How far body `i`, a piece coming down whole, has come down (m).
+func _came_down(i: int) -> float:
 	var down := _from_high[i] - _xf[i].origin.y
 	if not Matter.upright(structure.size[piece[i]]):
 		# (A slab that tips has come down by its far edge, not by its middle.)
 		down += reach[i] * sqrt(maxf(0.0, 1.0 - _xf[i].basis.y.y * _xf[i].basis.y.y))
-	if down >= BREAKS_FROM or stopped >= sqrt(2.0 * GRAVITY * fall * BREAKS_FROM):
-		structure.lands(i)
+	return down
