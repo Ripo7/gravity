@@ -283,7 +283,10 @@ porté :
 - La dalle du premier étage tient tant que son milieu est au-dessus des
   poteaux qui restent. Un poteau en moins : elle tient. Les trois d'un
   long côté en moins : elle tombe à plat, et tout ce qui est dessus avec
-  elle, murs, vitres et dalles. Le béton se disloque en touchant le sol.
+  elle, murs, vitres et dalles. Le béton se disloque en touchant le sol,
+  ou au plus tard quand il s'immobilise : posée doucement sur ce qui
+  tombait sous elle, une dalle restait parfois entière (quatre chutes
+  sur huit, mesuré en posant la tour).
 - Un trou dans un muret, ou un pan de mur en moins, ne fait pas tomber la
   dalle du dessus tant que les autres pans la portent.
 - Les poings atteignent le rez-de-chaussée et le bas du premier étage ;
@@ -305,9 +308,9 @@ détail est de ma part, à valider au banc :
 
 - Quatre étages de 1,8 m. Les deux du bas font 2,4 m de côté, les deux du
   haut 1,5 m, posés au milieu du plancher du dessous.
-- Chaque étage : quatre poteaux en métal aux coins, un plancher en métal
-  dessus, une vitre sur chaque face entre les poteaux. Les vitres ne
-  portent rien.
+- Chaque étage : quatre poteaux en métal aux coins (15 cm), un plancher
+  en métal dessus (6 cm), une vitre sur chaque face entre les poteaux.
+  Les vitres ne portent rien.
 - Derrière la brute au départ, au-delà des vitres, posée de travers elle
   aussi, assez loin pour ne se coucher ni sur la maison ni sur
   l'immeuble.
@@ -324,6 +327,21 @@ qu'il porte et à celui sur lequel il est posé.
   au-dessus éclatent, et l'ossature penche de ce côté et se couche, d'un
   seul tenant : poteaux et planchers restent attachés.
 - Elle reste pendue aux poteaux du bas qui sont encore debout.
+- Un poteau qui cède sous ce qu'il porte flambe : il se replie sous la
+  charge au lieu de la retenir. (Resté fixé par la tête au coin qu'il
+  portait, il le tenait encore, plié, comme une béquille.)
+- Les planchers sont minces pour que la tour tombe à coup sûr : à 12 cm,
+  un plancher tenait tout seul son coin en l'air, la tour restait sur
+  trois poteaux et ne tombait qu'à un cheveu près (une fois sur six, elle
+  est restée debout).
+- Mesuré au banc : un poteau du bas cède au sixième direct qui le touche.
+  À la main il faut douze coups, quatre combinaisons : le coup sauté
+  passe au-dessus, et le poteau, une fois cintré, n'est plus là où
+  arrivent une partie des directs. Alors les quatre planchers et les
+  douze poteaux du dessus se détachent d'un coup, les douze vitres du
+  dessus éclatent, l'ossature est couchée en 2 à 4 s et immobile 3 à
+  10 s après. Les vitres du rez-de-chaussée restent tant que rien ne
+  tombe dessus.
 
 ## Comment on avance
 
@@ -347,7 +365,7 @@ Le plan, une pull request par étape, chacune jouable sur le téléphone
 4. Bois. (fait ; validé le 19 novembre)
 5. Verre. (fait ; validé le 19 novembre)
 6. Maison, immeuble, tour sur le banc. (la maison est faite, posée
-   tournée ; l'immeuble attend d'être validé ; la tour est en cours)
+   tournée ; l'immeuble et la tour attendent d'être validés)
 7. La ville générée revient, faite de ces bâtiments.
 
 ## Ce qui prouvera que c'est bon

@@ -47,6 +47,90 @@ Since then, on that phone, with concrete and metal on the bench: 48 to
 53 frames a second while it is broken (see below). The measure above is
 still the way to compare two builds.
 
+### The tower
+
+Same machine, same way (headless, 2 cores, `--fixed-fps 60`, real
+gravity). The bench has 221 pieces, drawn as 1221 parts (185 and 1077
+before): the tower is 36 pieces and 144 parts.
+
+The run at the top of this page (it never goes near the tower), three
+times, turn about with the build before (the office building). This
+build: 0.12 to 0.13 ms at the median, 99% of the steps under 0.44 to
+0.55 ms, the slowest 4.1 to 6.9 ms (one step over 6 ms in one run); 85
+to 87 loose bodies at the end. The build before: 0.10 to 0.14 ms, 99%
+under 0.44 to 0.45 ms, the slowest 5.1 to 8.2 ms (one step over 6 ms in
+one run); 84 or 85 loose bodies. No difference that these runs can
+show.
+
+The tower brought down, three times: 8 s of blows at a post of a corner
+of its foot, then ten seconds for it to come down and lie.
+
+```sh
+M() { python3 -c "print(';'.join(['h;w0.25']*round($1/0.25)))"; }
+godot --headless --fixed-fps 60 --path . -- --mode=play --prof --steps="\
+s1.56,0.05,19.97,1.38,1,19.30;w0.4;$(M 8);w10"
+```
+
+0.34 to 0.40 ms at the median, 99% of the steps under 0.60 to 0.78 ms,
+the slowest 3.3 to 3.4 ms, none over 6 ms. In its worst second a step
+takes 0.44 to 0.55 ms. 23 loose bodies, all of which move at once; 189
+of the 221 pieces stand at the end.
+
+How long it takes to lie down and to come to rest, from the step in
+which the post gives, was measured on four falls of each build as it
+was written: one for each post of the foot, struck as the brute's
+straights would.
+
+| Build | Lying (nothing higher than 2.6 m) | At rest |
+| --- | --- | --- |
+| As first written: welds free to turn, what is welded turning less freely, decks 0.12 m | not measured | 8.8 and 17.8 s; two of four not after 30 s |
+| Welds that take 200 N.m to turn | 2.3 to 5.2 s; one of four stood | 5.7 to 11.6 s |
+| And decks 0.06 m | 2.3 to 3.8 s | 3.8 to 24.8 s |
+| And joined bodies still by where they are | 2.3 to 3.8 s | 5.4 to 9.9 s |
+| Without turning less freely (no longer needed) | 2.3 to 3.7 s | 5.2 to 8.0 s |
+| And the post that gave buckles (this build) | 2.2 to 3.7 s | 3.4 to 6.7 s |
+
+Two more falls of each, with the brute striking and then taken away:
+as first written the frame was at rest 11.1 and 17.7 s after that; in
+this build, 0.2 and 1.1 s. The tests bring the tower down once at each
+post of its foot: lying within 2.0 to 3.7 s, at rest within 3.2 to
+9.4 s, and no post farther than 0.26 m from the deck it is fixed to.
+
+The office building brought down (the run under "The office building"
+below), three times, turn about with the build before. This build: 0.16
+to 0.19 ms at the median, 99% of the steps under 1.28 to 1.66 ms, the
+slowest 4.2 to 7.4 ms (one step over 6 ms in one run); in its worst
+second a step takes 0.93 to 1.14 ms; up to 92 to 110 loose bodies move
+at once and 124 lie there at the end, each time. The build before: 0.15
+to 0.19 ms, 99% under 0.97 to 1.10 ms, the slowest 4.5 to 5.3 ms; up to
+64 to 87 move at once, 101 to 112 lie there. It costs more as it comes
+down than it did: what came down from high now breaks at the latest as
+it comes to rest, so all of it ends in blocks (docs/ARCHITECTURE.md,
+"Concrete", 5).
+
+That run does not always bring the building down on this branch: four
+times in fifty-five it did not (once in twenty-three before
+`Player.set_down`, three times in thirty-two since), and never in
+thirty-three on the build before. One of those runs was traced: the
+script first strikes a pane and the low wall over it, then sets the
+brute down where the blocks that came off lie; the brute steps onto one
+(0.5 m up) and its straights pass over the first column. The three
+runs above are runs in which it came down. What the tests and the web
+probe do is not that run: the probe's own, played natively sixteen
+times, brought down the roof of the house, the office building and the
+tower each time (105 or 106 of the 221 pieces standing at the end).
+
+What happens to the rest of the bench was compared as for the office
+building, one series of blows on each build started with the same
+random numbers: after each blow as many pieces stand in both (the 36 of
+the tower apart) and as many bodies lie loose. At rest, 231 lie loose
+in this build and 223 in the build before: a slab of the office
+building that lay whole is in blocks.
+
+`index.pck` is 0.67 MB (0.66 before). Nothing was measured on the
+phone. What the picture costs was not measured: nothing is drawn in
+these runs (144 more parts are drawn than before).
+
 ### The office building
 
 Same machine, same way (headless, 2 cores, `--fixed-fps 60`, real

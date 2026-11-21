@@ -57,10 +57,17 @@ storeys with windows under a flat roof. A pane bursts at a blow. A column
 is cut at the fourth. Cut the three columns of its front and all of it
 comes down towards you and breaks: glass holds nothing up.
 
+A tower stands behind it, beyond the panes of glass, four times as high
+as the brute: four storeys of metal posts and decks with a pane of glass
+in each side, the upper two narrower. Metal fixed to metal stays fixed.
+Strike a post of its foot until it gives (four combinations): the glass
+over it bursts and the frame leans that way and lies down in one, still
+hanging from the posts that stand.
+
 What breaks is worked out one material at a time, each on this bench and
 each tried on a phone before the next: concrete, then metal, wood, glass;
-then a house and an office (they are there) and a tower made of them; then the
-city, made up from a number as before.
+then a house, an office and a tower made of them (they are there); then
+the city, made up from a number as before.
 
 Godot 4.7, GDScript, Jolt physics, Compatibility renderer (WebGL2), so it
 can be played in Safari on an iPhone from each pull request's preview.

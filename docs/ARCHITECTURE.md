@@ -18,7 +18,7 @@ and the branch `archive/v1` for the code.
 | `scripts/player/` | `Player` (controls, camera) and `Character` (the animated body) |
 | `scripts/fx/` | the round shadow under the brute |
 | `scripts/ui/` | HUD and touch controls |
-| `scripts/destruction/` | what breaks: `Matter`, `Structure` (what stands), `Bend` (how a piece of metal is bent), `Rubble` (what has come off), `Fracture` (the cut), `ShardMesh` (the picture) |
+| `scripts/destruction/` | what breaks: `Matter`, `Structure` (what stands), `Bend` (how a piece of metal is bent), `Wreck` (the loose bodies a piece of metal becomes), `Rubble` (what has come off), `Fracture` (the cut), `ShardMesh` (the picture) |
 | `shaders/` | the ground's grid; the one shader that draws everything that stands or has come off |
 | `assets/` | the mannequin and its blows (made by `tools/moves`) |
 | `tools/` | CI and build scripts, the web probe, the asset tools |
@@ -175,7 +175,11 @@ which bends; glass, which bursts.
    touched something. The engine can tell of the contacts a step before
    it tells what they took; the stop counts all the same, shared out
    evenly among them. Until 19 November such a landing was dropped, and
-   a length of wall could be left lying whole.)
+   a length of wall could be left lying whole.) And at the latest as it
+   comes to rest that much lower, however gently it was stopped
+   (`Rubble._came_down`): set down on what was coming down under it, and
+   never stopped by 0.8 m a second in one step, a slab of the office
+   building was left lying whole in four falls out of eight.
 6. **All at once** (`Structure.shatter`). A blow that lands nowhere in
    particular (`hit` without a place: the measure, some tests) is taken
    by the whole piece, which cracks all over and, at its strength, goes
@@ -255,7 +259,7 @@ piece (`Bend`): a post, a sheet or a plate.
    a metre; one that carries something keeps its head where it is and
    bows instead, up to 0.55 m aside (`Bend.ring_poses`). While it stands
    kinked, the brute and the camera meet it where it is: a box between
-   its foot, its kinks and its head (`Structure._limbs_of`).
+   its foot, its kinks and its head (`Wreck.limbs_of`).
 3. **A sheet takes a dent** (`Bend._dent`). Upright and wider. A blow
    pushes the nodes within 0.55 m of it in, away from the blow: 0.06 m a
    point under the fist, less farther off; its foot stays where it is.
@@ -265,7 +269,7 @@ piece (`Bend`): a post, a sheet or a plate.
 4. **In one place.** What a piece has taken is what it has taken where
    it has taken the most: its deepest kink, its deepest dent. Blows
    elsewhere start another mark; they do not bring it down sooner.
-5. **Lying down** (`Structure._drop`). Marked as deep as it goes, a
+5. **Lying down** (`Structure._drop`, `Wreck.drop`). Marked as deep as it goes, a
    sheet becomes one loose body, dents and all, and goes over away from
    the blows. A post becomes its limbs, each a body, joined at its
    kinks.
@@ -274,10 +278,13 @@ piece (`Bend`): a post, a sheet or a plate.
    with only so much force (`Matter.FOLD`: 450 000 N.m for each metre the
    fold is long and each metre squared the piece is thick, at real
    gravity). Under less it holds; under more it gives, slowly, and stays
-   as it ends up. So a post that lies down keeps its shape, and one that
-   gives under a deck folds under it instead of staying up. Bodies
-   joined to one another are frozen, and move again, together.
-7. **A plate sags** (`Structure._drop_plate`). A piece that lies flat (a
+   as it ends up. So a post that lies down keeps its shape. One that
+   gives under what it carries buckles: its folds then hold a tenth of
+   that (`Matter.BUCKLED`), and it folds up under the deck instead of
+   holding it up (see 9). Bodies joined to one another are frozen, and
+   move again, together; they count as still by where they are, not by
+   how fast they go (see "A tower" below).
+7. **A plate sags** (`Wreck._plate`). A piece that lies flat (a
    deck) takes nothing from a blow. It is made of triangles, two to a
    square about 1.8 m across, cut one way and the other in turn so that
    it can fold along its diagonals too. As soon as one of the pieces
@@ -287,6 +294,16 @@ piece (`Bend`): a post, a sheet or a plate.
    play to fold over their edge): it hangs from them until they go too.
 8. **It never breaks**, however hard it lands (`Structure.shatter`
    leaves it alone).
+9. **Metal fixed to metal stays fixed** (`Structure._drop`, `_weld`;
+   `Rubble.weld`). Two pieces of metal, one of which rests on the other,
+   are fixed to one another where they met, come down as they were
+   standing: a post to the deck it carried and to the one it stood on.
+   Between two loose bodies it is a pin at that point, with 0.15 m of
+   play each way, which it takes 200 N.m to turn (`Rubble.WELD`: a
+   motor told to stay still with only so much force, as for a fold),
+   and the two still stop one another. A post is held by its foot or by
+   its head, a plate by the triangle over the place (`_part`). All that
+   is fixed together rests, and moves again, together (`_gather`).
 
 ### A house: a frame that carries, planks that clad
 
@@ -436,6 +453,65 @@ the brute's left as it starts, its front towards the start, askew.
    nothing still holds all it held. What comes of the same blows is the
    same, block for block.
 
+### A tower: a frame of metal that stays in one
+
+`Main._lay_tower`: 36 pieces, metal and glass, behind the brute as it
+starts, beyond the panes of glass, askew. Four times as high as the
+brute (7.2 m).
+
+1. **What carries what.** Four storeys 1.8 m high: the lower two 2.4 m
+   across, the upper two 1.5 m, in the middle of the deck under them.
+   Each has four posts 0.15 m thick at its corners; on them, a deck
+   0.06 m thick; and a pane in each side, between the posts, which
+   stops 4 cm short of the deck and carries nothing. The posts of a
+   storey stand on the deck of the one under it.
+2. **Only its foot is within reach.** A straight lands on a post of the
+   foot, 1.4 m up; the leap lands over the first deck, on a post or a
+   pane of the second storey. A deck takes nothing from a blow (it is a
+   plate).
+3. **A post of the foot gives at the sixth straight that lands on it**
+   (0.15 m thick: 10.5 points). Until then it bows, its head where it
+   was. By hand that is twelve blows, four combinations: the leap lands
+   over it, and bowed, the post is no longer where some of the straights
+   land.
+4. **Then all of it is loose, in one.** The first deck has lost a
+   corner and sags (`_shed`), and nothing over it is carried any more
+   (`_let_go`): three decks, twelve posts; the twelve panes over the
+   ground floor burst. That is twenty-two loose bodies or twenty-three
+   (a deck is two triangles; the post that gave, its limbs), each fixed
+   to its neighbours (Metal, 9), and the first deck tied to the three
+   posts of the foot that still stand. Its corner goes down, the frame
+   leans that way and lies down, in 2 to 4 s, and stays hanging from
+   those three posts.
+5. **Its decks are thin, so that it does.** A fold holds by the square
+   of how thick the plate is; the plate weighs by how thick it is. At
+   0.12 m, as on the bench, a deck 2.4 m across held out its own corner
+   and the post that hangs from it by its fold alone (22 kN.m held,
+   against 20 to hold): with one post of its foot gone, the tower stood
+   on three, and whether it went over hung by a hair. In one fall out of
+   six it stood there, at rest. At 0.06 m the fold holds 5.5 kN.m,
+   against 12.
+6. **The post that gave must not hold the corner up.** Fixed by its
+   head to the corner it carried, a post that had just given still
+   stood under it, kinked, as a strut: under the deck of the bench it
+   held the corner 1.82 m up. Hence `Matter.BUCKLED` (Metal, 6).
+7. **What it takes to turn a weld is what lets the heap rest.** Free to
+   turn, a post held by its two ends kept turning on its own length,
+   driven by what it touched: two falls out of six had not come to rest
+   after 30 s.
+8. **Joined bodies are still by where they are** (`Rubble._is_quiet`).
+   Held and shaken by what it is fixed to, a body of the heap shivers
+   where it lies: 0.1 m/s one step and back the next, going nowhere. By
+   its speed it never counted as still, nor the frame with it: up to
+   25 s before it rested. A body joined to others is now still as long
+   as it has not left where it was by more than it would have, going
+   for half a second at the speeds that counted (1.8 cm, 2.75 degrees).
+   The frame comes to rest 3 to 10 s after the post gives.
+9. **`Wreck`** is what `Structure` had to make loose bodies of a piece
+   of metal (the limbs of a post, a sheet, the triangles of a plate),
+   in a file of its own and unchanged: `structure.gd` was at the 1300
+   lines a file may have.
+
 Not there: what falls does nothing to the brute but push it (a deck that
 comes down round a brute that cannot get out stays on its head); blocks
 that lie in one come apart under blows only once they have taken the
@@ -443,14 +519,20 @@ strength of their piece in all; a hole is the blocks round the fist, two
 to five of them, not a fist's exact shape; what holds over a hole goes
 by which block is over which, not by weight, so how many holes it takes
 to open a wall to the top depends on how the wall was cut (two or three
-side by side); a slab that tips onto
-what is left under it breaks there only if that stops it short (by 0.8 m
-a second in a step), else it stays whole, leaning; glass gives under
+side by side); a slab that is never stopped short (by 0.8 m a second in
+a step) breaks only as it comes to rest, half a second after it has
+stopped; glass gives under
 what comes to rest on top of it, not under what leans against it nor
 under what weighs 40 kg or less; with the front of the office building
 cut, a strip of it can stay up on the columns of the back, as high as
 the floor of its second storey; that building has no door, no stairs and
-nothing inside; metal that lies there no
+nothing inside, nor has the tower; a weld has 0.15 m of play each way,
+so a post can lie up to 0.26 m from the deck it is fixed to; only
+pieces that rested on one another are fixed (the tower that has lain
+down is tied to nothing but the posts of its foot); the panes of its
+ground floor stand until something lands on them; a post of its foot,
+once bowed, is no longer where the fists land, and half the blows
+thrown at it pass by; metal that lies there no
 longer takes a mark; a sheet that stands dented is
 still a flat wall to the brute; a plate takes nothing from a blow;
 wood only snaps across its grain, never splits along it, and a long
@@ -497,8 +579,10 @@ away): 2.4 m across, 3 m along its ridge, 2.4 m high, of 70 pieces (see
 stands turned"). And an office building on its left, opposite the
 house (its front 7 m away): 3.6 m across, 2.4 m deep, 3.6 m high, of 71
 pieces (see "An office building" above). Its front faces the start, 20
-degrees off the lines of the ground. In all 185 pieces, drawn as 1077
-parts.
+degrees off the lines of the ground. And a tower behind it, beyond the
+panes of glass (17 m away): 2.4 m across at its foot, 7.2 m high, of 36
+pieces (see "A tower" above), 15 degrees askew. In all 221 pieces,
+drawn as 1221 parts.
 "Reconstruire" puts them back and the brute where it started, without
 loading anything again (`Main.rebuild`).
 
@@ -614,6 +698,12 @@ it jumps, lands or strikes.
   after the short one is an edge: the foot of a wall that was knocked
   open is uneven on top (`Player._climb`). The view and the body follow
   over a moment, so that they do not jump.
+- **Set down, not moved** (`Player.set_down`). A scripted run sets the
+  brute down in front of each thing it strikes, and the bench put back
+  sets it down where it started. A body moved from one step to the next
+  is taken by the physics to have gone there in that step: the brute
+  threw what lay against it (in a test, a block of 55 kg left at
+  270 m/s). Set down, it touches nothing for the two steps that takes.
 
 Not there: strafing and walking backwards (the free clips only go
 forward, so the character always turns to where it goes), feet placed on
