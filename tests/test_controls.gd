@@ -80,6 +80,50 @@ func test_touch_controls_move_look_and_strike() -> void:
 	await _unload()
 
 
+func test_set_down_elsewhere_the_brute_throws_nothing_of_what_lay_against_it() -> void:
+	await _load()
+	var p := main.player
+	var thrown := PackedFloat32Array()
+	for set_down: bool in [false, true]:
+		var at := Vector3(-30, 0.05, 40.0 if set_down else 30.0)
+		p.set_down(at)
+		await frames(5)
+		# A block against it, on the side it leaves by.
+		var block := RigidBody3D.new()
+		var shape := CollisionShape3D.new()
+		var box := BoxShape3D.new()
+		box.size = Vector3.ONE * 0.5
+		shape.shape = box
+		block.add_child(shape)
+		block.mass = 55.0
+		block.can_sleep = false
+		block.collision_layer = Layers.RUBBLE
+		block.collision_mask = Layers.WORLD | Layers.PLAYER
+		block.position = at + Vector3(Player.RADIUS + 0.23, 0.2, 0)
+		main.add_child(block)
+		await frames(20)
+		var to := at + Vector3(8, 0, 0)
+		if set_down:
+			p.set_down(to)
+		else:
+			p.global_position = to
+		var fastest := 0.0
+		for k in 4:
+			await frames(1)
+			fastest = maxf(fastest, block.linear_velocity.length())
+		thrown.append(fastest)
+		await frames(15)
+		check(p.global_position.distance_to(to) < 0.2, "it is there (%s)" % p.global_position)
+		check(p.is_on_floor(), "on the ground")
+		check_eq(p.collision_layer, Layers.PLAYER, "and in the way again")
+		block.free()
+	# (Moved from one step to the next, it is taken to have gone there in
+	# that step: this is what `set_down` is for.)
+	check(thrown[0] > 20.0, "(moved in one step, it throws the block: %.0f m/s)" % thrown[0])
+	check(thrown[1] < 1.0, "set down, it does not (%.2f m/s)" % thrown[1])
+	await _unload()
+
+
 func _touch(index: int, at: Vector2, pressed: bool) -> InputEventScreenTouch:
 	var e := InputEventScreenTouch.new()
 	e.index = index

@@ -241,8 +241,7 @@ func set_fall(share: float) -> void:
 func rebuild() -> void:
 	structure.free()
 	_lay_bench()
-	player.global_position = START
-	player.velocity = Vector3.ZERO
+	player.set_down(START)
 
 
 func _on_blow(at: Vector3, way: Vector3, power: int, on: RID) -> void:

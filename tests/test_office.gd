@@ -258,8 +258,8 @@ func test_the_brute_cuts_the_columns_of_the_front_and_brings_the_building_down()
 		p.global_position.is_finite() and p.global_position.y > -0.1 and p.global_position.y < 2.5,
 		"the brute is on the ground or on what came down (%.2f m up)" % p.global_position.y
 	)
-	# (What lies against the brute is not left to rest: it steps away.)
-	_face(_bench(Vector3(0, 0.05, 10)), _bench(Vector3.UP))
+	# (What lies against the brute is not left to rest: it is taken away.)
+	p.set_down(_bench(Vector3(0, 0.05, 10)))
 	check(await _rest(2400), "everything comes to rest")
 	var lies := _lies()
 	check(lies.x < 3.0, "nothing is left as high as the top storey was (%.2f m at the highest)" % lies.x)

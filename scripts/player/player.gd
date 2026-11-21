@@ -107,6 +107,7 @@ var _punch_to := 0.0  # where the strike under way is thrown (rad, like `facing`
 var _fist_was := Vector3.INF  # where its fist or foot was a step ago (not thrown yet: INF)
 var _ball := SphereShape3D.new()
 var _sight := PhysicsRayQueryParameters3D.new()  # what the camera stays in front of
+var _set_down := 0  # steps left during which it touches nothing, having been set down
 
 
 func _init() -> void:
@@ -201,7 +202,26 @@ func punch() -> bool:
 	return is_on_floor() and character.punch()
 
 
+## Sets the brute down at `at`, wherever it was: a scripted run does, the
+## bench put back does. It touches nothing for the two steps this takes:
+## a body moved from one step to the next is taken to have gone there in
+## that step, and throws what lay against it (a block of 55 kg left at
+## 270 m/s).
+func set_down(at: Vector3) -> void:
+	collision_layer = 0
+	collision_mask = 0
+	_set_down = 2
+	global_position = at
+	velocity = Vector3.ZERO
+
+
 func _physics_process(delta: float) -> void:
+	if _set_down > 0:
+		_set_down -= 1
+		if _set_down > 0:
+			return
+		collision_layer = Layers.PLAYER
+		collision_mask = Layers.WORLD | Layers.STRUCTURE | Layers.RUBBLE
 	var stick := Input.get_vector("look_right", "look_left", "look_down", "look_up")
 	var move := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 	move = (move + touch_move).limit_length(1.0)
